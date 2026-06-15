@@ -1,0 +1,879 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../models/player_model.dart';
+
+import '../models/team_model.dart';
+
+import '../models/hex_tile_model.dart';
+
+import '../models/team_request_model.dart';
+
+import 'package:google_sign_in/google_sign_in.dart';
+
+class FirebaseService {
+
+  final FirebaseFirestore
+  firestore =
+      FirebaseFirestore
+          .instance;
+
+  final FirebaseAuth auth =
+      FirebaseAuth.instance;
+
+  // =========================
+  // CURRENT USER
+  // =========================
+
+  User? get currentUser =>
+      auth.currentUser;
+
+  // =========================
+  // CREATE PLAYER
+  // =========================
+
+  Future<void> createPlayer({
+
+    required String uid,
+
+    required String name,
+
+    required String email,
+  }) async {
+
+    PlayerModel player =
+    PlayerModel(
+
+      uid: uid,
+
+      name: name,
+
+      email: email,
+
+      team: "No Team",
+      teamId: null,
+      isInTeam: false,
+
+      totalSteps: 0,
+
+      totalLand: 0,
+
+      trustScore: 100,
+
+      level: 1,
+
+      xp: 0,
+
+      avatar: "",
+    );
+
+    await firestore
+
+        .collection("players")
+
+        .doc(uid)
+
+        .set(player.toMap());
+  }
+
+  // =========================
+  // GET PLAYER
+  // =========================
+// GET PLAYER
+// =========================
+
+  Future<PlayerModel?> getPlayer(
+      String uid) async {
+
+    try {
+      final doc = await firestore
+          .collection("players")
+          .doc(uid)
+          .get();
+
+      if (!doc.exists) {
+        return null;
+      }
+
+      return PlayerModel.fromMap(
+        doc.data()
+        as Map<String, dynamic>,
+      );
+
+    } catch (e) {
+      return null;
+    }
+  }
+
+// =========================
+// PLAYER STREAM
+// =========================
+
+  Stream<PlayerModel?> getPlayerStream(
+      String uid) {
+
+    return firestore
+        .collection("players")
+        .doc(uid)
+        .snapshots()
+        .map((doc) {
+
+      try {
+        if (!doc.exists) {
+          return null;
+        }
+
+        return PlayerModel.fromMap(
+          doc.data()!,
+        );
+
+      } catch (e) {
+        return null;
+      }
+    });
+  }
+
+  // =========================
+  // UPDATE TEAM STATUS
+  // =========================
+
+  Future<void>
+  updateTeamStatus({
+
+    required String uid,
+
+    required bool isInTeam,
+  }) async {
+
+    await firestore
+
+        .collection("players")
+
+        .doc(uid)
+
+        .update({
+
+      "isInTeam":
+      isInTeam,
+    });
+  }
+
+  // =========================
+  // UPDATE STEPS
+  // =========================
+
+  Future<void> updateSteps({
+    required String uid,
+    required int stepsToAdd,
+  }) async {
+    await firestore
+        .collection("players")
+        .doc(uid)
+        .update({
+      "totalSteps": FieldValue.increment(stepsToAdd),
+    });
+  }
+
+  // =========================
+  // UPDATE LAND
+  // =========================
+
+  Future<void> updateLand({
+
+    required String uid,
+
+    required int totalLand,
+  }) async {
+
+    await firestore
+
+        .collection("players")
+
+        .doc(uid)
+
+        .update({
+
+      "totalLand":
+      totalLand,
+    });
+  }
+
+  // =========================
+  // UPDATE TRUST SCORE
+  // =========================
+
+  Future<void>
+  updateTrustScore({
+
+    required String uid,
+
+    required int trustScore,
+  }) async {
+
+    await firestore
+
+        .collection("players")
+
+        .doc(uid)
+
+        .update({
+
+      "trustScore":
+      trustScore,
+    });
+  }
+
+  // =========================
+  // UPDATE XP
+  // =========================
+
+  Future<void> incrementXP({
+    required String uid,
+    required int xpToAdd,
+  }) async {
+    await firestore.collection("players").doc(uid).update({
+      "xp": FieldValue.increment(xpToAdd),
+    });
+  }
+
+  Future<void> updateXP({
+    required String uid,
+    required int xp,
+  }) async {
+
+    await firestore
+
+        .collection("players")
+
+        .doc(uid)
+
+        .update({
+
+      "xp": xp,
+    });
+  }
+
+  // =========================
+  // UPDATE STREAK & RESET QUESTS
+  // =========================
+
+  Future<void> checkAndResetDailyStats(String uid) async {
+    final doc = await firestore.collection("players").doc(uid).get();
+    if (!doc.exists) return;
+
+    final data = doc.data()!;
+    final lastActiveDate = data["lastActiveDate"] != null 
+        ? (data["lastActiveDate"] as Timestamp).toDate() 
+        : null;
+    int currentStreak = data["streakCount"] ?? 0;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    if (lastActiveDate == null) {
+      // First time
+      await firestore.collection("players").doc(uid).update({
+        "streakCount": 1,
+        "lastActiveDate": Timestamp.fromDate(today),
+        "claimedQuests": [],
+      });
+    } else {
+      final lastDate = DateTime(lastActiveDate.year, lastActiveDate.month, lastActiveDate.day);
+      final difference = today.difference(lastDate).inDays;
+
+      if (difference >= 1) {
+        // New day: Reset quests
+        Map<String, dynamic> updates = {
+          "lastActiveDate": Timestamp.fromDate(today),
+          "claimedQuests": [],
+        };
+
+        if (difference == 1) {
+          // Consecutive day: Increment streak
+          updates["streakCount"] = currentStreak + 1;
+        } else {
+          // Streak broken: Reset streak
+          updates["streakCount"] = 1;
+        }
+
+        await firestore.collection("players").doc(uid).update(updates);
+      }
+      // If difference == 0, already updated today, do nothing.
+    }
+  }
+
+  // =========================
+  // CLAIM QUEST
+  // =========================
+
+  Future<void> claimQuest({
+    required String uid,
+    required String questId,
+    required int rewardXp,
+  }) async {
+    final docRef = firestore.collection("players").doc(uid);
+    
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data()!;
+      List<String> claimed = List<String>.from(data["claimedQuests"] ?? []);
+      int currentXp = data["xp"] ?? 0;
+
+      if (!claimed.contains(questId)) {
+        claimed.add(questId);
+        transaction.update(docRef, {
+          "claimedQuests": claimed,
+          "xp": currentXp + rewardXp,
+        });
+      }
+    });
+  }
+
+  // =========================
+  // UPDATE LEVEL
+  // =========================
+
+  Future<void>
+  updateLevel({
+
+    required String uid,
+
+    required int level,
+  }) async {
+
+    await firestore
+
+        .collection("players")
+
+        .doc(uid)
+
+        .update({
+
+      "level": level,
+    });
+  }
+
+  // =========================
+  // GLOBAL LEADERBOARD
+  // =========================
+
+  Stream<List<PlayerModel>>
+  getLeaderboard() {
+
+    return firestore
+
+        .collection("players")
+
+        .orderBy(
+      "totalSteps",
+      descending: true,
+    )
+
+        .snapshots()
+
+        .map((snapshot) {
+
+      return snapshot.docs.map(
+
+            (doc) {
+
+          return PlayerModel
+              .fromMap(
+            doc.data(),
+          );
+        },
+      ).toList();
+    });
+  }
+
+  // =========================
+  // SOLO LEADERBOARD
+  // =========================
+
+  Stream<List<PlayerModel>>
+  getSoloLeaderboard() {
+
+    return firestore
+
+        .collection("players")
+
+        .orderBy(
+      "totalSteps",
+      descending: true,
+    )
+
+        .snapshots()
+
+        .map((snapshot) {
+
+      return snapshot.docs.map(
+
+            (doc) {
+
+          return PlayerModel
+              .fromMap(
+            doc.data(),
+          );
+        },
+      ).toList();
+    });
+  }
+
+  // =========================
+  // TEAM LEADERBOARD
+  // =========================
+
+  Stream<List<PlayerModel>> getTeamLeaderboard(String teamName) {
+    return firestore
+        .collection("players")
+        .where("team", isEqualTo: teamName)
+        .snapshots()
+        .map((snapshot) {
+      final players = snapshot.docs
+          .map((doc) => PlayerModel.fromMap(doc.data()))
+          .toList();
+      
+      // Sort locally to avoid needing a composite index in Firestore
+      players.sort((a, b) => b.totalSteps.compareTo(a.totalSteps));
+      return players;
+    });
+  }
+
+  // =========================
+  // CREATE TEAM
+  // =========================
+
+  Future<void> createTeam(
+      TeamModel team) async {
+    await firestore.collection("teams").doc(team.id).set(team.toMap());
+
+    // Update creator's status and timestamp
+    await firestore.collection("players").doc(team.leaderId).update({
+      "team": team.name,
+      "teamId": team.id,
+      "isInTeam": true,
+      "lastTeamAction": FieldValue.serverTimestamp(),
+    });
+  }
+
+  // =========================
+  // GET TEAMS FOR LEADERBOARD
+  // =========================
+
+  Stream<List<TeamModel>> getTeamLeaderboardGlobal() {
+    return firestore
+        .collection("teams")
+        .orderBy("totalSteps", descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => TeamModel.fromMap(doc.data())).toList();
+    });
+  }
+
+  Stream<List<TeamModel>>
+  getTeams() {
+
+    return firestore
+
+        .collection("teams")
+
+        .snapshots()
+
+        .map((snapshot) {
+
+      return snapshot.docs.map(
+
+            (doc) {
+
+          return TeamModel
+              .fromMap(
+            doc.data(),
+          );
+        },
+      ).toList();
+    });
+  }
+
+  // =========================
+  // JOIN TEAM
+  // =========================
+
+  Future<void> joinTeam({
+    required String uid,
+    required String teamId,
+    required String teamName,
+  }) async {
+    await firestore
+        .collection("players")
+        .doc(uid)
+        .update({
+      "team": teamName,
+      "teamId": teamId,
+      "isInTeam": true,
+    });
+  }
+
+  // =========================
+  // UPDATE TEAM LAND
+  // =========================
+
+  Future<void> updateTeamLand({
+    required String teamId,
+    required int totalLand,
+  }) async {
+    await firestore.collection("teams").doc(teamId).update({
+      "totalLand": totalLand,
+    });
+  }
+
+  // =========================
+  // UPDATE TEAM STEPS
+  // =========================
+
+  Future<void> updateTeamSteps({
+    required String teamId,
+    required int stepsToAdd,
+  }) async {
+    await firestore.collection("teams").doc(teamId).update({
+      "totalSteps": FieldValue.increment(stepsToAdd),
+    });
+  }
+
+  // =========================
+  // UPDATE TEAM MEMBERS
+  // =========================
+
+  Future<void>
+  updateTeamMembers({
+
+    required String teamId,
+
+    required int members,
+  }) async {
+
+    await firestore
+
+        .collection("teams")
+
+        .doc(teamId)
+
+        .update({
+
+      "members":
+      members,
+    });
+  }
+
+  // =========================
+  // SAVE HEX TILE
+  // =========================
+
+  Future<void> saveHexTile(
+      HexTileModel tile) async {
+
+    await firestore
+
+        .collection(
+        "hex_tiles")
+
+        .doc(tile.tileId)
+
+        .set(tile.toMap());
+  }
+
+  // =========================
+  // GET HEX TILES
+  // =========================
+
+  Stream<List<HexTileModel>>
+  getHexTiles() {
+
+    return firestore
+
+        .collection(
+        "hex_tiles")
+
+        .snapshots()
+
+        .map((snapshot) {
+
+      return snapshot.docs.map(
+
+            (doc) {
+
+          return HexTileModel
+              .fromMap(
+            doc.data(),
+          );
+        },
+      ).toList();
+    });
+  }
+
+  // =========================
+  // DELETE HEX TILE
+  // =========================
+
+  Future<void> deleteHexTile(
+      String tileId) async {
+
+    await firestore
+
+        .collection(
+        "hex_tiles")
+
+        .doc(tileId)
+
+        .delete();
+  }
+
+  // =========================
+  // SEND JOIN REQUEST
+  // =========================
+
+  Future<void> sendJoinRequest(
+      TeamRequestModel request) async {
+
+    await firestore
+
+        .collection(
+        "team_requests")
+
+        .doc(request.requestId)
+
+        .set(request.toMap());
+  }
+
+  // =========================
+  // GET TEAM REQUESTS
+  // =========================
+
+  Stream<List<TeamRequestModel>>
+  getTeamRequests(
+      String teamId) {
+
+    return firestore
+
+        .collection(
+        "team_requests")
+
+        .where(
+      "teamId",
+      isEqualTo:
+      teamId,
+    )
+
+        .where(
+      "status",
+      isEqualTo:
+      "pending",
+    )
+
+        .snapshots()
+
+        .map((snapshot) {
+
+      return snapshot.docs.map(
+
+            (doc) {
+
+          return TeamRequestModel
+              .fromMap(
+            doc.data(),
+          );
+        },
+      ).toList();
+    });
+  }
+
+  // =========================
+  // ACCEPT REQUEST
+  // =========================
+
+  Future<void> acceptRequest({
+    required String requestId,
+    required String playerId,
+    required String teamId,
+    required String teamName,
+  }) async {
+    // UPDATE PLAYER
+    await firestore.collection("players").doc(playerId).update({
+      "team": teamName,
+      "teamId": teamId,
+      "isInTeam": true,
+      "lastTeamAction": FieldValue.serverTimestamp(),
+    });
+
+    // UPDATE REQUEST
+    await firestore.collection("team_requests").doc(requestId).update({
+      "status": "accepted",
+    });
+
+    // UPDATE TEAM MEMBERS
+    DocumentSnapshot teamDoc =
+        await firestore.collection("teams").doc(teamId).get();
+    int currentMembers = teamDoc["members"];
+    await firestore.collection("teams").doc(teamId).update({
+      "members": currentMembers + 1,
+    });
+  }
+
+  // =========================
+  // REJECT REQUEST
+  // =========================
+
+  Future<void> leaveTeam({
+    required String uid,
+    required String teamId,
+  }) async {
+    // Get team doc first
+    DocumentSnapshot teamDoc =
+        await firestore.collection("teams").doc(teamId).get();
+    
+    // UPDATE PLAYER
+    await firestore.collection("players").doc(uid).update({
+      "team": "No Team",
+      "teamId": null,
+      "isInTeam": false,
+      "lastTeamAction": FieldValue.serverTimestamp(),
+    });
+
+    // UPDATE TEAM MEMBERS
+    int currentMembers = teamDoc["members"];
+    if (currentMembers > 0) {
+      await firestore.collection("teams").doc(teamId).update({
+        "members": currentMembers - 1,
+      });
+    }
+  }
+
+  Future<void> kickPlayer({
+    required String playerId,
+    required String teamId,
+  }) async {
+    // UPDATE PLAYER
+    await firestore.collection("players").doc(playerId).update({
+      "team": "No Team",
+      "isInTeam": false,
+      "lastTeamAction": FieldValue.serverTimestamp(),
+    });
+
+    // UPDATE TEAM MEMBERS
+    DocumentSnapshot teamDoc =
+        await firestore.collection("teams").doc(teamId).get();
+    int currentMembers = teamDoc["members"];
+    if (currentMembers > 0) {
+      await firestore.collection("teams").doc(teamId).update({
+        "members": currentMembers - 1,
+      });
+    }
+  }
+
+  Future<void> rejectRequest(
+      String requestId) async {
+
+    await firestore
+
+        .collection(
+        "team_requests")
+
+        .doc(requestId)
+
+        .update({
+
+      "status":
+      "rejected",
+    });
+  }
+
+  // =========================
+  // GOOGLE SIGN IN
+  // =========================
+
+  Future<UserCredential?> signInWithGoogle() async {
+    final GoogleSignIn googleSignIn = GoogleSignIn();
+    final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+    if (googleUser != null) {
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      return await auth.signInWithCredential(credential);
+    }
+    return null;
+  }
+
+  // =========================
+  // ANONYMOUS SIGN IN
+  // =========================
+
+  Future<UserCredential> signInAnonymously() async {
+    return await auth.signInAnonymously();
+  }
+
+  // =========================
+  // PHONE SIGN IN
+  // =========================
+
+  Future<void> verifyPhone({
+    required String phoneNumber,
+    required Function(PhoneAuthCredential) verificationCompleted,
+    required Function(FirebaseAuthException) verificationFailed,
+    required Function(String, int?) codeSent,
+    required Function(String) codeAutoRetrievalTimeout,
+  }) async {
+    await auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: verificationCompleted,
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+    );
+  }
+
+  Future<UserCredential> signInWithPhone(String verificationId, String smsCode) async {
+    PhoneAuthCredential credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+    return await auth.signInWithCredential(credential);
+  }
+
+  // =========================
+  // PURCHASE POWER-UP
+  // =========================
+
+  Future<void> purchasePowerUp({
+    required String uid,
+    required String powerUpId,
+    required int cost,
+    required Duration duration,
+  }) async {
+    final docRef = firestore.collection("players").doc(uid);
+
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data()!;
+      int currentXp = data["xp"] ?? 0;
+      Map<String, dynamic> activePowerUps = Map<String, dynamic>.from(data["activePowerUps"] ?? {});
+
+      if (currentXp >= cost) {
+        final expiryDate = DateTime.now().add(duration);
+        activePowerUps[powerUpId] = Timestamp.fromDate(expiryDate);
+
+        transaction.update(docRef, {
+          "xp": currentXp - cost,
+          "activePowerUps": activePowerUps,
+        });
+      }
+    });
+  }
+}

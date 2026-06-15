@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "78178298285",
+    "project_id": "territory-game-462f9",
+    "storage_bucket": "territory-game-462f9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:78178298285:android:6bd4030361785373d19924",
+        "android_client_info": {
+          "package_name": "com.example.untitled"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBueMcRT8oZp-725XbpVNdaDVfWnj6PraU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
