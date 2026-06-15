@@ -118,19 +118,23 @@ class ShopScreen extends StatelessWidget {
                                 cost: item.cost,
                                 duration: item.duration,
                               );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Purchased ${item.name}!"),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Purchased ${item.name}!"),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Purchase failed: $e"),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Purchase failed: $e"),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             }
                           } : null,
                           child: const Text("BUY", style: TextStyle(color: Colors.white)),

@@ -89,14 +89,16 @@ class _MapScreenState extends State<MapScreen> {
         double calculatedSpeed = position.speed * 3.6;
 
         // Calculate manual speed if GPS speed is 0
-        if (lastPosition != null && lastTimestamp != null) {
+        final lPos = lastPosition;
+        final lTime = lastTimestamp;
+        if (lPos != null && lTime != null) {
           double distance = locationService.calculateDistance(
-            startLat: lastPosition!.latitude,
-            startLng: lastPosition!.longitude,
+            startLat: lPos.latitude,
+            startLng: lPos.longitude,
             endLat: position.latitude,
             endLng: position.longitude,
           );
-          double timeDiff = now.difference(lastTimestamp!).inSeconds.toDouble();
+          double timeDiff = now.difference(lTime).inSeconds.toDouble();
           
           if (timeDiff > 0) {
             double manualSpeed = (distance / timeDiff) * 3.6;
@@ -184,15 +186,17 @@ class _MapScreenState extends State<MapScreen> {
   // =========================
 
   Future<void> captureTile() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
     PlayerModel? player = await firebaseService.getPlayer(uid);
     if (player == null) return;
 
     // Check for Radar Power-up
     double effectiveHexSize = TerritoryService.hexSize;
-    if (player.activePowerUps.containsKey("radar")) {
-      final expiry = player.activePowerUps["radar"]!;
-      if (expiry.isAfter(DateTime.now())) {
+    final radarExpiry = player.activePowerUps["radar"];
+    if (radarExpiry != null) {
+      if (radarExpiry.isAfter(DateTime.now())) {
         effectiveHexSize *= 2.0; // Double the capture distance
       }
     }
@@ -228,27 +232,22 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    HexTileModel? existingTile;
-    try {
-      existingTile = allTiles.firstWhere((tile) => tile.tileId == tileId);
-    } catch (e) {
-      existingTile = null;
-    }
+    final HexTileModel? existingTile = allTiles.where((t) => t.tileId == tileId).firstOrNull;
 
     // Shield Logic: If target is team-owned and shielded, prevent capture
-    // Shield Logic
     if (existingTile != null) {
+      final tile = existingTile;
       bool isShielded = false;
-      if (existingTile.ownerType == "solo") {
-        final owner = await firebaseService.getPlayer(existingTile.ownerId);
-        if (owner != null && owner.activePowerUps.containsKey("shield")) {
-          final expiry = owner.activePowerUps["shield"]!;
-          if (expiry.isAfter(DateTime.now())) isShielded = true;
+      if (tile.ownerType == "solo") {
+        final owner = await firebaseService.getPlayer(tile.ownerId);
+        final shieldExpiry = owner?.activePowerUps["shield"];
+        if (shieldExpiry != null && shieldExpiry.isAfter(DateTime.now())) {
+          isShielded = true;
         }
       } else {
         final teamList = await firebaseService.getTeams().first;
         final team = teamList.firstWhere(
-          (t) => t.id == existingTile?.ownerId,
+          (t) => t.id == tile.ownerId,
           orElse: () => TeamModel(
             id: "",
             name: "Unknown",
@@ -263,9 +262,9 @@ class _MapScreenState extends State<MapScreen> {
         );
         if (team.id.isNotEmpty) {
           final leader = await firebaseService.getPlayer(team.leaderId);
-          if (leader != null && leader.activePowerUps.containsKey("shield")) {
-            final expiry = leader.activePowerUps["shield"]!;
-            if (expiry.isAfter(DateTime.now())) isShielded = true;
+          final shieldExpiry = leader?.activePowerUps["shield"];
+          if (shieldExpiry != null && shieldExpiry.isAfter(DateTime.now())) {
+            isShielded = true;
           }
         }
       }
@@ -282,15 +281,14 @@ class _MapScreenState extends State<MapScreen> {
 
 
     String ownerType = player.isInTeam ? "team" : "solo";
-    String ownerId;
+    String? ownerId;
 
     if (player.isInTeam) {
-      if (player.teamId == null) {
-        print("ERROR: Player marked as team member but teamId is null");
+      ownerId = player.teamId;
+      if (ownerId == null) {
+        debugPrint("ERROR: Player marked as team member but teamId is null");
         return;
       }
-
-      ownerId = player.teamId!;
     } else {
       ownerId = player.uid;
     }
@@ -298,16 +296,9 @@ class _MapScreenState extends State<MapScreen> {
     String tileColor = player.isInTeam ? "blue" : "orange";
 
     if (existingTile != null) {
-      if (existingTile.ownerId ==
-          ownerId) {
+      if (existingTile.ownerId == ownerId) {
         return;
       }
-
-      // Anyone can attack anyone
-      // Solo ↔ Solo
-      // Solo ↔ Team
-      // Team ↔ Solo
-      // Team ↔ Team
     }
 
     HexTileModel tile = HexTileModel(
@@ -359,11 +350,9 @@ class _MapScreenState extends State<MapScreen> {
         
         // Reward XP for team capture
         int xpReward = 50;
-        if (player.activePowerUps.containsKey("boost")) {
-          final expiry = player.activePowerUps["boost"]!;
-          if (expiry.isAfter(DateTime.now())) {
-            xpReward *= 2;
-          }
+        final boostExpiry = player.activePowerUps["boost"];
+        if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
+          xpReward *= 2;
         }
         await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
       }
@@ -373,11 +362,9 @@ class _MapScreenState extends State<MapScreen> {
       
       // Reward XP for solo capture
       int xpReward = 30;
-      if (player.activePowerUps.containsKey("boost")) {
-        final expiry = player.activePowerUps["boost"]!;
-        if (expiry.isAfter(DateTime.now())) {
-          xpReward *= 2;
-        }
+      final boostExpiry = player.activePowerUps["boost"];
+      if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
+        xpReward *= 2;
       }
       await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
     }
@@ -388,15 +375,22 @@ class _MapScreenState extends State<MapScreen> {
   // =========================
 
   Future<void> attackTile(HexTileModel tile) async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
     PlayerModel? player = await firebaseService.getPlayer(uid);
     if (player == null) return;
 
-    if (player.isInTeam && player.teamId == null) {
-      debugPrint("ERROR: Player marked as team member but teamId is null in attackTile");
-      return;
+    String? attackerId;
+    if (player.isInTeam) {
+      attackerId = player.teamId;
+      if (attackerId == null) {
+        debugPrint("ERROR: Player marked as team member but teamId is null in attackTile");
+        return;
+      }
+    } else {
+      attackerId = player.uid;
     }
-    String attackerId = player.isInTeam ? player.teamId! : player.uid;
 
     if (tile.ownerId == attackerId) {
       if (mounted) {
@@ -426,11 +420,9 @@ class _MapScreenState extends State<MapScreen> {
       
       // XP reward for capture
       int xpReward = 100;
-      if (player.activePowerUps.containsKey("boost")) {
-        final expiry = player.activePowerUps["boost"]!;
-        if (expiry.isAfter(DateTime.now())) {
-          xpReward *= 2;
-        }
+      final boostExpiry = player.activePowerUps["boost"];
+      if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
+        xpReward *= 2;
       }
       await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
 
@@ -472,16 +464,22 @@ class _MapScreenState extends State<MapScreen> {
   // =========================
 
   Future<void> defendTile(HexTileModel tile) async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
     PlayerModel? player = await firebaseService.getPlayer(uid);
     if (player == null) return;
 
-    if (player.isInTeam && player.teamId == null) {
-      debugPrint("ERROR: Player marked as team member but teamId is null in defendTile");
-      return;
+    String? attackerId;
+    if (player.isInTeam) {
+      attackerId = player.teamId;
+      if (attackerId == null) {
+        debugPrint("ERROR: Player marked as team member but teamId is null in defendTile");
+        return;
+      }
+    } else {
+      attackerId = player.uid;
     }
-
-    String attackerId = player.isInTeam ? player.teamId! : player.uid;
 
     if (tile.ownerId != attackerId) {
       if (mounted) {
@@ -524,11 +522,9 @@ class _MapScreenState extends State<MapScreen> {
     await firebaseService.saveHexTile(defendedTile);
     // Reward for defending
     int xpReward = 20;
-    if (player.activePowerUps.containsKey("boost")) {
-      final expiry = player.activePowerUps["boost"]!;
-      if (expiry.isAfter(DateTime.now())) {
-        xpReward *= 2;
-      }
+    final boostExpiry = player.activePowerUps["boost"];
+    if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
+      xpReward *= 2;
     }
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
 
