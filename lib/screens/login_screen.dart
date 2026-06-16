@@ -1,42 +1,27 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
-
 import 'package:firebase_auth/firebase_auth.dart';
-
 import '../services/firebase_service.dart';
-
+import '../services/auth_service.dart';
 import 'main_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
-
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() =>
-      _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState
-    extends State<LoginScreen> {
-
-  final emailController =
-  TextEditingController();
-
-  final passwordController =
-  TextEditingController();
-
-  final nameController =
-  TextEditingController();
-
+class _LoginScreenState extends State<LoginScreen> {
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  final nameController = TextEditingController();
   bool isLogin = true;
-
   bool loading = false;
 
-  final FirebaseAuth auth =
-      FirebaseAuth.instance;
-
-  final FirebaseService
-  firebaseService =
-  FirebaseService();
+  final FirebaseAuth auth = FirebaseAuth.instance;
+  final FirebaseService firebaseService = FirebaseService();
+  final AuthService authService = AuthService();
 
   // =========================
   // AUTH
@@ -210,7 +195,7 @@ class _LoginScreenState
                     return;
                   }
 
-                  await firebaseService.verifyPhone(
+                  await authService.verifyPhone(
                     phoneNumber: phone,
                     verificationCompleted: (cred) async {
                       try {
@@ -252,7 +237,7 @@ class _LoginScreenState
                   );
                 } else {
                   try {
-                    UserCredential userCredential = await firebaseService.signInWithPhone(
+                    UserCredential userCredential = await authService.signInWithPhone(
                       vId!,
                       codeController.text.trim(),
                     );
@@ -543,11 +528,11 @@ class _LoginScreenState
                       color: Colors.red,
                       onTap: () async {
                         try {
-                          UserCredential? userCredential = await firebaseService.signInWithGoogle();
+                          UserCredential? userCredential = await authService.signInWithGoogle();
                           if (userCredential != null && userCredential.additionalUserInfo!.isNewUser) {
                             await firebaseService.createPlayer(
                               uid: userCredential.user!.uid,
-                              name: userCredential.user!.displayName ?? "New Explorer",
+                              name: userCredential.user!.displayName ?? "Explorer",
                               email: userCredential.user!.email ?? "",
                             );
                           }
@@ -567,7 +552,7 @@ class _LoginScreenState
                       color: Colors.orange,
                       onTap: () async {
                         try {
-                          UserCredential userCredential = await firebaseService.signInAnonymously();
+                          UserCredential userCredential = await authService.signInAnonymously();
                           await firebaseService.createPlayer(
                             uid: userCredential.user!.uid,
                             name: "Guest",
@@ -588,7 +573,6 @@ class _LoginScreenState
                       icon: Icons.phone,
                       color: Colors.green,
                       onTap: () {
-                        // Logic for phone sign-in (could open a dialog)
                         _showPhoneSignInDialog();
                       },
                     ),

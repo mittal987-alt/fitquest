@@ -65,6 +65,9 @@ class _MainNavigationState extends State<MainNavigation> {
         if (player != null && mounted) {
           final notificationService = Provider.of<NotificationService>(context, listen: false);
           
+          // Sync configuration with StepSyncService to handle team changes
+          stepSyncService.updateConfig(player);
+
           if (player.teamId != currentTeamId) {
             if (currentTeamId != null) {
               notificationService.unsubscribeFromTeam(currentTeamId!);

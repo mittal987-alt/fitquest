@@ -790,62 +790,6 @@ class FirebaseService {
   }
 
   // =========================
-  // GOOGLE SIGN IN
-  // =========================
-
-  Future<UserCredential?> signInWithGoogle() async {
-    final GoogleSignIn googleSignIn = GoogleSignIn();
-    final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
-    if (googleUser != null) {
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      return await auth.signInWithCredential(credential);
-    }
-    return null;
-  }
-
-  // =========================
-  // ANONYMOUS SIGN IN
-  // =========================
-
-  Future<UserCredential> signInAnonymously() async {
-    return await auth.signInAnonymously();
-  }
-
-  // =========================
-  // PHONE SIGN IN
-  // =========================
-
-  Future<void> verifyPhone({
-    required String phoneNumber,
-    required Function(PhoneAuthCredential) verificationCompleted,
-    required Function(FirebaseAuthException) verificationFailed,
-    required Function(String, int?) codeSent,
-    required Function(String) codeAutoRetrievalTimeout,
-  }) async {
-    await auth.verifyPhoneNumber(
-      phoneNumber: phoneNumber,
-      verificationCompleted: verificationCompleted,
-      verificationFailed: verificationFailed,
-      codeSent: codeSent,
-      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
-    );
-  }
-
-  Future<UserCredential> signInWithPhone(String verificationId, String smsCode) async {
-    PhoneAuthCredential credential = PhoneAuthProvider.credential(
-      verificationId: verificationId,
-      smsCode: smsCode,
-    );
-    return await auth.signInWithCredential(credential);
-  }
-
-  // =========================
   // PURCHASE POWER-UP
   // =========================
 

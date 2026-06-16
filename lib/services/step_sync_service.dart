@@ -17,6 +17,11 @@ class StepSyncService {
   bool initialized = false;
   PlayerModel? _cachedPlayer;
 
+  // Update the cached player to ensure team steps are synced correctly
+  void updateConfig(PlayerModel? player) {
+    _cachedPlayer = player;
+  }
+
   // =========================
   // START STEP TRACKING
   // =========================
@@ -47,18 +52,21 @@ class StepSyncService {
 
       lastStepCount = event.steps;
 
-      // 1. Update Player Total Steps (Incrementally) - Every step counts!
-      await firebaseService.updateSteps(
-        uid: uid,
-        stepsToAdd: stepsToAdd,
-      );
-
-      // 2. Update Team Steps if applicable - Every step counts!
-      if (_cachedPlayer != null && _cachedPlayer!.isInTeam && _cachedPlayer!.teamId != null) {
-        await firebaseService.updateTeamSteps(
-          teamId: _cachedPlayer!.teamId!,
+      // Batch updates to every 5 steps to reduce Firestore writes while remaining "real-time"
+      if (stepsToAdd >= 5) {
+        // 1. Update Player Total Steps (Incrementally)
+        await firebaseService.updateSteps(
+          uid: uid,
           stepsToAdd: stepsToAdd,
         );
+
+        // 2. Update Team Steps if applicable
+        if (_cachedPlayer != null && _cachedPlayer!.isInTeam && _cachedPlayer!.teamId != null) {
+          await firebaseService.updateTeamSteps(
+            teamId: _cachedPlayer!.teamId!,
+            stepsToAdd: stepsToAdd,
+          );
+        }
       }
 
       // 3. XP & Level System - Accumulate until we have at least 10 steps to grant 1 XP

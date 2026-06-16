@@ -66,19 +66,14 @@ class LocationService {
   // LOCATION STREAM
   // =========================
 
-  Stream<Position>
-  getLocationStream() {
-
-    return Geolocator
-        .getPositionStream(
-
-      locationSettings:
-      const LocationSettings(
-
-        accuracy:
-        LocationAccuracy.best,
-
-        distanceFilter: 0,
+  Stream<Position> getLocationStream() {
+    return Geolocator.getPositionStream(
+      locationSettings: AppleSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 10,
+        pauseLocationUpdatesAutomatically: true,
+        showBackgroundLocationIndicator: true,
+        activityType: ActivityType.fitness,
       ),
     );
   }
