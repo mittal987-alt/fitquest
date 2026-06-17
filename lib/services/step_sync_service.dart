@@ -5,116 +5,190 @@ import 'firebase_service.dart';
 import '../models/player_model.dart';
 
 class StepSyncService {
-  static final StepSyncService _instance = StepSyncService._internal();
-  factory StepSyncService() => _instance;
+  static final StepSyncService _instance =
   StepSyncService._internal();
 
-  final FirebaseService firebaseService = FirebaseService();
-  StreamSubscription<StepCount>? stepStream;
-  
-  int? lastStepCount;
-  int _pendingXpSteps = 0;
-  bool initialized = false;
-  PlayerModel? _cachedPlayer;
+  factory StepSyncService() => _instance;
 
-  // Update the cached player to ensure team steps are synced correctly
-  void updateConfig(PlayerModel? player) {
-    _cachedPlayer = player;
+  StepSyncService._internal();
+
+  final FirebaseService firebaseService =
+  FirebaseService();
+
+  StreamSubscription<StepCount>? stepStream;
+
+  int? lastStepCount;
+  int pendingXpSteps = 0;
+
+  bool initialized = false;
+
+  PlayerModel? cachedPlayer;
+
+  void updateConfig(
+      PlayerModel? player) {
+    cachedPlayer = player;
   }
 
   // =========================
-  // START STEP TRACKING
+  // START TRACKING
   // =========================
 
   void startTracking() {
     if (stepStream != null) return;
-    stepStream = Pedometer.stepCountStream.listen((StepCount event) async {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
 
-      if (!initialized) {
-        lastStepCount = event.steps;
-        // Fetch player once at start to know team status
-        _cachedPlayer = await firebaseService.getPlayer(uid);
-        initialized = true;
-        return;
-      }
+    stepStream =
+        Pedometer.stepCountStream.listen(
 
-      int stepsToAdd = event.steps - (lastStepCount ?? event.steps);
-      
-      // Handle potential step counter reset (e.g., phone reboot)
-      if (stepsToAdd < 0) {
-        lastStepCount = event.steps;
-        return;
-      }
+              (StepCount event) async {
 
-      if (stepsToAdd == 0) return;
+            final uid =
+                FirebaseAuth.instance
+                    .currentUser
+                    ?.uid;
 
-      lastStepCount = event.steps;
+            if (uid == null) return;
 
-      // Batch updates to every 5 steps to reduce Firestore writes while remaining "real-time"
-      if (stepsToAdd >= 5) {
-        // 1. Update Player Total Steps (Incrementally)
-        await firebaseService.updateSteps(
-          uid: uid,
-          stepsToAdd: stepsToAdd,
-        );
-
-        // 2. Update Team Steps if applicable
-        if (_cachedPlayer != null && _cachedPlayer!.isInTeam && _cachedPlayer!.teamId != null) {
-          await firebaseService.updateTeamSteps(
-            teamId: _cachedPlayer!.teamId!,
-            stepsToAdd: stepsToAdd,
-          );
-        }
-      }
-
-      // 3. XP & Level System - Accumulate until we have at least 10 steps to grant 1 XP
-      _pendingXpSteps += stepsToAdd;
-      if (_pendingXpSteps >= 10) {
-        int xpGain = _pendingXpSteps ~/ 10;
-        _pendingXpSteps %= 10;
-
-        await firebaseService.incrementXP(uid: uid, xpToAdd: xpGain);
-        
-        // Re-fetch player occasionally to check for level up
-        // or calculate it locally if we trust our cache
-        if (_cachedPlayer != null) {
-          int newXp = _cachedPlayer!.xp + xpGain;
-          int newLevel = (newXp ~/ 1000) + 1;
-
-          if (newLevel > _cachedPlayer!.level) {
-            await firebaseService.updateLevel(uid: uid, level: newLevel);
-            // Refresh cache after level up
-            _cachedPlayer = await firebaseService.getPlayer(uid);
-          } else {
-            // Just update local XP to keep track
-            _cachedPlayer = PlayerModel(
-              uid: _cachedPlayer!.uid,
-              name: _cachedPlayer!.name,
-              isInTeam: _cachedPlayer!.isInTeam,
-              email: _cachedPlayer!.email,
-              team: _cachedPlayer!.team,
-              teamId: _cachedPlayer!.teamId,
-              totalSteps: _cachedPlayer!.totalSteps + stepsToAdd,
-              totalLand: _cachedPlayer!.totalLand,
-              trustScore: _cachedPlayer!.trustScore,
-              level: _cachedPlayer!.level,
-              xp: newXp,
-              avatar: _cachedPlayer!.avatar,
-              lastTeamAction: _cachedPlayer!.lastTeamAction,
-              streakCount: _cachedPlayer!.streakCount,
-              lastActiveDate: _cachedPlayer!.lastActiveDate,
-              claimedQuests: _cachedPlayer!.claimedQuests,
-              activePowerUps: _cachedPlayer!.activePowerUps,
+            print(
+              "RAW STEPS: ${event.steps}",
             );
-          }
-        } else {
-          // If for some reason cache is null, fetch it
-          _cachedPlayer = await firebaseService.getPlayer(uid);
-        }
-      }
-    });
+
+            // First launch
+
+            if (!initialized) {
+
+              lastStepCount =
+                  event.steps;
+
+              cachedPlayer =
+              await firebaseService
+                  .getPlayer(uid);
+
+              initialized = true;
+
+              return;
+            }
+
+            int stepsToAdd =
+                event.steps -
+                    (lastStepCount ??
+                        event.steps);
+
+            print(
+              "STEPS TO ADD: $stepsToAdd",
+            );
+
+            if (stepsToAdd <= 0) {
+
+              lastStepCount =
+                  event.steps;
+
+              return;
+            }
+
+            lastStepCount =
+                event.steps;
+
+            // =====================
+            // UPDATE PLAYER STEPS
+            // =====================
+
+            await firebaseService
+                .updateSteps(
+              uid: uid,
+              stepsToAdd:
+              stepsToAdd,
+            );
+
+            print(
+              "PLAYER STEPS UPDATED",
+            );
+
+            // =====================
+            // TEAM STEPS
+            // =====================
+
+            if (cachedPlayer !=
+                null &&
+                cachedPlayer!
+                    .isInTeam &&
+                cachedPlayer!
+                    .teamId !=
+                    null) {
+
+              await firebaseService
+                  .updateTeamSteps(
+                teamId:
+                cachedPlayer!
+                    .teamId!,
+                stepsToAdd:
+                stepsToAdd,
+              );
+
+              print(
+                "TEAM STEPS UPDATED",
+              );
+            }
+
+            // =====================
+            // XP SYSTEM
+            // =====================
+
+            pendingXpSteps +=
+                stepsToAdd;
+
+            if (pendingXpSteps >=
+                10) {
+
+              int xpGain =
+                  pendingXpSteps ~/
+                      10;
+
+              pendingXpSteps =
+                  pendingXpSteps %
+                      10;
+
+              await firebaseService
+                  .incrementXP(
+                uid: uid,
+                xpToAdd: xpGain,
+              );
+
+              print(
+                "XP ADDED: $xpGain",
+              );
+
+              cachedPlayer =
+              await firebaseService
+                  .getPlayer(uid);
+
+              if (cachedPlayer !=
+                  null) {
+
+                int newLevel =
+                    (cachedPlayer!
+                        .xp ~/
+                        1000) +
+                        1;
+
+                if (newLevel >
+                    cachedPlayer!
+                        .level) {
+
+                  await firebaseService
+                      .updateLevel(
+                    uid: uid,
+                    level:
+                    newLevel,
+                  );
+
+                  print(
+                    "LEVEL UP: $newLevel",
+                  );
+                }
+              }
+            }
+          },
+        );
   }
 
   // =========================
@@ -122,7 +196,13 @@ class StepSyncService {
   // =========================
 
   void stopTracking() {
+
     stepStream?.cancel();
+
+    stepStream = null;
+
     initialized = false;
+
+    lastStepCount = null;
   }
 }

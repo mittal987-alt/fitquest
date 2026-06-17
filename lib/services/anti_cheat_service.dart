@@ -8,6 +8,8 @@ class AntiCheatService {
 
   bool captureBlocked = false;
 
+  bool get isCaptureBlocked => captureBlocked;
+
   // =========================
   // VEHICLE DETECTION
   // =========================
@@ -138,14 +140,17 @@ class AntiCheatService {
   // =========================
 
   bool canCapture({
-
     required bool isWalking,
-
     required bool realWalking,
+    required bool captureBlocked,
+    required double distanceToTile,
   }) {
+    // A multiplier of 2.0 covers the entire rectangular bounding box of the hex
+    // Using 0.002 to match updated TerritoryService.hexSize
+    bool isNear = distanceToTile < (0.002 * 2.0 * 111000);
 
     return isWalking &&
-        realWalking &&
-        !captureBlocked;
+        !captureBlocked &&
+        isNear;
   }
 }

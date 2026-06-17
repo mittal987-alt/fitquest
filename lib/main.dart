@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'services/firebase_service.dart';
 import 'services/notification_service.dart';
 import 'screens/login_screen.dart';
+import 'screens/main_navigation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,36 +26,36 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
-
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-
     return MaterialApp(
-
       debugShowCheckedModeBanner: false,
-
       title: "FitQuest",
-
       theme: ThemeData(
-
         useMaterial3: true,
-
         colorSchemeSeed: Colors.blue,
-
-        scaffoldBackgroundColor:
-        Colors.grey.shade100,
-
+        scaffoldBackgroundColor: Colors.grey.shade100,
         appBarTheme: const AppBarTheme(
-
           centerTitle: true,
-
           elevation: 0,
         ),
       ),
-
-      home: const LoginScreen(),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasData) {
+            return const MainNavigation();
+          }
+          return const LoginScreen();
+        },
+      ),
     );
   }
 }

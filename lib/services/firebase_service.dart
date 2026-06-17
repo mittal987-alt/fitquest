@@ -1,16 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'package:firebase_auth/firebase_auth.dart';
-
+import 'package:flutter/foundation.dart';
 import '../models/player_model.dart';
-
 import '../models/team_model.dart';
-
 import '../models/hex_tile_model.dart';
-
 import '../models/team_request_model.dart';
-
-import 'package:google_sign_in/google_sign_in.dart';
 
 class FirebaseService {
 
@@ -167,12 +161,22 @@ class FirebaseService {
     required String uid,
     required int stepsToAdd,
   }) async {
-    await firestore
-        .collection("players")
-        .doc(uid)
-        .update({
-      "totalSteps": FieldValue.increment(stepsToAdd),
-    });
+    try {
+      await firestore
+          .collection("players")
+          .doc(uid)
+          .update({
+        "totalSteps": FieldValue.increment(stepsToAdd),
+      });
+
+      debugPrint(
+        "STEPS UPDATED => +$stepsToAdd",
+      );
+    } catch (e) {
+      debugPrint(
+        "STEP UPDATE ERROR => $e",
+      );
+    }
   }
 
   // =========================
@@ -180,23 +184,25 @@ class FirebaseService {
   // =========================
 
   Future<void> updateLand({
-
     required String uid,
-
     required int totalLand,
   }) async {
+    try {
+      await firestore
+          .collection("players")
+          .doc(uid)
+          .update({
+        "totalLand": totalLand,
+      });
 
-    await firestore
-
-        .collection("players")
-
-        .doc(uid)
-
-        .update({
-
-      "totalLand":
-      totalLand,
-    });
+      debugPrint(
+        "LAND UPDATED => $totalLand",
+      );
+    } catch (e) {
+      debugPrint(
+        "LAND UPDATE ERROR => $e",
+      );
+    }
   }
 
   // =========================
@@ -232,9 +238,24 @@ class FirebaseService {
     required String uid,
     required int xpToAdd,
   }) async {
-    await firestore.collection("players").doc(uid).update({
-      "xp": FieldValue.increment(xpToAdd),
-    });
+    try {
+      await firestore
+          .collection("players")
+          .doc(uid)
+          .update({
+        "xp": FieldValue.increment(
+          xpToAdd,
+        ),
+      });
+
+      debugPrint(
+        "XP ADDED => $xpToAdd",
+      );
+    } catch (e) {
+      debugPrint(
+        "XP UPDATE ERROR => $e",
+      );
+    }
   }
 
   Future<void> updateXP({
@@ -573,15 +594,20 @@ class FirebaseService {
 
   Future<void> saveHexTile(
       HexTileModel tile) async {
+    try {
+      await firestore
+          .collection("hex_tiles")
+          .doc(tile.tileId)
+          .set(tile.toMap());
 
-    await firestore
-
-        .collection(
-        "hex_tiles")
-
-        .doc(tile.tileId)
-
-        .set(tile.toMap());
+      debugPrint(
+        "HEX SAVED => ${tile.tileId}",
+      );
+    } catch (e) {
+      debugPrint(
+        "HEX SAVE ERROR => $e",
+      );
+    }
   }
 
   // =========================

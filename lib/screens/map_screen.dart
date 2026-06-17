@@ -31,19 +31,21 @@ class _MapScreenState extends State<MapScreen> {
   final FirebaseService firebaseService = FirebaseService();
 
   StreamSubscription<Position>? positionStream;
+  StreamSubscription<List<HexTileModel>>? hexTilesStream;
   LatLng currentPosition = const LatLng(28.6139, 77.2090);
   final Set<Polygon> hexagons = {};
   final Set<Marker> markers = {};
   List<HexTileModel> allTiles = [];
   double speedKmh = 0;
+  String? lastCapturedTile;
 
   @override
   void initState() {
     super.initState();
+
     initializeLocation();
     listenToHexTiles();
     startRegenLoop();
-    pedometerService.startListening();
   }
 
   // =========================
@@ -51,7 +53,8 @@ class _MapScreenState extends State<MapScreen> {
   // =========================
 
   void listenToHexTiles() {
-    firebaseService.getHexTiles().listen((tiles) {
+    hexTilesStream?.cancel();
+    hexTilesStream = firebaseService.getHexTiles().listen((tiles) {
       allTiles = tiles;
       generateGrid();
       if (mounted) setState(() {});
@@ -83,6 +86,7 @@ class _MapScreenState extends State<MapScreen> {
   DateTime? lastTimestamp;
 
   void startTracking() {
+    positionStream?.cancel();
     positionStream = locationService.getLocationStream().listen(
       (position) async {
         final now = DateTime.now();
@@ -127,6 +131,8 @@ class _MapScreenState extends State<MapScreen> {
         lastTimestamp = now;
         currentPosition = LatLng(position.latitude, position.longitude);
 
+        if (!mounted) return;
+
         bool isWalking = antiCheatService.isWalking(speedKmh);
 
         if (antiCheatService.isVehicle(speedKmh)) {
@@ -145,11 +151,20 @@ class _MapScreenState extends State<MapScreen> {
         updatePlayerMarker();
         generateGrid();
 
-        mapController?.animateCamera(
-          CameraUpdate.newLatLng(currentPosition),
-        );
+        if (mounted &&
+            mapController != null) {
 
-        if (mounted) setState(() {});
+          try {
+
+            await mapController!
+                .animateCamera(
+              CameraUpdate.newLatLng(
+                currentPosition,
+              ),
+            );
+
+          } catch (_) {}
+        }
       },
     );
   }
@@ -161,6 +176,10 @@ class _MapScreenState extends State<MapScreen> {
     Timer.periodic(
       const Duration(minutes: 2),
       (timer) async {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
         await regenerateTerritories();
       },
     );
@@ -188,123 +207,88 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> captureTile() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
     final uid = user.uid;
+
     PlayerModel? player = await firebaseService.getPlayer(uid);
     if (player == null) return;
 
-    // Check for Radar Power-up
-    double effectiveHexSize = TerritoryService.hexSize;
-    final radarExpiry = player.activePowerUps["radar"];
-    if (radarExpiry != null) {
-      if (radarExpiry.isAfter(DateTime.now())) {
-        effectiveHexSize *= 2.0; // Double the capture distance
-      }
+    String tileId = territoryService.getHexId(
+      currentPosition.latitude,
+      currentPosition.longitude,
+    );
+
+    // prevent duplicate capture spam
+    if (lastCapturedTile == tileId) {
+      return;
     }
 
-    // Get current hex info
-    int q = (currentPosition.longitude / (effectiveHexSize * 1.5)).floor();
-    int r = (currentPosition.latitude / (effectiveHexSize * 1.732)).floor();
-    double tileLng = q * (effectiveHexSize * 1.5);
-    double tileLat = r * (effectiveHexSize * 1.732);
-    if (r.isOdd) tileLng += effectiveHexSize * 0.75;
-    String tileId = "${q}_$r";
+    lastCapturedTile = tileId;
 
-    // 1. Basic walking check from AntiCheat
+    LatLng tileCenter = territoryService.getHexCenter(tileId);
+
     bool isWalking = antiCheatService.isWalking(speedKmh);
-    bool realWalking = pedometerService.isRealWalking();
+
+    // TEMPORARY TEST
+    bool realWalking =
+    pedometerService
+        .isRealWalking();
+
     bool captureBlocked = antiCheatService.captureBlocked;
 
-    // 2. Distance check to tile center
     double distToCenter = locationService.calculateDistance(
       startLat: currentPosition.latitude,
       startLng: currentPosition.longitude,
-      endLat: tileLat,
-      endLng: tileLng,
+      endLat: tileCenter.latitude,
+      endLng: tileCenter.longitude,
     );
 
-    if (!territoryService.canCapture(
+    debugPrint("========== CAPTURE ==========");
+    debugPrint("Tile: $tileId");
+    debugPrint("Walking: $isWalking");
+    debugPrint("RealWalking: $realWalking");
+    debugPrint("Blocked: $captureBlocked");
+    debugPrint("Distance: $distToCenter");
+    debugPrint("============================");
+
+    if (!antiCheatService.canCapture(
       isWalking: isWalking,
       realWalking: realWalking,
       captureBlocked: captureBlocked,
       distanceToTile: distToCenter,
     )) {
-      debugPrint("MapScreen: Capture denied - isWalking: $isWalking, realWalking: $realWalking, captureBlocked: $captureBlocked, distToCenter: $distToCenter");
+      debugPrint("CAPTURE DENIED");
       return;
     }
 
-    final HexTileModel? existingTile = allTiles.where((t) => t.tileId == tileId).firstOrNull;
+    HexTileModel? existingTile;
 
-    // Shield Logic: If target is team-owned and shielded, prevent capture
-    if (existingTile != null) {
-      final tile = existingTile;
-      bool isShielded = false;
-      if (tile.ownerType == "solo") {
-        final owner = await firebaseService.getPlayer(tile.ownerId);
-        final shieldExpiry = owner?.activePowerUps["shield"];
-        if (shieldExpiry != null && shieldExpiry.isAfter(DateTime.now())) {
-          isShielded = true;
-        }
-      } else {
-        final teamList = await firebaseService.getTeams().first;
-        final team = teamList.firstWhere(
-          (t) => t.id == tile.ownerId,
-          orElse: () => TeamModel(
-            id: "",
-            name: "Unknown",
-            color: "blue",
-            members: 0,
-            maxMembers: 50,
-            totalLand: 0,
-            totalSteps: 0,
-            leaderId: "",
-            logo: "",
-          ),
-        );
-        if (team.id.isNotEmpty) {
-          final leader = await firebaseService.getPlayer(team.leaderId);
-          final shieldExpiry = leader?.activePowerUps["shield"];
-          if (shieldExpiry != null && shieldExpiry.isAfter(DateTime.now())) {
-            isShielded = true;
-          }
-        }
-      }
-
-      if (isShielded) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Target is protected by a Shield!")),
-          );
-        }
-        return;
-      }
+    try {
+      existingTile = allTiles.firstWhere(
+        (t) => t.tileId == tileId,
+      );
+    } catch (_) {
+      existingTile = null;
     }
-
 
     String ownerType = player.isInTeam ? "team" : "solo";
-    String? ownerId;
 
-    if (player.isInTeam) {
-      ownerId = player.teamId;
-      if (ownerId == null) {
-        debugPrint("ERROR: Player marked as team member but teamId is null");
-        return;
-      }
-    } else {
-      ownerId = player.uid;
-    }
+    String ownerId = player.isInTeam ? (player.teamId ?? player.uid) : player.uid;
+
     String ownerName = player.isInTeam ? player.team : player.name;
+
     String tileColor = player.isInTeam ? "blue" : "orange";
 
-    if (existingTile != null) {
-      if (existingTile.ownerId == ownerId) {
-        return;
-      }
+    // already yours
+    if (existingTile != null && existingTile.ownerId == ownerId) {
+      debugPrint("ALREADY OWNED");
+      return;
     }
 
     HexTileModel tile = HexTileModel(
       tileId: tileId,
-      latitude: currentPosition.latitude,
-      longitude: currentPosition.longitude,
+      latitude: tileCenter.latitude,
+      longitude: tileCenter.longitude,
       ownerType: ownerType,
       ownerId: ownerId,
       ownerName: ownerName,
@@ -314,60 +298,38 @@ class _MapScreenState extends State<MapScreen> {
     );
 
     await firebaseService.saveHexTile(tile);
+    allTiles.add(tile);
 
-    // Notify user of capture
+    generateGrid();
+
     if (mounted) {
-      final notificationService = Provider.of<NotificationService>(context, listen: false);
-      notificationService.showLocalNotification(
-        title: "Tile Captured!",
-        body: "You've successfully captured a new territory!",
+      setState(() {});
+    }
+
+    debugPrint("HEX SAVED => $tileId");
+
+    // update player land
+    final myTiles = allTiles.where((t) => t.ownerId == ownerId).length + 1;
+
+    if (player.isInTeam && player.teamId != null) {
+      await firebaseService.updateTeamLand(
+        teamId: player.teamId!,
+        totalLand: myTiles,
+      );
+    } else {
+      await firebaseService.updateLand(
+        uid: player.uid,
+        totalLand: myTiles,
       );
     }
 
-    // Update global counts
-    if (player.isInTeam && player.teamId != null) {
-      // Find team by id
-      final teamList = await firebaseService.getTeams().first;
-      final team = teamList.firstWhere(
-        (t) => t.id == player.teamId,
-        orElse: () => TeamModel(
-          id: "",
-          name: "Unknown",
-          color: "blue",
-          members: 0,
-          maxMembers: 50,
-          totalLand: 0,
-          totalSteps: 0,
-          leaderId: "",
-          logo: "",
-        ),
-      );
-      
-      if (team.id.isNotEmpty) {
-        // Get all tiles owned by this team
-        final teamTiles = allTiles.where((t) => t.ownerId == team.id).length;
-        await firebaseService.updateTeamLand(teamId: team.id, totalLand: teamTiles + (existingTile == null ? 1 : 0));
-        
-        // Reward XP for team capture
-        int xpReward = 50;
-        final boostExpiry = player.activePowerUps["boost"];
-        if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
-          xpReward *= 2;
-        }
-        await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
-      }
-    } else {
-      final myTiles = allTiles.where((t) => t.ownerId == player.uid).length;
-      await firebaseService.updateLand(uid: player.uid, totalLand: myTiles + (existingTile == null ? 1 : 0));
-      
-      // Reward XP for solo capture
-      int xpReward = 30;
-      final boostExpiry = player.activePowerUps["boost"];
-      if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
-        xpReward *= 2;
-      }
-      await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
-    }
+    await firebaseService.incrementXP(
+      uid: player.uid,
+      xpToAdd: 30,
+    );
+
+    debugPrint("LAND UPDATED");
+    debugPrint("XP UPDATED");
   }
 
   // =========================
@@ -771,7 +733,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     positionStream?.cancel();
-    pedometerService.stopListening();
+    hexTilesStream?.cancel();
     super.dispose();
   }
 
@@ -790,6 +752,32 @@ class _MapScreenState extends State<MapScreen> {
             compassEnabled: true,
             onMapCreated: (controller) => mapController = controller,
           ),
+          // Warning indicator if capture is blocked
+          if (antiCheatService.isCaptureBlocked)
+            Positioned(
+              top: 40,
+              left: 20,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Movement too fast! Capture disabled.",
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Positioned(
             left: 0,
             right: 0,

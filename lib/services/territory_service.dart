@@ -10,8 +10,7 @@ class TerritoryService {
   // HEX SIZE
   // =========================
 
-  static const double hexSize =
-  0.0007;
+  static const double hexSize = 0.0005;
 
   // =========================
   // GET HEX ID
@@ -20,19 +19,52 @@ class TerritoryService {
   String getHexId(
       double lat,
       double lng, {
-      double? customHexSize,
-    }) {
+        double? customHexSize,
+      }) {
     final size = customHexSize ?? hexSize;
 
-    int q =
-    (lng / (size * 1.5))
-        .floor();
+    int r = (lat / (size * 1.5)).round();
 
-    int r =
-    (lat / (size * 1.732))
-        .floor();
+    int q = (
+        (lng -
+            (r.isOdd ? size * 0.75 : 0))
+            /
+            (size * 1.3)
+    ).round();
 
     return "${q}_$r";
+  }
+
+  // =========================
+  // GET HEX CENTER
+  // =========================
+
+  LatLng getHexCenter(
+      String tileId, {
+        double? customHexSize,
+      }) {
+    final size = customHexSize ?? hexSize;
+
+    List<String> parts =
+    tileId.split("_");
+
+    int q = int.parse(parts[0]);
+    int r = int.parse(parts[1]);
+
+    double lat =
+        r * (size * 1.5);
+
+    double lng =
+        q * (size * 1.3);
+
+    if (r.isOdd) {
+      lng += size * 0.75;
+    }
+
+    return LatLng(
+      lat,
+      lng,
+    );
   }
 
   // =========================
@@ -40,34 +72,21 @@ class TerritoryService {
   // =========================
 
   List<LatLng> createHexagon(
-
-      LatLng center,
-
-      double radius,
-      ) {
-
+    LatLng center,
+    double radius,
+  ) {
     List<LatLng> points = [];
+    // Adjust for map projection aspect ratio
+    final double lngAdjust = 1.0 / cos(center.latitude * pi / 180.0);
 
     for (int i = 0; i < 6; i++) {
+      double angle = pi / 180 * (60 * i + 30); // Rotate 30 deg for pointy-top
 
-      double angle =
-          pi / 180 * (60 * i);
+      double lat = center.latitude + (radius * sin(angle));
+      double lng = center.longitude + (radius * cos(angle) * lngAdjust);
 
-      double lat =
-          center.latitude +
-              radius *
-                  sin(angle);
-
-      double lng =
-          center.longitude +
-              radius *
-                  cos(angle);
-
-      points.add(
-        LatLng(lat, lng),
-      );
+      points.add(LatLng(lat, lng));
     }
-
     return points;
   }
 
@@ -102,64 +121,28 @@ class TerritoryService {
   // =========================
 
   Set<Polygon> generateWorldGrid({
-
     required LatLng currentPosition,
-
-    required Set<String>
-    capturedTiles,
-
-    required Map<String, String>
-    tileOwners,
+    required Set<String> capturedTiles,
+    required Map<String, String> tileOwners,
   }) {
-
-    final Set<Polygon>
-    hexagons = {};
-
+    final Set<Polygon> hexagons = {};
     int id = 0;
 
-    int playerQ =
-    (currentPosition.longitude /
-        (hexSize * 1.5))
-        .floor();
+    int playerQ = (currentPosition.longitude / (hexSize * 1.3)).floor();
+    int playerR = (currentPosition.latitude / (hexSize * 1.5)).floor();
 
-    int playerR =
-    (currentPosition.latitude /
-        (hexSize * 1.732))
-        .floor();
-
-    for (int q = playerQ - 10;
-    q <= playerQ + 10;
-    q++) {
-
-      for (int r = playerR - 10;
-      r <= playerR + 10;
-      r++) {
-
-        double centerLng =
-            q *
-                (hexSize * 1.5);
-
-        double centerLat =
-            r *
-                (hexSize * 1.732);
+    for (int q = playerQ - 8; q <= playerQ + 8; q++) {
+      for (int r = playerR - 8; r <= playerR + 8; r++) {
+        double centerLng = q * (hexSize * 1.3);
+        double centerLat = r * (hexSize * 1.5);
 
         if (r.isOdd) {
-
-          centerLng +=
-              hexSize * 0.75;
+          centerLng += hexSize * 0.75;
         }
 
-        String tileId =
-            "${q}_$r";
-
-        List<LatLng> points =
-        createHexagon(
-
-          LatLng(
-            centerLat,
-            centerLng,
-          ),
-
+        String tileId = "${q}_$r";
+        List<LatLng> points = createHexagon(
+          LatLng(centerLat, centerLng),
           hexSize,
         );
 
@@ -211,25 +194,6 @@ class TerritoryService {
     return hexagons;
   }
 
-  // =========================
-  // CHECK CAPTURE
-  // =========================
-
-  bool canCapture({
-    required bool isWalking,
-    required bool realWalking,
-    required bool captureBlocked,
-    required double distanceToTile,
-  }) {
-    // A multiplier of 2.0 covers the entire rectangular bounding box of the hex
-    // We'll also allow capture if realWalking is false for debugging/testing
-    // since some devices/emulators might not have pedometer support.
-    bool isNear = distanceToTile < (hexSize * 2.0 * 111000);
-
-    return isWalking &&
-        !captureBlocked &&
-        isNear;
-  }
 
   // =========================
   // ATTACK CHECK
