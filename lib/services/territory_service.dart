@@ -23,18 +23,16 @@ class TerritoryService {
       }) {
     final size = customHexSize ?? hexSize;
 
-    int r = (lat / (size * 1.5)).round();
+    int q =
+    (lng / (size * 1.5))
+        .round();
 
-    int q = (
-        (lng -
-            (r.isOdd ? size * 0.75 : 0))
-            /
-            (size * 1.3)
-    ).round();
+    int r =
+    (lat / (size * 1.732))
+        .round();
 
     return "${q}_$r";
   }
-
   // =========================
   // GET HEX CENTER
   // =========================
@@ -45,25 +43,18 @@ class TerritoryService {
       }) {
     final size = customHexSize ?? hexSize;
 
-    List<String> parts =
-    tileId.split("_");
+    final parts = tileId.split("_");
 
     int q = int.parse(parts[0]);
     int r = int.parse(parts[1]);
 
-    double lat =
-        r * (size * 1.5);
+    double x = q * size * 1.5;
 
-    double lng =
-        q * (size * 1.3);
-
-    if (r.isOdd) {
-      lng += size * 0.75;
-    }
+    double y = r * size * 1.732;
 
     return LatLng(
-      lat,
-      lng,
+      y,
+      x,
     );
   }
 
@@ -72,21 +63,28 @@ class TerritoryService {
   // =========================
 
   List<LatLng> createHexagon(
-    LatLng center,
-    double radius,
-  ) {
+      LatLng center,
+      double radius,
+      ) {
     List<LatLng> points = [];
-    // Adjust for map projection aspect ratio
-    final double lngAdjust = 1.0 / cos(center.latitude * pi / 180.0);
 
     for (int i = 0; i < 6; i++) {
-      double angle = pi / 180 * (60 * i + 30); // Rotate 30 deg for pointy-top
+      double angle =
+          pi / 180 * (60 * i);
 
-      double lat = center.latitude + (radius * sin(angle));
-      double lng = center.longitude + (radius * cos(angle) * lngAdjust);
+      double lat =
+          center.latitude +
+              radius * sin(angle);
 
-      points.add(LatLng(lat, lng));
+      double lng =
+          center.longitude +
+              radius * cos(angle);
+
+      points.add(
+        LatLng(lat, lng),
+      );
     }
+
     return points;
   }
 
