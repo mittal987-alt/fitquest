@@ -54,12 +54,18 @@ class _MapScreenState extends State<MapScreen> {
 
   void listenToHexTiles() {
     hexTilesStream?.cancel();
+
     hexTilesStream = firebaseService.getHexTiles().listen((tiles) {
+      debugPrint("TOTAL TILES FROM FIRESTORE = ${tiles.length}");
+
       allTiles = tiles;
+
       generateGrid();
+
       if (mounted) setState(() {});
     });
   }
+
 
   // =========================
   // INITIALIZE LOCATION
@@ -205,6 +211,7 @@ class _MapScreenState extends State<MapScreen> {
   // =========================
 
   Future<void> captureTile() async {
+    debugPrint("CAPTURE FUNCTION CALLED");
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -296,8 +303,12 @@ class _MapScreenState extends State<MapScreen> {
       power: 100,
       capturedAt: DateTime.now().millisecondsSinceEpoch,
     );
+    debugPrint("BEFORE SAVE");
 
     await firebaseService.saveHexTile(tile);
+
+    debugPrint("AFTER SAVE");
+
     allTiles.add(tile);
 
     generateGrid();

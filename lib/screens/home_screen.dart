@@ -18,6 +18,8 @@ import '../models/power_up_model.dart';
 import '../services/firebase_service.dart';
 import 'package:confetti/confetti.dart';
 
+import 'package:intl/intl.dart';
+
 class HomeScreen extends StatefulWidget {
 
   const HomeScreen({super.key});
@@ -56,14 +58,6 @@ class _HomeScreenState
       firebaseService.checkAndResetDailyStats(uid);
     }
 
-    // START PEDOMETER
-    pedometerService
-        .startListening();
-
-    // START FIREBASE STEP SYNC
-    stepSyncService
-        .startTracking();
-
     // AUTO REFRESH UI
     refreshTimer = Timer.periodic(
 
@@ -84,11 +78,14 @@ class _HomeScreenState
   void dispose() {
     _confettiController.dispose();
     refreshTimer?.cancel();
-
-    stepSyncService
-        .stopTracking();
-
     super.dispose();
+  }
+
+  String _getRelativeSyncTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inSeconds < 60) return "Just now";
+    if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
+    return DateFormat('HH:mm').format(time);
   }
 
   @override
@@ -143,37 +140,42 @@ class _HomeScreenState
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Welcome Back 👋",
-                            style: TextStyle(color: Colors.white70, fontSize: 18),
-                          ),
-                          const SizedBox(height: 10),
-                          const Text(
-                            "Ready To Conquer?",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Welcome Back 👋",
+                              style: TextStyle(color: Colors.white70, fontSize: 18),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 10),
+                            const Text(
+                              "Ready To Conquer?",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       if (streak > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            "🔥 $streak",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              "🔥 $streak",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
                             ),
                           ),
                         ),
@@ -185,6 +187,29 @@ class _HomeScreenState
 
             const SizedBox(
                 height: 24),
+
+            // =====================
+            // SYNC STATUS
+            // =====================
+            if (stepSyncService.lastSyncTime != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.sync, size: 16, color: Colors.grey.shade600),
+                    const SizedBox(width: 4),
+                    Text(
+                      _getRelativeSyncTime(stepSyncService.lastSyncTime!),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
             // =====================
             // STATS GRID
@@ -641,25 +666,6 @@ class _HomeScreenState
               ),
             ),
 
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                    ),
-                    onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
-                    },
-                    icon: const Icon(Icons.leaderboard),
-                    label: const Text("Leaderboard"),
-                  ),
-                ),
-              ],
-            ),
-
             const SizedBox(height: 30),
 
             // =====================
@@ -779,19 +785,17 @@ class _HomeScreenState
                       final player = snapshot.data;
                       if (player == null || player.activePowerUps.isEmpty) return const SizedBox();
                       
-                      return Row(
+                      return Wrap(
+                        spacing: 4,
                         children: player.activePowerUps.entries.map((entry) {
                           final isExpired = entry.value.isBefore(DateTime.now());
                           if (isExpired) return const SizedBox();
 
                           final powerUp = shopItems.firstWhere((p) => p.id == entry.key, orElse: () => shopItems[0]);
 
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Tooltip(
-                              message: "${powerUp.name} active",
-                              child: Icon(powerUp.icon, color: Colors.white, size: 24),
-                            ),
+                          return Tooltip(
+                            message: "${powerUp.name} active",
+                            child: Icon(powerUp.icon, color: Colors.white, size: 24),
                           );
                         }).toList(),
                       );
@@ -851,13 +855,17 @@ class _HomeScreenState
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     if (isClaimed)
                       const Icon(Icons.check_circle, color: Colors.green, size: 20)
                     else
@@ -900,6 +908,9 @@ class _HomeScreenState
                             questId: id,
                             rewardXp: reward,
                           );
+
+                          if (!mounted) return;
+
                           _confettiController.play();
                         },
                         child: const Text("CLAIM REWARD", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),

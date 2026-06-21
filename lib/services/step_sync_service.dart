@@ -19,6 +19,7 @@ class StepSyncService {
 
   int? lastStepCount;
   int pendingXpSteps = 0;
+  DateTime? lastSyncTime;
 
   bool initialized = false;
 
@@ -87,6 +88,8 @@ class StepSyncService {
 
             lastStepCount =
                 event.steps;
+
+            lastSyncTime = DateTime.now();
 
             // =====================
             // UPDATE PLAYER STEPS

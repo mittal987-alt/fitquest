@@ -592,21 +592,19 @@ class FirebaseService {
   // SAVE HEX TILE
   // =========================
 
-  Future<void> saveHexTile(
-      HexTileModel tile) async {
+  Future<void> saveHexTile(HexTileModel tile) async {
     try {
+      debugPrint("START FIREBASE WRITE");
+
       await firestore
           .collection("hex_tiles")
           .doc(tile.tileId)
           .set(tile.toMap());
 
-      debugPrint(
-        "HEX SAVED => ${tile.tileId}",
-      );
-    } catch (e) {
-      debugPrint(
-        "HEX SAVE ERROR => $e",
-      );
+      debugPrint("FIREBASE WRITE SUCCESS");
+    } catch (e, s) {
+      debugPrint("FIREBASE ERROR = $e");
+      debugPrint("$s");
     }
   }
 
