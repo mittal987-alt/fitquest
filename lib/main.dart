@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+
 import 'firebase_options.dart';
 import 'services/firebase_service.dart';
 import 'services/notification_service.dart';
@@ -10,12 +11,23 @@ import 'screens/main_navigation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
+
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    debugPrint("✅ Firebase Initialized");
+  } catch (e) {
+    debugPrint("❌ Firebase Init Error: $e");
+  }
+
   final notificationService = NotificationService();
-  await notificationService.initialize();
+  try {
+    await notificationService.initialize();
+    debugPrint("✅ Notifications Initialized");
+  } catch (e) {
+    debugPrint("❌ Notification Error: $e");
+  }
 
   runApp(
     MultiProvider(
