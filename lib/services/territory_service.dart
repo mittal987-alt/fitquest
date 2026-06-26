@@ -1,222 +1,217 @@
 import 'dart:math';
-
 import 'package:flutter/material.dart';
-
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class TerritoryService {
-
   // =========================
   // HEX SIZE
   // =========================
-
-  static const double hexSize = 0.0005;
+  static const double hexSize = 0.0001; // Approx 11 meters
+  static const double sqrt3 = 1.7320508;
 
   // =========================
-  // GET HEX ID
+  // GET HEX ID (Odd-R Offset)
   // =========================
-
-  String getHexId(
-      double lat,
-      double lng, {
-        double? customHexSize,
-      }) {
-    final size = customHexSize ?? hexSize;
-
-    int q =
-    (lng / (size * 1.5))
-        .round();
-
-    int r =
-    (lat / (size * 1.732))
-        .round();
+  String getHexId(double lat, double lng) {
+    // Standard Hex Offset Grid (Odd-R) calculation
+    int r = (lat / (hexSize * 1.5)).round();
+    double offset = (r % 2 != 0) ? (hexSize * sqrt3 / 2) : 0;
+    int q = ((lng - offset) / (hexSize * sqrt3)).round();
 
     return "${q}_$r";
   }
+
   // =========================
   // GET HEX CENTER
   // =========================
-
-  LatLng getHexCenter(
-      String tileId, {
-        double? customHexSize,
-      }) {
-    final size = customHexSize ?? hexSize;
-
+  LatLng getHexCenter(String tileId) {
     final parts = tileId.split("_");
-
     int q = int.parse(parts[0]);
     int r = int.parse(parts[1]);
 
-    double x = q * size * 1.5;
+    double lat = r * (hexSize * 1.5);
+    double offset = (r % 2 != 0) ? (hexSize * sqrt3 / 2) : 0;
+    double lng = q * (hexSize * sqrt3) + offset;
 
-    double y = r * size * 1.732;
-
-    return LatLng(
-      y,
-      x,
-    );
+    return LatLng(lat, lng);
   }
 
   // =========================
   // CREATE HEXAGON
   // =========================
-
-  List<LatLng> createHexagon(
-      LatLng center,
-      double radius,
-      ) {
+  List<LatLng> createHexagon(LatLng center, double radius) {
     List<LatLng> points = [];
-
     for (int i = 0; i < 6; i++) {
-      double angle =
-          pi / 180 * (60 * i);
+      // Pointy-top hex orientation (30 deg start)
+      double angleDeg = 60 * i - 30;
+      double angleRad = pi / 180 * angleDeg;
 
-      double lat =
-          center.latitude +
-              radius * sin(angle);
-
-      double lng =
-          center.longitude +
-              radius * cos(angle);
-
-      points.add(
-        LatLng(lat, lng),
-      );
+      points.add(LatLng(
+        center.latitude + radius * sin(angleRad),
+        center.longitude + (radius * cos(angleRad)) / cos(center.latitude * pi / 180),
+      ));
     }
-
     return points;
   }
 
   // =========================
   // TEAM COLOR
   // =========================
-
-  Color getTeamColor(
-      String team) {
-
+  Color getTeamColor(String team) {
     switch (team) {
-
-      case "red":
-        return Colors.red;
-
-      case "green":
-        return Colors.green;
-
-      case "yellow":
-        return Colors.orange;
-
-      case "purple":
-        return Colors.purple;
-
-      default:
-        return Colors.blue;
+      case "red": return Colors.red;
+      case "green": return Colors.green;
+      case "yellow": return Colors.orange;
+      case "purple": return Colors.purple;
+      case "blue": return Colors.blue;
+      default: return Colors.orange; // Default solo
     }
   }
-
-  // =========================
-  // GENERATE WORLD GRID
-  // =========================
-
-  Set<Polygon> generateWorldGrid({
-    required LatLng currentPosition,
-    required Set<String> capturedTiles,
-    required Map<String, String> tileOwners,
+  // ==========================================
+  // CALCULATE CAPTURED TILES (Fixed Bound Box)
+  // ==========================================
+  Set<String> calculateCapturedTiles({
+    required Set<String> currentTrail,
+    required Set<String> ownedTerritory,
+    required List<String> allActiveGameTiles,
   }) {
-    final Set<Polygon> hexagons = {};
-    int id = 0;
+    if (currentTrail.isEmpty) return {};
 
-    int playerQ = (currentPosition.longitude / (hexSize * 1.3)).floor();
-    int playerR = (currentPosition.latitude / (hexSize * 1.5)).floor();
+    // 1. DYNAMIC BOUNDING BOX CREATION
+    // We parse all current tiles to find the spatial boundaries (min/max coordinates)
+    Set<String> localProcessingPool = Set.from(allActiveGameTiles);
+    localProcessingPool.addAll(currentTrail);
+    localProcessingPool.addAll(ownedTerritory);
 
-    for (int q = playerQ - 8; q <= playerQ + 8; q++) {
-      for (int r = playerR - 8; r <= playerR + 8; r++) {
-        double centerLng = q * (hexSize * 1.3);
-        double centerLat = r * (hexSize * 1.5);
+    int minQ = 9999999, maxQ = -9999999;
+    int minR = 9999999, maxR = -9999999;
 
-        if (r.isOdd) {
-          centerLng += hexSize * 0.75;
-        }
+    for (String tileId in localProcessingPool) {
+      final parts = tileId.split("_");
+      int q = int.parse(parts[0]);
+      int r = int.parse(parts[1]);
+      if (q < minQ) minQ = q;
+      if (q > maxQ) maxQ = q;
+      if (r < minR) minR = r;
+      if (r > maxR) maxR = r;
+    }
 
-        String tileId = "${q}_$r";
-        List<LatLng> points = createHexagon(
-          LatLng(centerLat, centerLng),
-          hexSize,
-        );
+    // Pad the bounding box by 2 extra layers of hexes to ensure the flood fill
+    // can completely loop *around* the outside of the player's trail.
+    minQ -= 2; maxQ += 2;
+    minR -= 2; maxR += 2;
 
-        Color tileColor =
-        Colors.grey
-            .withValues(alpha: 0.08);
-
-        // CAPTURED TILE
-        if (capturedTiles
-            .contains(tileId)) {
-
-          String? team =
-          tileOwners[tileId];
-
-          if (team != null) {
-
-            tileColor =
-                getTeamColor(team)
-                    .withValues(
-                    alpha: 0.5);
-          }
-        }
-
-        hexagons.add(
-
-          Polygon(
-
-            polygonId:
-            PolygonId(
-              "hex_$id",
-            ),
-
-            points: points,
-
-            fillColor:
-            tileColor,
-
-            strokeColor:
-            Colors.white24,
-
-            strokeWidth: 1,
-          ),
-        );
-
-        id++;
+    // Build the finalized evaluation pool space
+    Set<String> boundedMapSpace = {};
+    for (int q = minQ; q <= maxQ; q++) {
+      for (int r = minR; r <= maxR; r++) {
+        boundedMapSpace.add("${q}_$r");
       }
     }
 
-    return hexagons;
+    Set<String> outsideTiles = {};
+    List<String> queue = [];
+
+    // 2. Identify outer edge tiles of our newly padded bounding rectangle
+    for (String tileId in boundedMapSpace) {
+      final parts = tileId.split("_");
+      int q = int.parse(parts[0]);
+      int r = int.parse(parts[1]);
+
+      // If it is on the literal boundary layer of the matrix box, it is safely "Outside"
+      if (q == minQ || q == maxQ || r == minR || r == maxR) {
+        if (!currentTrail.contains(tileId) && !ownedTerritory.contains(tileId)) {
+          queue.add(tileId);
+          outsideTiles.add(tileId);
+        }
+      }
+    }
+
+    // 3. BFS Flood Fill
+    while (queue.isNotEmpty) {
+      String current = queue.removeAt(0);
+
+      for (String neighbor in getNeighbors(current)) {
+        // Must stay inside our generated virtual box limits
+        if (boundedMapSpace.contains(neighbor) &&
+            !outsideTiles.contains(neighbor) &&
+            !currentTrail.contains(neighbor) &&
+            !ownedTerritory.contains(neighbor)) {
+
+          outsideTiles.add(neighbor);
+          queue.add(neighbor);
+        }
+      }
+    }
+
+    // 4. Inversion Step
+    Set<String> freshlyCaptured = {};
+    for (String tileId in boundedMapSpace) {
+      if (!outsideTiles.contains(tileId) && !ownedTerritory.contains(tileId)) {
+        freshlyCaptured.add(tileId);
+      }
+    }
+
+    freshlyCaptured.addAll(currentTrail);
+    return freshlyCaptured;
   }
 
-
+// Simple boundary helper
+  bool isMapEdgeTile(String tileId, List<String> totalPool) {
+    // If any neighbor of this tile doesn't even exist in your active pool,
+    // it means it sits right on the outer perimeter of your gameplay zone.
+    for (String neighbor in getNeighbors(tileId)) {
+      if (!totalPool.contains(neighbor)) return true;
+    }
+    return false;
+  }
   // =========================
-  // ATTACK CHECK
-  // =========================
+// GET NEIGHBOR TILE IDS
+// =========================
+  List<String> getNeighbors(String tileId) {
+    final parts = tileId.split("_");
+    int q = int.parse(parts[0]);
+    int r = int.parse(parts[1]);
 
-  bool isEnemyTile({
+    List<List<int>> offsets;
 
-    required String? ownerTeam,
+    if (r % 2 != 0) {
+      // Odd row offsets
+      offsets = [
+        [1, 0],   // Right
+        [-1, 0],  // Left
+        [0, -1],  // Top-Right
+        [-1, -1], // Top-Left
+        [0, 1],   // Bottom-Right
+        [-1, 1],  // Bottom-Left
+      ];
+    } else {
+      // Even row offsets
+      offsets = [
+        [1, 0],   // Right
+        [-1, 0],  // Left
+        [1, -1],  // Top-Right
+        [0, -1],  // Top-Left
+        [1, 1],   // Bottom-Right
+        [0, 1],   // Bottom-Left
+      ];
+    }
 
-    required String myTeam,
-  }) {
-
-    return ownerTeam != null &&
-        ownerTeam != myTeam;
+    return offsets.map((offset) {
+      int neighborQ = q + offset[0];
+      int neighborR = r + offset[1];
+      return "${neighborQ}_$neighborR";
+    }).toList();
   }
 
   // =========================
-  // EMPTY TILE CHECK
+  // LOGIC CHECKS
   // =========================
+  bool isEnemyTile({required String? ownerTeam, required String myTeam}) {
+    return ownerTeam != null && ownerTeam != myTeam;
+  }
 
-  bool isEmptyTile({
-
-    required bool alreadyCaptured,
-  }) {
-
+  bool isEmptyTile({required bool alreadyCaptured}) {
     return !alreadyCaptured;
   }
 }

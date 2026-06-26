@@ -1,4 +1,7 @@
+
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -39,38 +42,84 @@ class _MapScreenState extends State<MapScreen> {
   double speedKmh = 0;
   String? lastCapturedTile;
 
+  // ==========================================
+  // TERRITORY CAPTURE TRACKING STATES
+  // ==========================================
+  final Set<String> playerTrail = {}; // Temporary hex trail drawn outside
+  Set<String> myOwnedTileIds = {};   // Cached set of current owned hex IDs
+
   @override
   void initState() {
     super.initState();
-
     initializeLocation();
     listenToHexTiles();
     startRegenLoop();
   }
 
   // =========================
-  // FIREBASE TILES
+  // FIREBASE TILES STREAM
   // =========================
-
   void listenToHexTiles() {
     hexTilesStream?.cancel();
 
     hexTilesStream = firebaseService.getHexTiles().listen((tiles) {
       debugPrint("TOTAL TILES FROM FIRESTORE = ${tiles.length}");
-
       allTiles = tiles;
 
-      generateGrid();
+      // ----------------------------------------------------
+      // ENEMY INTERSECTION CHECK (Paper.io Trail Splitting)
+      // ----------------------------------------------------
+      if (playerTrail.isNotEmpty) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          String myUid = user.isAnonymous? "anon" : user.uid;
+          for (var tile in tiles) {
+            // If the tile was claimed by an enemy but sits in your current local active trail...
+            if (tile.ownerId != myUid && playerTrail.contains(tile.tileId)) {
+              debugPrint("TRAIL SNAPPED! Enemy ${tile.ownerName} crossed your trail at ${tile.tileId}");
+              handleTrailSnapped();
+              break;
+            }
+          }
+        }
+      }
 
+      generateGrid();
       if (mounted) setState(() {});
     });
   }
 
+  void handleTrailSnapped() {
+    playerTrail.clear();
+    lastCapturedTile = null;
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.gavel, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "Your trail was cut by an enemy! Expansion reset.",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
+    generateGrid();
+    if (mounted) setState(() {});
+  }
 
   // =========================
   // INITIALIZE LOCATION
   // =========================
-
   Future<void> initializeLocation() async {
     bool granted = await locationService.checkPermission();
     if (!granted) return;
@@ -87,18 +136,16 @@ class _MapScreenState extends State<MapScreen> {
   // =========================
   // START TRACKING
   // =========================
-
   Position? lastPosition;
   DateTime? lastTimestamp;
 
   void startTracking() {
     positionStream?.cancel();
     positionStream = locationService.getLocationStream().listen(
-      (position) async {
+          (position) async {
         final now = DateTime.now();
         double calculatedSpeed = position.speed * 3.6;
 
-        // Calculate manual speed if GPS speed is 0
         final lPos = lastPosition;
         final lTime = lastTimestamp;
         if (lPos != null && lTime != null) {
@@ -108,17 +155,15 @@ class _MapScreenState extends State<MapScreen> {
             endLat: position.latitude,
             endLng: position.longitude,
           );
-          double timeDiff = now.difference(lTime).inSeconds.toDouble();
-          
+          double timeDiff = now.difference(lTime).inMilliseconds / 1000.0;
+
           if (timeDiff > 0) {
             double manualSpeed = (distance / timeDiff) * 3.6;
-            // Use manual speed if GPS speed is too low/zero
-            if (calculatedSpeed < 0.5 && manualSpeed > 0.5) {
+            if (calculatedSpeed < 0.3 && manualSpeed > 0.3) {
               calculatedSpeed = manualSpeed;
             }
           }
 
-          // Anti-cheat: Teleportation check
           if (antiCheatService.isTeleportJump(distance, timeDiff)) {
             antiCheatService.applyTeleportPenalty();
             if (mounted) {
@@ -145,43 +190,32 @@ class _MapScreenState extends State<MapScreen> {
           antiCheatService.applyVehicleWarning();
         }
 
-        // Trigger capture if walking
         if (isWalking) {
-          debugPrint("MapScreen: Walking detected at $speedKmh km/h. Attempting capture...");
           antiCheatService.resetCaptureBlock();
           await captureTile();
-        } else {
-          debugPrint("MapScreen: Not walking (speed: $speedKmh km/h)");
         }
 
         updatePlayerMarker();
         generateGrid();
 
-        if (mounted &&
-            mapController != null) {
-
+        if (mounted && mapController != null) {
           try {
-
-            await mapController!
-                .animateCamera(
-              CameraUpdate.newLatLng(
-                currentPosition,
-              ),
+            await mapController!.animateCamera(
+              CameraUpdate.newLatLng(currentPosition),
             );
-
           } catch (_) {}
         }
       },
     );
   }
-  // =========================
-// REGEN LOOP
-// =========================
 
+  // =========================
+  // REGEN LOOP
+  // =========================
   void startRegenLoop() {
     Timer.periodic(
       const Duration(minutes: 2),
-      (timer) async {
+          (timer) async {
         if (!mounted) {
           timer.cancel();
           return;
@@ -194,7 +228,6 @@ class _MapScreenState extends State<MapScreen> {
   // =========================
   // PLAYER MARKER
   // =========================
-
   void updatePlayerMarker() {
     markers.clear();
     markers.add(
@@ -206,15 +239,12 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  // =========================
-  // CAPTURE TILE
-  // =========================
-
+  // ==========================================
+  // CAPTURE TILE W/ ENCLOSURE SYSTEM
+  // ==========================================
   Future<void> captureTile() async {
-    debugPrint("CAPTURE FUNCTION CALLED");
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     final uid = user.uid;
 
     PlayerModel? player = await firebaseService.getPlayer(uid);
@@ -225,22 +255,11 @@ class _MapScreenState extends State<MapScreen> {
       currentPosition.longitude,
     );
 
-    // prevent duplicate capture spam
-    if (lastCapturedTile == tileId) {
-      return;
-    }
-
-    lastCapturedTile = tileId;
+    if (lastCapturedTile == tileId) return;
 
     LatLng tileCenter = territoryService.getHexCenter(tileId);
-
     bool isWalking = antiCheatService.isWalking(speedKmh);
-
-    // TEMPORARY TEST
-    bool realWalking =
-    pedometerService
-        .isRealWalking();
-
+    bool realWalking = pedometerService.isRealWalking();
     bool captureBlocked = antiCheatService.captureBlocked;
 
     double distToCenter = locationService.calculateDistance(
@@ -250,103 +269,110 @@ class _MapScreenState extends State<MapScreen> {
       endLng: tileCenter.longitude,
     );
 
-    debugPrint("========== CAPTURE ==========");
-    debugPrint("Tile: $tileId");
-    debugPrint("Walking: $isWalking");
-    debugPrint("RealWalking: $realWalking");
-    debugPrint("Blocked: $captureBlocked");
-    debugPrint("Distance: $distToCenter");
-    debugPrint("============================");
-
     if (!antiCheatService.canCapture(
       isWalking: isWalking,
       realWalking: realWalking,
       captureBlocked: captureBlocked,
       distanceToTile: distToCenter,
     )) {
-      debugPrint("CAPTURE DENIED");
       return;
     }
-
-    HexTileModel? existingTile;
-
-    try {
-      existingTile = allTiles.firstWhere(
-        (t) => t.tileId == tileId,
-      );
-    } catch (_) {
-      existingTile = null;
-    }
-
-    String ownerType = player.isInTeam ? "team" : "solo";
 
     String ownerId = player.isInTeam ? (player.teamId ?? player.uid) : player.uid;
-
+    String ownerType = player.isInTeam ? "team" : "solo";
     String ownerName = player.isInTeam ? player.team : player.name;
-
     String tileColor = player.isInTeam ? "blue" : "orange";
 
-    // already yours
-    if (existingTile != null && existingTile.ownerId == ownerId) {
-      debugPrint("ALREADY OWNED");
+    // Build immediate local lookup map for owned hexes
+    myOwnedTileIds = allTiles.where((t) => t.ownerId == ownerId).map((t) => t.tileId).toSet();
+
+    // CASE 1: Return to own ground -> Execute Area Enclosure Capture
+    if (myOwnedTileIds.contains(tileId)) {
+      if (playerTrail.isNotEmpty) {
+        debugPrint("LOOP CLOSED! Calculating area polygon...");
+
+        // Dynamically build a local grid context map bounding block
+        List<String> activePool = allTiles.map((t) => t.tileId).toList();
+        for (var trailId in playerTrail) {
+          if (!activePool.contains(trailId)) activePool.add(trailId);
+          for (var neighbor in territoryService.getNeighbors(trailId)) {
+            if (!activePool.contains(neighbor)) activePool.add(neighbor);
+          }
+        }
+
+        // Invoke the inversion flood-fill function
+        Set<String> newlyWonTiles = territoryService.calculateCapturedTiles(
+          currentTrail: playerTrail,
+          ownedTerritory: myOwnedTileIds,
+          allActiveGameTiles: activePool,
+        );
+
+        // Upload batch updates to Firestore database
+        for (String wonId in newlyWonTiles) {
+          LatLng wonCenter = territoryService.getHexCenter(wonId);
+          HexTileModel newTile = HexTileModel(
+            tileId: wonId,
+            latitude: wonCenter.latitude,
+            longitude: wonCenter.longitude,
+            ownerType: ownerType,
+            ownerId: ownerId,
+            ownerName: ownerName,
+            color: tileColor,
+            power: 100,
+            capturedAt: DateTime.now().millisecondsSinceEpoch,
+          );
+
+          await firebaseService.saveHexTile(newTile);
+          allTiles.removeWhere((t) => t.tileId == wonId);
+          allTiles.add(newTile);
+        }
+
+        playerTrail.clear();
+        lastCapturedTile = tileId;
+
+        await firebaseService.incrementXP(uid: player.uid, xpToAdd: 150);
+        generateGrid();
+        if (mounted) setState(() {});
+      }
       return;
     }
 
-    HexTileModel tile = HexTileModel(
-      tileId: tileId,
-      latitude: tileCenter.latitude,
-      longitude: tileCenter.longitude,
-      ownerType: ownerType,
-      ownerId: ownerId,
-      ownerName: ownerName,
-      color: tileColor,
-      power: 100,
-      capturedAt: DateTime.now().millisecondsSinceEpoch,
-    );
-    debugPrint("BEFORE SAVE");
+    // CASE 2: Self-Intersection Protection
+    if (playerTrail.contains(tileId)) {
+      debugPrint("CRASHED INTO OWN PATH");
+      playerTrail.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("You crossed your own trail! Extension reset."),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      generateGrid();
+      if (mounted) setState(() {});
+      return;
+    }
 
-    await firebaseService.saveHexTile(tile);
-
-    debugPrint("AFTER SAVE");
-
-    allTiles.add(tile);
+    // CASE 3: Stepping on open grid field -> append trail path element
+    playerTrail.add(tileId);
+    lastCapturedTile = tileId;
 
     generateGrid();
+    if (mounted) setState(() {});
 
-    if (mounted) {
-      setState(() {});
-    }
-
-    debugPrint("HEX SAVED => $tileId");
-
-    // update player land
-    final myTiles = allTiles.where((t) => t.ownerId == ownerId).length + 1;
-
+    // Update individual XP/Land increments safely for active mapping tracking
+    final myTilesCount = allTiles.where((t) => t.ownerId == ownerId).length;
     if (player.isInTeam && player.teamId != null) {
-      await firebaseService.updateTeamLand(
-        teamId: player.teamId!,
-        totalLand: myTiles,
-      );
+      await firebaseService.updateTeamLand(teamId: player.teamId!, totalLand: myTilesCount);
     } else {
-      await firebaseService.updateLand(
-        uid: player.uid,
-        totalLand: myTiles,
-      );
+      await firebaseService.updateLand(uid: player.uid, totalLand: myTilesCount);
     }
-
-    await firebaseService.incrementXP(
-      uid: player.uid,
-      xpToAdd: 30,
-    );
-
-    debugPrint("LAND UPDATED");
-    debugPrint("XP UPDATED");
   }
 
   // =========================
   // ATTACK TILE
   // =========================
-
   Future<void> attackTile(HexTileModel tile) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -354,16 +380,8 @@ class _MapScreenState extends State<MapScreen> {
     PlayerModel? player = await firebaseService.getPlayer(uid);
     if (player == null) return;
 
-    String? attackerId;
-    if (player.isInTeam) {
-      attackerId = player.teamId;
-      if (attackerId == null) {
-        debugPrint("ERROR: Player marked as team member but teamId is null in attackTile");
-        return;
-      }
-    } else {
-      attackerId = player.uid;
-    }
+    String? attackerId = player.isInTeam ? player.teamId : player.uid;
+    if (attackerId == null) return;
 
     if (tile.ownerId == attackerId) {
       if (mounted) {
@@ -390,8 +408,7 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       await firebaseService.saveHexTile(newTile);
-      
-      // XP reward for capture
+
       int xpReward = 100;
       final boostExpiry = player.activePowerUps["boost"];
       if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
@@ -401,10 +418,7 @@ class _MapScreenState extends State<MapScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Text("Territory Captured!"),
-          ),
+          const SnackBar(backgroundColor: Colors.green, content: Text("Territory Captured!")),
         );
       }
     } else {
@@ -421,21 +435,12 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       await firebaseService.saveHexTile(damagedTile);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.orange,
-            content: Text("Territory Power Reduced to $newPower"),
-          ),
-        );
-      }
     }
   }
 
   // =========================
   // DEFEND TILE
   // =========================
-
   Future<void> defendTile(HexTileModel tile) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -443,24 +448,13 @@ class _MapScreenState extends State<MapScreen> {
     PlayerModel? player = await firebaseService.getPlayer(uid);
     if (player == null) return;
 
-    String? attackerId;
-    if (player.isInTeam) {
-      attackerId = player.teamId;
-      if (attackerId == null) {
-        debugPrint("ERROR: Player marked as team member but teamId is null in defendTile");
-        return;
-      }
-    } else {
-      attackerId = player.uid;
-    }
+    String? attackerId = player.isInTeam ? player.teamId : player.uid;
+    if (attackerId == null) return;
 
     if (tile.ownerId != attackerId) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text("You can only defend your own territory"),
-          ),
+          const SnackBar(backgroundColor: Colors.red, content: Text("You can only defend your own territory")),
         );
       }
       return;
@@ -469,10 +463,7 @@ class _MapScreenState extends State<MapScreen> {
     if (tile.power >= 100) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.blue,
-            content: Text("Territory already at max power"),
-          ),
+          const SnackBar(backgroundColor: Colors.blue, content: Text("Territory already at max power")),
         );
       }
       return;
@@ -493,28 +484,17 @@ class _MapScreenState extends State<MapScreen> {
     );
 
     await firebaseService.saveHexTile(defendedTile);
-    // Reward for defending
     int xpReward = 20;
     final boostExpiry = player.activePowerUps["boost"];
     if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
       xpReward *= 2;
     }
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.green,
-          content: Text("Territory Defended! Power: $newPower"),
-        ),
-      );
-    }
   }
 
   // =========================
-  // TILE DETAILS
+  // TILE DETAILS SHEET
   // =========================
-
   void showTileDetails(HexTileModel tile) {
     showModalBottomSheet(
       context: context,
@@ -540,10 +520,7 @@ class _MapScreenState extends State<MapScreen> {
                   Expanded(
                     child: Text(
                       tile.ownerName,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -564,14 +541,8 @@ class _MapScreenState extends State<MapScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    "Territory Power",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    "${tile.power}/100",
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+                  const Text("Territory Power", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text("${tile.power}/100", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 14),
@@ -582,11 +553,7 @@ class _MapScreenState extends State<MapScreen> {
                   minHeight: 16,
                   backgroundColor: Colors.grey.shade300,
                   valueColor: AlwaysStoppedAnimation(
-                    tile.power > 70
-                        ? Colors.green
-                        : tile.power > 40
-                            ? Colors.orange
-                            : Colors.red,
+                    tile.power > 70 ? Colors.green : tile.power > 40 ? Colors.orange : Colors.red,
                   ),
                 ),
               ),
@@ -599,9 +566,7 @@ class _MapScreenState extends State<MapScreen> {
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       onPressed: () async {
                         Navigator.pop(context);
@@ -618,9 +583,7 @@ class _MapScreenState extends State<MapScreen> {
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       onPressed: () async {
                         Navigator.pop(context);
@@ -639,77 +602,38 @@ class _MapScreenState extends State<MapScreen> {
       },
     );
   }
+
   // =========================
-// AUTO TERRITORY REGEN
-// =========================
+  // AUTO TERRITORY REGEN
+  // =========================
+  Future<void> regenerateTerritories() async {
+    for (var tile in allTiles) {
+      if (tile.power >= 100) continue;
+      int newPower = (tile.power + 5).clamp(0, 100);
 
-  Future<void>
-  regenerateTerritories()
-  async {
-
-    for (var tile
-    in allTiles) {
-
-      // =====================
-      // MAX POWER
-      // =====================
-
-      if (tile.power >= 100) {
-        continue;
-      }
-
-      int newPower =
-          tile.power + 5;
-
-      if (newPower > 100) {
-        newPower = 100;
-      }
-
-      HexTileModel
-      regeneratedTile =
-
-      HexTileModel(
-
-        tileId:
-        tile.tileId,
-
-        latitude:
-        tile.latitude,
-
-        longitude:
-        tile.longitude,
-
-        ownerType:
-        tile.ownerType,
-
-        ownerId:
-        tile.ownerId,
-
-        ownerName:
-        tile.ownerName,
-
-        color:
-        tile.color,
-
-        power:
-        newPower,
-
-        capturedAt:
-        tile.capturedAt,
+      HexTileModel regeneratedTile = HexTileModel(
+        tileId: tile.tileId,
+        latitude: tile.latitude,
+        longitude: tile.longitude,
+        ownerType: tile.ownerType,
+        ownerId: tile.ownerId,
+        ownerName: tile.ownerName,
+        color: tile.color,
+        power: newPower,
+        capturedAt: tile.capturedAt,
       );
 
-      await firebaseService
-          .saveHexTile(
-          regeneratedTile);
+      await firebaseService.saveHexTile(regeneratedTile);
     }
   }
 
   // =========================
-  // GENERATE GRID
+  // GENERATE MAP GRID
   // =========================
-
   void generateGrid() {
     hexagons.clear();
+
+    // 1. Draw Captured Persistent Hexagons
     for (var tile in allTiles) {
       Color tileColor = Colors.grey;
       if (tile.ownerType == "solo") {
@@ -733,9 +657,26 @@ class _MapScreenState extends State<MapScreen> {
             LatLng(tile.latitude, tile.longitude),
             TerritoryService.hexSize,
           ),
-          fillColor: tileColor.withValues(alpha: 0.45),
+          fillColor: tileColor.withOpacity(0.45),
           strokeColor: tileColor,
           strokeWidth: 2,
+        ),
+      );
+    }
+
+    // 2. Overlay Live Temporary Trail Hexagons (Yellow Paper.io path feedback)
+    for (var trailId in playerTrail) {
+      LatLng trailCenter = territoryService.getHexCenter(trailId);
+      hexagons.add(
+        Polygon(
+          polygonId: PolygonId("trail_$trailId"),
+          points: territoryService.createHexagon(
+            trailCenter,
+            TerritoryService.hexSize,
+          ),
+          fillColor: Colors.yellow.withOpacity(0.55),
+          strokeColor: Colors.yellowAccent,
+          strokeWidth: 3,
         ),
       );
     }
@@ -763,7 +704,6 @@ class _MapScreenState extends State<MapScreen> {
             compassEnabled: true,
             onMapCreated: (controller) => mapController = controller,
           ),
-          // Warning indicator if capture is blocked
           if (antiCheatService.isCaptureBlocked)
             Positioned(
               top: 40,
@@ -772,7 +712,7 @@ class _MapScreenState extends State<MapScreen> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.9),
+                  color: Colors.red.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(
@@ -803,3 +743,4 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 }
+
