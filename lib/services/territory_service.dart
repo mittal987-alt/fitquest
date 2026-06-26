@@ -13,7 +13,6 @@ class TerritoryService {
   // GET HEX ID (Odd-R Offset)
   // =========================
   String getHexId(double lat, double lng) {
-    // Standard Hex Offset Grid (Odd-R) calculation
     int r = (lat / (hexSize * 1.5)).round();
     double offset = (r % 2 != 0) ? (hexSize * sqrt3 / 2) : 0;
     int q = ((lng - offset) / (hexSize * sqrt3)).round();
@@ -42,7 +41,6 @@ class TerritoryService {
   List<LatLng> createHexagon(LatLng center, double radius) {
     List<LatLng> points = [];
     for (int i = 0; i < 6; i++) {
-      // Pointy-top hex orientation (30 deg start)
       double angleDeg = 60 * i - 30;
       double angleRad = pi / 180 * angleDeg;
 
@@ -52,6 +50,56 @@ class TerritoryService {
       ));
     }
     return points;
+  }
+
+  // ==========================================================
+  // NATIVE TERRITORY FUSION (Removes internal grid lines)
+  // ==========================================================
+// ==========================================================
+  // NATIVE TERRITORY FUSION (Removes internal grid lines)
+  // ==========================================================
+  List<Polygon> buildUnifiedTerritory({
+    required String groupKey,
+    required List<String> tileIds,
+    required Color color,
+    required Function(String) onTap,
+  }) {
+    List<Polygon> finalPolygons = [];
+
+    // Convert to Set for O(1) instantaneous lookups
+    final Set<String> groupSet = tileIds.toSet();
+
+    for (int i = 0; i < tileIds.length; i++) {
+      String tileId = tileIds[i];
+      LatLng center = getHexCenter(tileId);
+      List<LatLng> points = createHexagon(center, hexSize);
+
+      // CRITICAL FIX: Check if this tile touches a space NOT owned by this specific group
+      bool isActualEdge = false;
+      for (String neighbor in getNeighbors(tileId)) {
+        if (!groupSet.contains(neighbor)) {
+          isActualEdge = true;
+          break;
+        }
+      }
+
+      finalPolygons.add(
+        Polygon(
+          polygonId: PolygonId("${groupKey}_cell_$tileId"),
+          points: points,
+          consumeTapEvents: true,
+          onTap: () => onTap(tileId),
+          // Clean aesthetic: Solid glowing opacity fill
+          fillColor: color.withOpacity(0.35),
+          // If it's inside the kingdom, keep it transparent to melt the shapes together
+          strokeColor: isActualEdge ? color.withOpacity(0.9) : Colors.transparent,
+          // Set stroke to 0 for internal tiles to remove overlapping lines entirely
+          strokeWidth: isActualEdge ? 3 : 0,
+        ),
+      );
+    }
+
+    return finalPolygons;
   }
 
   // =========================
@@ -67,6 +115,7 @@ class TerritoryService {
       default: return Colors.orange; // Default solo
     }
   }
+
   // ==========================================
   // CALCULATE CAPTURED TILES (Fixed Bound Box)
   // ==========================================
@@ -77,8 +126,6 @@ class TerritoryService {
   }) {
     if (currentTrail.isEmpty) return {};
 
-    // 1. DYNAMIC BOUNDING BOX CREATION
-    // We parse all current tiles to find the spatial boundaries (min/max coordinates)
     Set<String> localProcessingPool = Set.from(allActiveGameTiles);
     localProcessingPool.addAll(currentTrail);
     localProcessingPool.addAll(ownedTerritory);
@@ -96,12 +143,9 @@ class TerritoryService {
       if (r > maxR) maxR = r;
     }
 
-    // Pad the bounding box by 2 extra layers of hexes to ensure the flood fill
-    // can completely loop *around* the outside of the player's trail.
     minQ -= 2; maxQ += 2;
     minR -= 2; maxR += 2;
 
-    // Build the finalized evaluation pool space
     Set<String> boundedMapSpace = {};
     for (int q = minQ; q <= maxQ; q++) {
       for (int r = minR; r <= maxR; r++) {
@@ -112,13 +156,11 @@ class TerritoryService {
     Set<String> outsideTiles = {};
     List<String> queue = [];
 
-    // 2. Identify outer edge tiles of our newly padded bounding rectangle
     for (String tileId in boundedMapSpace) {
       final parts = tileId.split("_");
       int q = int.parse(parts[0]);
       int r = int.parse(parts[1]);
 
-      // If it is on the literal boundary layer of the matrix box, it is safely "Outside"
       if (q == minQ || q == maxQ || r == minR || r == maxR) {
         if (!currentTrail.contains(tileId) && !ownedTerritory.contains(tileId)) {
           queue.add(tileId);
@@ -127,12 +169,10 @@ class TerritoryService {
       }
     }
 
-    // 3. BFS Flood Fill
     while (queue.isNotEmpty) {
       String current = queue.removeAt(0);
 
       for (String neighbor in getNeighbors(current)) {
-        // Must stay inside our generated virtual box limits
         if (boundedMapSpace.contains(neighbor) &&
             !outsideTiles.contains(neighbor) &&
             !currentTrail.contains(neighbor) &&
@@ -144,7 +184,6 @@ class TerritoryService {
       }
     }
 
-    // 4. Inversion Step
     Set<String> freshlyCaptured = {};
     for (String tileId in boundedMapSpace) {
       if (!outsideTiles.contains(tileId) && !ownedTerritory.contains(tileId)) {
@@ -156,18 +195,16 @@ class TerritoryService {
     return freshlyCaptured;
   }
 
-// Simple boundary helper
   bool isMapEdgeTile(String tileId, List<String> totalPool) {
-    // If any neighbor of this tile doesn't even exist in your active pool,
-    // it means it sits right on the outer perimeter of your gameplay zone.
     for (String neighbor in getNeighbors(tileId)) {
       if (!totalPool.contains(neighbor)) return true;
     }
     return false;
   }
+
   // =========================
-// GET NEIGHBOR TILE IDS
-// =========================
+  // GET NEIGHBOR TILE IDS
+  // =========================
   List<String> getNeighbors(String tileId) {
     final parts = tileId.split("_");
     int q = int.parse(parts[0]);
@@ -176,24 +213,12 @@ class TerritoryService {
     List<List<int>> offsets;
 
     if (r % 2 != 0) {
-      // Odd row offsets
       offsets = [
-        [1, 0],   // Right
-        [-1, 0],  // Left
-        [0, -1],  // Top-Right
-        [-1, -1], // Top-Left
-        [0, 1],   // Bottom-Right
-        [-1, 1],  // Bottom-Left
+        [1, 0], [-1, 0], [0, -1], [-1, -1], [0, 1], [-1, 1],
       ];
     } else {
-      // Even row offsets
       offsets = [
-        [1, 0],   // Right
-        [-1, 0],  // Left
-        [1, -1],  // Top-Right
-        [0, -1],  // Top-Left
-        [1, 1],   // Bottom-Right
-        [0, 1],   // Bottom-Left
+        [1, 0], [-1, 0], [1, -1], [0, -1], [1, 1], [0, 1],
       ];
     }
 
@@ -204,9 +229,6 @@ class TerritoryService {
     }).toList();
   }
 
-  // =========================
-  // LOGIC CHECKS
-  // =========================
   bool isEnemyTile({required String? ownerTeam, required String myTeam}) {
     return ownerTeam != null && ownerTeam != myTeam;
   }

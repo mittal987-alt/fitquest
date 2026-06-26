@@ -1,22 +1,16 @@
-
-
 import 'dart:async';
-
+import 'dart:ui'; // Required for ImageFilter (Glassmorphism effect)
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/team_model.dart';
 import '../services/location_service.dart';
 import '../services/pedometer_service.dart';
 import '../services/territory_service.dart';
 import '../services/anti_cheat_service.dart';
 import '../services/firebase_service.dart';
-import '../services/notification_service.dart';
-import 'package:provider/provider.dart';
 import '../models/hex_tile_model.dart';
 import '../models/player_model.dart';
-import '../widgets/movement_status_card.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -41,6 +35,7 @@ class _MapScreenState extends State<MapScreen> {
   List<HexTileModel> allTiles = [];
   double speedKmh = 0;
   String? lastCapturedTile;
+  String? _mapStyleJson; // Store custom game theme json
 
   // ==========================================
   // TERRITORY CAPTURE TRACKING STATES
@@ -51,9 +46,29 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _loadMapStyle();
     initializeLocation();
     listenToHexTiles();
     startRegenLoop();
+  }
+
+  // =========================
+  // LOAD MAP STYLE ASSET
+  // =========================
+  void _loadMapStyle() async {
+    try {
+      String style = await DefaultAssetBundle.of(context)
+          .loadString('assets/map_style.json');
+      setState(() {
+        _mapStyleJson = style;
+      });
+      if (mapController != null && _mapStyleJson != null) {
+        // The warning suggests using GoogleMap.style, but we'll stick to consistency for now 
+        // if the controller is already initialized.
+      }
+    } catch (e) {
+      debugPrint("Error loading map style configuration: $e");
+    }
   }
 
   // =========================
@@ -66,15 +81,11 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint("TOTAL TILES FROM FIRESTORE = ${tiles.length}");
       allTiles = tiles;
 
-      // ----------------------------------------------------
-      // ENEMY INTERSECTION CHECK (Paper.io Trail Splitting)
-      // ----------------------------------------------------
       if (playerTrail.isNotEmpty) {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
-          String myUid = user.isAnonymous? "anon" : user.uid;
+          String myUid = user.isAnonymous ? "anon" : user.uid;
           for (var tile in tiles) {
-            // If the tile was claimed by an enemy but sits in your current local active trail...
             if (tile.ownerId != myUid && playerTrail.contains(tile.tileId)) {
               debugPrint("TRAIL SNAPPED! Enemy ${tile.ownerName} crossed your trail at ${tile.tileId}");
               handleTrailSnapped();
@@ -234,6 +245,7 @@ class _MapScreenState extends State<MapScreen> {
       Marker(
         markerId: const MarkerId("player"),
         position: currentPosition,
+        // Optional custom icon replacement goes here via BitmapDescriptor
         infoWindow: const InfoWindow(title: "You"),
       ),
     );
@@ -283,15 +295,12 @@ class _MapScreenState extends State<MapScreen> {
     String ownerName = player.isInTeam ? player.team : player.name;
     String tileColor = player.isInTeam ? "blue" : "orange";
 
-    // Build immediate local lookup map for owned hexes
     myOwnedTileIds = allTiles.where((t) => t.ownerId == ownerId).map((t) => t.tileId).toSet();
 
-    // CASE 1: Return to own ground -> Execute Area Enclosure Capture
     if (myOwnedTileIds.contains(tileId)) {
       if (playerTrail.isNotEmpty) {
         debugPrint("LOOP CLOSED! Calculating area polygon...");
 
-        // Dynamically build a local grid context map bounding block
         List<String> activePool = allTiles.map((t) => t.tileId).toList();
         for (var trailId in playerTrail) {
           if (!activePool.contains(trailId)) activePool.add(trailId);
@@ -300,14 +309,12 @@ class _MapScreenState extends State<MapScreen> {
           }
         }
 
-        // Invoke the inversion flood-fill function
         Set<String> newlyWonTiles = territoryService.calculateCapturedTiles(
           currentTrail: playerTrail,
           ownedTerritory: myOwnedTileIds,
           allActiveGameTiles: activePool,
         );
 
-        // Upload batch updates to Firestore database
         for (String wonId in newlyWonTiles) {
           LatLng wonCenter = territoryService.getHexCenter(wonId);
           HexTileModel newTile = HexTileModel(
@@ -337,7 +344,6 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    // CASE 2: Self-Intersection Protection
     if (playerTrail.contains(tileId)) {
       debugPrint("CRASHED INTO OWN PATH");
       playerTrail.clear();
@@ -354,14 +360,12 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    // CASE 3: Stepping on open grid field -> append trail path element
     playerTrail.add(tileId);
     lastCapturedTile = tileId;
 
     generateGrid();
     if (mounted) setState(() {});
 
-    // Update individual XP/Land increments safely for active mapping tracking
     final myTilesCount = allTiles.where((t) => t.ownerId == ownerId).length;
     if (player.isInTeam && player.teamId != null) {
       await firebaseService.updateTeamLand(teamId: player.teamId!, totalLand: myTilesCount);
@@ -492,111 +496,120 @@ class _MapScreenState extends State<MapScreen> {
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
   }
 
-  // =========================
-  // TILE DETAILS SHEET
-  // =========================
+  // ==========================================
+  // TILE DETAILS BOTTOM SHEET (DARK GAMING UX)
+  // ==========================================
   void showTileDetails(HexTileModel tile) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+      backgroundColor: Colors.transparent, // Translucent framework
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.85),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1.5),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    tile.ownerType == "solo" ? Icons.person : Icons.groups,
-                    size: 32,
-                    color: Colors.blue,
+                  Row(
+                    children: [
+                      Icon(
+                        tile.ownerType == "solo" ? Icons.person_rounded : Icons.groups_rounded,
+                        size: 36,
+                        color: Colors.cyanAccent,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          tile.ownerName,
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     child: Text(
-                      tile.ownerName,
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                      tile.ownerType == "solo" ? "⚔️ Solo Domain" : "🛡️ Squad Domain",
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white70, fontSize: 13),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  tile.ownerType == "solo" ? "Solo Territory" : "Team Territory",
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Territory Power", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text("${tile.power}/100", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              const SizedBox(height: 14),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: LinearProgressIndicator(
-                  value: tile.power / 100,
-                  minHeight: 16,
-                  backgroundColor: Colors.grey.shade300,
-                  valueColor: AlwaysStoppedAnimation(
-                    tile.power > 70 ? Colors.green : tile.power > 40 ? Colors.orange : Colors.red,
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Fortification HP", style: TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.w500)),
+                      Text("${tile.power}/100", style: const TextStyle(fontSize: 16, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+                    ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: LinearProgressIndicator(
+                      value: tile.power / 100,
+                      minHeight: 12,
+                      backgroundColor: Colors.white.withValues(alpha: 0.1),
+                      valueColor: AlwaysStoppedAnimation(
+                        tile.power > 70 ? Colors.greenAccent : tile.power > 40 ? Colors.orangeAccent : Colors.redAccent,
                       ),
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        await attackTile(tile);
-                      },
-                      icon: const Icon(Icons.gps_fixed),
-                      label: const Text("Attack"),
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  const SizedBox(height: 32),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent.withValues(alpha: 0.2),
+                            foregroundColor: Colors.redAccent,
+                            side: const BorderSide(color: Colors.redAccent, width: 1),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await attackTile(tile);
+                          },
+                          icon: const Icon(Icons.flash_on_rounded),
+                          label: const Text("ATTACK", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                        ),
                       ),
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        await defendTile(tile);
-                      },
-                      icon: const Icon(Icons.shield),
-                      label: const Text("Defend"),
-                    ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.greenAccent.withValues(alpha: 0.2),
+                            foregroundColor: Colors.greenAccent,
+                            side: const BorderSide(color: Colors.greenAccent, width: 1),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await defendTile(tile);
+                          },
+                          icon: const Icon(Icons.shield_rounded),
+                          label: const Text("FORTIFY", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-            ],
+            ),
           ),
         );
       },
@@ -627,44 +640,50 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // =========================
-  // GENERATE MAP GRID
-  // =========================
+  // ==========================================
+  // GENERATE GRID (CLEAN NEON STYLING)
+  // ==========================================
   void generateGrid() {
     hexagons.clear();
 
-    // 1. Draw Captured Persistent Hexagons
+    // Group tiles by owner/color to merge them into distinct custom kingdoms
+    Map<String, List<HexTileModel>> groupedTiles = {};
     for (var tile in allTiles) {
-      Color tileColor = Colors.grey;
-      if (tile.ownerType == "solo") {
-        tileColor = Colors.orange;
+      String key = "${tile.ownerId}_${tile.color}";
+      groupedTiles.putIfAbsent(key, () => []).add(tile);
+    }
+
+    // 1. Draw Captured Persistent Merged Territories
+    groupedTiles.forEach((key, tiles) {
+      if (tiles.isEmpty) return;
+
+      var sampleTile = tiles.first;
+      Color territoryColor = Colors.blueGrey;
+      if (sampleTile.ownerType == "solo") {
+        territoryColor = Colors.orange;
       } else {
-        switch (tile.color) {
-          case "blue": tileColor = Colors.blue; break;
-          case "red": tileColor = Colors.red; break;
-          case "green": tileColor = Colors.green; break;
-          case "yellow": tileColor = Colors.yellow; break;
-          case "purple": tileColor = Colors.purple; break;
+        switch (sampleTile.color) {
+          case "blue": territoryColor = Colors.cyan; break;
+          case "red": territoryColor = Colors.redAccent; break;
+          case "green": territoryColor = Colors.greenAccent; break;
+          case "yellow": territoryColor = Colors.amber; break;
+          case "purple": territoryColor = Colors.purpleAccent; break;
         }
       }
 
-      hexagons.add(
-        Polygon(
-          polygonId: PolygonId(tile.tileId),
-          consumeTapEvents: true,
-          onTap: () => showTileDetails(tile),
-          points: territoryService.createHexagon(
-            LatLng(tile.latitude, tile.longitude),
-            TerritoryService.hexSize,
-          ),
-          fillColor: tileColor.withOpacity(0.45),
-          strokeColor: tileColor,
-          strokeWidth: 2,
-        ),
-      );
-    }
+      List<String> tileIds = tiles.map((t) => t.tileId).toList();
+      hexagons.addAll(territoryService.buildUnifiedTerritory(
+        groupKey: key,
+        tileIds: tileIds,
+        color: territoryColor,
+        onTap: (tileId) {
+          final tile = tiles.firstWhere((t) => t.tileId == tileId);
+          showTileDetails(tile);
+        },
+      ));
+    });
 
-    // 2. Overlay Live Temporary Trail Hexagons (Yellow Paper.io path feedback)
+    // 2. Overlay Live Temporary Trail Hexagons (Keep distinct so path building stands out)
     for (var trailId in playerTrail) {
       LatLng trailCenter = territoryService.getHexCenter(trailId);
       hexagons.add(
@@ -674,9 +693,9 @@ class _MapScreenState extends State<MapScreen> {
             trailCenter,
             TerritoryService.hexSize,
           ),
-          fillColor: Colors.yellow.withOpacity(0.55),
-          strokeColor: Colors.yellowAccent,
-          strokeWidth: 3,
+          fillColor: Colors.yellowAccent.withValues(alpha: 0.35),
+          strokeColor: Colors.yellow,
+          strokeWidth: 2,
         ),
       );
     }
@@ -689,53 +708,124 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
+  // ==========================================
+  // WIDGET SCREEN UI LAYER STACK
+  // ==========================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
+          // 1. CORE MAP PANEL INTERFACE LAYER
           GoogleMap(
             initialCameraPosition: CameraPosition(target: currentPosition, zoom: 19),
+            style: _mapStyleJson,
             polygons: hexagons,
             markers: markers,
             myLocationEnabled: true,
-            myLocationButtonEnabled: true,
+            myLocationButtonEnabled: false, // Turned off default button to save layout space
             zoomControlsEnabled: false,
-            compassEnabled: true,
-            onMapCreated: (controller) => mapController = controller,
+            compassEnabled: false,
+            onMapCreated: (controller) {
+              mapController = controller;
+            },
           ),
+
+          // 2. ANTI-CHEAT WARNING LAYER ALERT BANNER
           if (antiCheatService.isCaptureBlocked)
             Positioned(
-              top: 40,
-              left: 20,
-              right: 20,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning, color: Colors.white),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        "Movement too fast! Capture disabled.",
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
+              top: MediaQuery.of(context).padding.top + 12,
+              left: 16,
+              right: 16,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                     ),
-                  ],
+                    child: const Row(
+                      children: [
+                        Icon(Icons.speed_rounded, color: Colors.white, size: 24),
+                        SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            "EXCESSIVE VELOCITY! Capture array disabled.",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
+
+          // 3. FLOATING GLASSMORPHISM INTERACTIVE TELEMETRY HUD
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 10,
-            child: MovementStatusCard(
-              status: antiCheatService.getMovementStatus(speedKmh),
-              speed: speedKmh,
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1.2),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.cyanAccent.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          speedKmh > 1.0 ? Icons.directions_run_rounded : Icons.accessibility_new_rounded,
+                          color: Colors.cyanAccent,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              antiCheatService.getMovementStatus(speedKmh).toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.cyanAccent,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              "${speedKmh.toStringAsFixed(1)} KM/H",
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -743,4 +833,3 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 }
-
