@@ -90,9 +90,9 @@ class TerritoryService {
           consumeTapEvents: true,
           onTap: () => onTap(tileId),
           // Clean aesthetic: Solid glowing opacity fill
-          fillColor: color.withOpacity(0.35),
+          fillColor: color.withValues(alpha: 0.35),
           // If it's inside the kingdom, keep it transparent to melt the shapes together
-          strokeColor: isActualEdge ? color.withOpacity(0.9) : Colors.transparent,
+          strokeColor: isActualEdge ? color.withValues(alpha: 0.9) : Colors.transparent,
           // Set stroke to 0 for internal tiles to remove overlapping lines entirely
           strokeWidth: isActualEdge ? 3 : 0,
         ),

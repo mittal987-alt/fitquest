@@ -5,207 +5,135 @@ import 'firebase_service.dart';
 import '../models/player_model.dart';
 
 class StepSyncService {
-  static final StepSyncService _instance =
-  StepSyncService._internal();
-
+  static final StepSyncService _instance = StepSyncService._internal();
   factory StepSyncService() => _instance;
-
   StepSyncService._internal();
 
-  final FirebaseService firebaseService =
-  FirebaseService();
-
+  final FirebaseService firebaseService = FirebaseService();
   StreamSubscription<StepCount>? stepStream;
 
   int? lastStepCount;
   int pendingXpSteps = 0;
   DateTime? lastSyncTime;
-
   bool initialized = false;
-
+  bool _isProcessing = false; // Concurrency protection lock flag
   PlayerModel? cachedPlayer;
 
-  void updateConfig(
-      PlayerModel? player) {
+  void updateConfig(PlayerModel? player) {
     cachedPlayer = player;
   }
 
-  // =========================
-  // START TRACKING
-  // =========================
+  // ==========================================
+  // START BACKGROUND SYNC CHANNEL
+  // ==========================================
 
   void startTracking() {
     if (stepStream != null) return;
 
-    stepStream =
-        Pedometer.stepCountStream.listen(
+    stepStream = Pedometer.stepCountStream.listen(
+            (StepCount event) async {
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid == null) return;
 
-              (StepCount event) async {
+          // Prevent race-condition data overrides if previous write loop is pending
+          if (_isProcessing) {
+            doublePrint("TELEMETRY ALERT: Hardware frame dropped. Cloud sync loop active.");
+            return;
+          }
 
-            final uid =
-                FirebaseAuth.instance
-                    .currentUser
-                    ?.uid;
+          _isProcessing = true;
 
-            if (uid == null) return;
-
-            print(
-              "RAW STEPS: ${event.steps}",
-            );
-
-            // First launch
-
+          try {
+            // Initialize tracking session baselines on first system execution frame
             if (!initialized) {
-
-              lastStepCount =
-                  event.steps;
-
-              cachedPlayer =
-              await firebaseService
-                  .getPlayer(uid);
-
+              lastStepCount = event.steps;
+              cachedPlayer = await firebaseService.getPlayer(uid);
               initialized = true;
-
+              _isProcessing = false;
               return;
             }
 
-            int stepsToAdd =
-                event.steps -
-                    (lastStepCount ??
-                        event.steps);
-
-            print(
-              "STEPS TO ADD: $stepsToAdd",
-            );
+            int stepsToAdd = event.steps - (lastStepCount ?? event.steps);
 
             if (stepsToAdd <= 0) {
-
-              lastStepCount =
-                  event.steps;
-
+              lastStepCount = event.steps;
+              _isProcessing = false;
               return;
             }
 
-            lastStepCount =
-                event.steps;
-
+            // Instantly cache baseline before dispatching async network writes
+            lastStepCount = event.steps;
             lastSyncTime = DateTime.now();
 
-            // =====================
-            // UPDATE PLAYER STEPS
-            // =====================
-
-            await firebaseService
-                .updateSteps(
+            // 1. UPDATE HARDWARE STRIDE VECTOR TO CLOUD METRICS
+            await firebaseService.updateSteps(
               uid: uid,
-              stepsToAdd:
-              stepsToAdd,
+              stepsToAdd: stepsToAdd,
             );
 
-            print(
-              "PLAYER STEPS UPDATED",
-            );
-
-            // =====================
-            // TEAM STEPS
-            // =====================
-
-            if (cachedPlayer !=
-                null &&
-                cachedPlayer!
-                    .isInTeam &&
-                cachedPlayer!
-                    .teamId !=
-                    null) {
-
-              await firebaseService
-                  .updateTeamSteps(
-                teamId:
-                cachedPlayer!
-                    .teamId!,
-                stepsToAdd:
-                stepsToAdd,
-              );
-
-              print(
-                "TEAM STEPS UPDATED",
+            // 2. DISPATCH COHORT TOTAL ALLOCATIONS IF LINKED TO SQUAD
+            if (cachedPlayer != null && cachedPlayer!.isInTeam && cachedPlayer!.teamId != null) {
+              await firebaseService.updateTeamSteps(
+                teamId: cachedPlayer!.teamId!,
+                stepsToAdd: stepsToAdd,
               );
             }
 
-            // =====================
-            // XP SYSTEM
-            // =====================
+            // 3. COMPUTE DYNAMIC EXPERIENCE COEFFICIENTS
+            pendingXpSteps += stepsToAdd;
 
-            pendingXpSteps +=
-                stepsToAdd;
+            if (pendingXpSteps >= 10) {
+              int xpGain = pendingXpSteps ~/ 10;
+              pendingXpSteps = pendingXpSteps % 10;
 
-            if (pendingXpSteps >=
-                10) {
-
-              int xpGain =
-                  pendingXpSteps ~/
-                      10;
-
-              pendingXpSteps =
-                  pendingXpSteps %
-                      10;
-
-              await firebaseService
-                  .incrementXP(
+              await firebaseService.incrementXP(
                 uid: uid,
                 xpToAdd: xpGain,
               );
 
-              print(
-                "XP ADDED: $xpGain",
-              );
+              // Re-fetch current model to calculate precise milestone bounds
+              cachedPlayer = await firebaseService.getPlayer(uid);
 
-              cachedPlayer =
-              await firebaseService
-                  .getPlayer(uid);
+              if (cachedPlayer != null) {
+                int calculatedLevel = (cachedPlayer!.xp ~/ 1000) + 1;
 
-              if (cachedPlayer !=
-                  null) {
-
-                int newLevel =
-                    (cachedPlayer!
-                        .xp ~/
-                        1000) +
-                        1;
-
-                if (newLevel >
-                    cachedPlayer!
-                        .level) {
-
-                  await firebaseService
-                      .updateLevel(
+                if (calculatedLevel > cachedPlayer!.level) {
+                  await firebaseService.updateLevel(
                     uid: uid,
-                    level:
-                    newLevel,
-                  );
-
-                  print(
-                    "LEVEL UP: $newLevel",
+                    level: calculatedLevel,
                   );
                 }
               }
             }
-          },
-        );
+          } catch (e) {
+            doublePrint("SYNCHRONIZATION ERROR ENCOUNTERED: $e");
+          } finally {
+            _isProcessing = false; // Safely release system operational lock
+          }
+        },
+        onError: (error) {
+          doublePrint("HARDWARE PEDOMETER INTERFACE FAULT: $error");
+        }
+    );
   }
 
-  // =========================
-  // STOP TRACKING
-  // =========================
+  // ==========================================
+  // STOP BACKGROUND SYNC CHANNEL
+  // ==========================================
 
   void stopTracking() {
-
     stepStream?.cancel();
-
     stepStream = null;
-
     initialized = false;
-
+    _isProcessing = false;
     lastStepCount = null;
+  }
+
+  void doublePrint(String message) {
+    // Utility log mapping matching cyberpunk system terminal protocols
+    assert(() {
+      print("[SQUAD CORE ENGINE] -> $message");
+      return true;
+    }());
   }
 }

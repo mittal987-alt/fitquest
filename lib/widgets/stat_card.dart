@@ -21,11 +21,14 @@ class StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
+        border: Border.all(
+          color: Colors.black.withValues(alpha: 0.05),
+        ),
+        boxShadow: [
           BoxShadow(
-            color: Colors.black12,
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -36,26 +39,23 @@ class StatCard extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: color.withValues(alpha: 0.15),
+              backgroundColor: color.withValues(alpha: 0.1),
               child: Icon(
                 icon,
                 size: 24,
                 color: color,
               ),
             ),
-
             const SizedBox(height: 8),
-
             Text(
               value,
               style: const TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w900,
+                color: Colors.black87,
               ),
             ),
-
             const SizedBox(height: 4),
-
             SizedBox(
               width: 100,
               child: Text(
@@ -63,9 +63,10 @@ class StatCard extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.grey.shade700,
+                style: const TextStyle(
+                  color: Colors.black54,
                   fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),

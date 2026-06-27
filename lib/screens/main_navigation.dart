@@ -24,66 +24,9 @@ class _MainNavigationState extends State<MainNavigation> {
   int currentIndex = 0;
   String? currentTeamId;
   StreamSubscription<PlayerModel?>? _playerSubscription;
-  
+
   final PedometerService pedometerService = PedometerService();
   final StepSyncService stepSyncService = StepSyncService();
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeServices();
-  }
-
-  Future<void> _initializeServices() async {
-    // 1. Request Permissions
-    await [
-      Permission.activityRecognition,
-      Permission.locationWhenInUse,
-    ].request();
-
-    // 2. Setup Team Notifications
-    _setupTeamNotifications();
-    
-    // 3. Start global tracking
-    pedometerService.startListening();
-    stepSyncService.startTracking();
-  }
-
-  @override
-  void dispose() {
-    _playerSubscription?.cancel();
-    stepSyncService.stopTracking();
-    super.dispose();
-  }
-
-  void _setupTeamNotifications() {
-    final firebaseService = Provider.of<FirebaseService>(context, listen: false);
-    final uid = firebaseService.auth.currentUser?.uid;
-    
-    if (uid != null) {
-      _playerSubscription = firebaseService.getPlayerStream(uid).listen((player) {
-        if (player != null && mounted) {
-          final notificationService = Provider.of<NotificationService>(context, listen: false);
-          
-          // Sync configuration with StepSyncService to handle team changes
-          stepSyncService.updateConfig(player);
-
-          if (player.teamId != currentTeamId) {
-            if (currentTeamId != null) {
-              notificationService.unsubscribeFromTeam(currentTeamId!);
-            }
-            if (player.teamId != null) {
-              notificationService.subscribeToTeam(player.teamId!);
-            }
-            
-            setState(() {
-              currentTeamId = player.teamId;
-            });
-          }
-        }
-      });
-    }
-  }
 
   final List<Widget> pages = [
     const HomeScreen(),
@@ -94,41 +37,106 @@ class _MainNavigationState extends State<MainNavigation> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _initializeServices();
+  }
+
+  Future<void> _initializeServices() async {
+    await [
+      Permission.activityRecognition,
+      Permission.locationWhenInUse,
+    ].request();
+
+    if (!mounted) return;
+    _setupTeamNotifications();
+
+    pedometerService.startListening();
+    stepSyncService.startTracking();
+  }
+
+  void _setupTeamNotifications() {
+    final firebaseService = Provider.of<FirebaseService>(context, listen: false);
+    final uid = firebaseService.auth.currentUser?.uid;
+
+    if (uid != null) {
+      _playerSubscription = firebaseService.getPlayerStream(uid).listen((player) {
+        if (!mounted || player == null) return;
+
+        final notificationService = Provider.of<NotificationService>(context, listen: false);
+        stepSyncService.updateConfig(player);
+
+        if (player.teamId != currentTeamId) {
+          if (currentTeamId != null) {
+            notificationService.unsubscribeFromTeam(currentTeamId!);
+          }
+          if (player.teamId != null) {
+            notificationService.subscribeToTeam(player.teamId!);
+          }
+
+          setState(() {
+            currentTeamId = player.teamId;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _playerSubscription?.cancel();
+    stepSyncService.stopTracking();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: pages[currentIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: currentIndex,
-        height: 75,
-        backgroundColor: Colors.white,
-        indicatorColor: Colors.blue.withValues(alpha: 0.15),
-        onDestinationSelected: (index) {
-          setState(() {
-            currentIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home),
-            label: "Home",
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: IndexedStack(
+        index: currentIndex,
+        children: pages,
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.black.withValues(alpha: 0.05), width: 1.5)),
+        ),
+        child: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return const TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.w900);
+              }
+              return const TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.bold);
+            }),
+            iconTheme: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return const IconThemeData(color: Colors.white);
+              }
+              return const IconThemeData(color: Colors.black38);
+            }),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.map),
-            label: "Map",
+          child: NavigationBar(
+            selectedIndex: currentIndex,
+            height: 72,
+            backgroundColor: Colors.white,
+            indicatorColor: Colors.blueAccent,
+            elevation: 0,
+            onDestinationSelected: (index) {
+              setState(() {
+                currentIndex = index;
+              });
+            },
+            destinations: const [
+              NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: "HQ"),
+              NavigationDestination(icon: Icon(Icons.map_rounded), label: "GRID MAP"),
+              NavigationDestination(icon: Icon(Icons.leaderboard_rounded), label: "RANKS"),
+              NavigationDestination(icon: Icon(Icons.groups_rounded), label: "TEAMS"),
+              NavigationDestination(icon: Icon(Icons.person_rounded), label: "PROFILE"),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.leaderboard),
-            label: "Rank",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.groups),
-            label: "Teams",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person),
-            label: "Profile",
-          ),
-        ],
+        ),
       ),
     );
   }

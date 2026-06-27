@@ -1,363 +1,167 @@
 import 'package:flutter/material.dart';
-
 import '../models/team_request_model.dart';
-
 import '../services/firebase_service.dart';
 
-class TeamRequestsScreen
-    extends StatelessWidget {
-
+class TeamRequestsScreen extends StatelessWidget {
   final String teamId;
-
   final String teamName;
 
   const TeamRequestsScreen({
-
     super.key,
-
     required this.teamId,
-
     required this.teamName,
   });
 
   @override
   Widget build(BuildContext context) {
-
-    final FirebaseService
-    firebaseService =
-    FirebaseService();
+    final FirebaseService firebaseService = FirebaseService();
 
     return Scaffold(
-
-      backgroundColor:
-      Colors.grey.shade100,
-
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-
-        title:
-        const Text(
-            "Join Requests"),
-
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          "INBOUND SQUAD REQUESTS",
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 16, color: Colors.black87),
+        ),
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
-
-      body:
-      StreamBuilder<
-          List<
-              TeamRequestModel>>(
-
-        stream:
-        firebaseService
-            .getTeamRequests(
-            teamId),
-
-        builder:
-            (context, snapshot) {
-
-          // LOADING
-          if (snapshot
-              .connectionState ==
-              ConnectionState
-                  .waiting) {
-
-            return const Center(
-
-              child:
-              CircularProgressIndicator(),
-            );
+      body: StreamBuilder<List<TeamRequestModel>>(
+        stream: firebaseService.getTeamRequests(teamId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
           }
 
-          // EMPTY
-          if (!snapshot.hasData ||
-
-              snapshot
-                  .data!
-                  .isEmpty) {
-
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(
-
               child: Text(
-
-                "No Pending Requests",
+                "NO PENDING TELEMETRY REQUESTS",
+                style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold, letterSpacing: 1, fontSize: 13),
               ),
             );
           }
 
-          final requests =
-          snapshot.data!;
+          final requests = snapshot.data!;
 
           return ListView.builder(
-
-            padding:
-            const EdgeInsets
-                .all(16),
-
-            itemCount:
-            requests.length,
-
-            itemBuilder:
-                (context, index) {
-
-              final request =
-              requests[index];
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            itemCount: requests.length,
+            itemBuilder: (context, index) {
+              final request = requests[index];
 
               return Container(
-
-                margin:
-                const EdgeInsets
-                    .only(
-                  bottom: 16,
-                ),
-
-                padding:
-                const EdgeInsets
-                    .all(18),
-
-                decoration:
-                BoxDecoration(
-
-                  color:
-                  Colors.white,
-
-                  borderRadius:
-                  BorderRadius.circular(
-                      22),
-
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
                   boxShadow: [
-
                     BoxShadow(
-
-                      color: Colors
-                          .black12,
-
-                      blurRadius:
-                      10,
-                    ),
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    )
                   ],
                 ),
-
                 child: Column(
-
                   children: [
-
-                    // =====================
-                    // PLAYER INFO
-                    // =====================
-
+                    // APPLICANT DOSSIER INFO
                     Row(
-
                       children: [
-
-                        const CircleAvatar(
-
-                          radius:
-                          28,
-
-                          child: Icon(
-                            Icons
-                                .person,
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.greenAccent.withValues(alpha: 0.05),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
                           ),
+                          child: const Icon(Icons.person_search_rounded, color: Colors.greenAccent, size: 22),
                         ),
-
-                        const SizedBox(
-                            width:
-                            16),
-
+                        const SizedBox(width: 16),
                         Expanded(
-
-                          child:
-                          Column(
-
-                            crossAxisAlignment:
-                            CrossAxisAlignment
-                                .start,
-
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-
                               Text(
-
-                                request
-                                    .playerName,
-
-                                style:
-                                const TextStyle(
-
-                                  fontSize:
-                                  18,
-
-                                  fontWeight:
-                                  FontWeight.bold,
-                                ),
+                                request.playerName.toUpperCase(),
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
+                                overflow: TextOverflow.ellipsis,
                               ),
-
-                              const SizedBox(
-                                  height:
-                                  6),
-
+                              const SizedBox(height: 4),
                               Text(
-
-                                "Wants to join $teamName",
+                                "REQUESTING LINK TO ${teamName.toUpperCase()}",
+                                style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.2),
                               ),
                             ],
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 18),
 
-                    const SizedBox(
-                        height:
-                        20),
-
-                    // =====================
-                    // ACTION BUTTONS
-                    // =====================
-
+                    // COMMAND OPERATIONS PANEL BUTTONS
                     Row(
-
                       children: [
-
-                        // REJECT
+                        // REJECT INBOUND REQUEST
                         Expanded(
-
-                          child:
-                          ElevatedButton(
-
-                            style:
-                            ElevatedButton.styleFrom(
-
-                              backgroundColor:
-                              Colors.red,
-
-                              padding:
-                              const EdgeInsets.symmetric(
-                                vertical:
-                                14,
-                              ),
-
-                              shape:
-                              RoundedRectangleBorder(
-
-                                borderRadius:
-                                BorderRadius.circular(
-                                    16),
-                              ),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                              foregroundColor: Colors.redAccent,
+                              elevation: 0,
+                              side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
+                            onPressed: () async {
+                              await firebaseService.rejectRequest(request.requestId);
 
-                            onPressed:
-                                () async {
-
-                              await firebaseService
-                                  .rejectRequest(
-
-                                request
-                                    .requestId,
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: Colors.redAccent,
+                                  content: Text("REJECTED: ${request.playerName.toUpperCase()} TRANSMISSION PURGED"),
+                                ),
                               );
-
-                              if (context
-                                  .mounted) {
-
-                                ScaffoldMessenger.of(
-                                    context)
-                                    .showSnackBar(
-
-                                  SnackBar(
-
-                                    backgroundColor:
-                                    Colors.red,
-
-                                    content:
-                                    Text(
-
-                                      "${request.playerName} rejected",
-                                    ),
-                                  ),
-                                );
-                              }
                             },
-
-                            child:
-                            const Text(
-                              "Reject",
-                            ),
+                            child: const Text("DENY ACCESS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
                           ),
                         ),
+                        const SizedBox(width: 12),
 
-                        const SizedBox(
-                            width:
-                            12),
-
-                        // ACCEPT
+                        // ACCEPT INBOUND REQUEST
                         Expanded(
-
-                          child:
-                          ElevatedButton(
-
-                            style:
-                            ElevatedButton.styleFrom(
-
-                              backgroundColor:
-                              Colors.green,
-
-                              padding:
-                              const EdgeInsets.symmetric(
-                                vertical:
-                                14,
-                              ),
-
-                              shape:
-                              RoundedRectangleBorder(
-
-                                borderRadius:
-                                BorderRadius.circular(
-                                    16),
-                              ),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.greenAccent.withValues(alpha: 0.1),
+                              foregroundColor: Colors.greenAccent,
+                              elevation: 0,
+                              side: BorderSide(color: Colors.greenAccent.withValues(alpha: 0.3)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-
-                            onPressed:
-                                () async {
-
-                              await firebaseService
-                                  .acceptRequest(
-
-                                requestId:
-                                request.requestId,
-
-                                playerId:
-                                request.playerId,
-
-                                teamId:
-                                request.teamId,
-
-                                teamName:
-                                request.teamName,
+                            onPressed: () async {
+                              await firebaseService.acceptRequest(
+                                requestId: request.requestId,
+                                playerId: request.playerId,
+                                teamId: request.teamId,
+                                teamName: request.teamName,
                               );
 
-                              if (context
-                                  .mounted) {
-
-                                ScaffoldMessenger.of(
-                                    context)
-                                    .showSnackBar(
-
-                                  SnackBar(
-
-                                    backgroundColor:
-                                    Colors.green,
-
-                                    content:
-                                    Text(
-
-                                      "${request.playerName} joined $teamName",
-                                    ),
-                                  ),
-                                );
-                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: Colors.greenAccent,
+                                  content: Text("ACCEPTED: ${request.playerName.toUpperCase()} ALLOCATED TO SQUAD"),
+                                ),
+                              );
                             },
-
-                            child:
-                            const Text(
-                              "Accept",
-                            ),
+                            child: const Text("GRANT ACCESS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
                           ),
                         ),
                       ],

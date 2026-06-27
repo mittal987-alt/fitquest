@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:confetti/confetti.dart';
+import 'package:intl/intl.dart';
 import '../widgets/stat_card.dart';
 import '../services/pedometer_service.dart';
 import '../services/step_sync_service.dart';
+import '../services/firebase_service.dart';
+import '../models/player_model.dart';
 import 'leaderboard_screen.dart';
 import 'map_screen.dart';
 import 'shop_screen.dart';
-import '../models/player_model.dart';
-import '../models/power_up_model.dart';
-import '../services/firebase_service.dart';
-import 'package:confetti/confetti.dart';
-import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,13 +31,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _confettiController = ConfettiController(duration: const Duration(seconds: 3));
 
-    // UPDATE STREAK & RESET QUESTS ON LAUNCH
     final uid = firebaseService.auth.currentUser?.uid;
     if (uid != null) {
       firebaseService.checkAndResetDailyStats(uid);
     }
 
-    // AUTO REFRESH UI
     refreshTimer = Timer.periodic(
       const Duration(seconds: 2),
           (timer) {
@@ -62,92 +60,37 @@ class _HomeScreenState extends State<HomeScreen> {
     return DateFormat('HH:mm').format(time);
   }
 
-  // UI Helper to match your clean card designs
-  Widget _buildModernStatCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: color.withOpacity(0.1),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final String currentUid = firebaseService.auth.currentUser?.uid ?? "";
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: const Text(
-          "FitQuest",
-          style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: -0.5),
+          "FITQUEST HQ",
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 18, color: Colors.black87),
         ),
         centerTitle: true,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
-        foregroundColor: Colors.black87,
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: StreamBuilder<PlayerModel?>(
         stream: firebaseService.getPlayerStream(currentUid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator.adaptive());
+            return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
           }
 
           final player = snapshot.data;
-
-          // Fallbacks if data stream has missing values initially
           final int liveSteps = player?.totalSteps ?? 0;
           final int liveLevel = player?.level ?? 1;
           final int liveXp = player?.xp ?? 0;
           final int streak = player?.streakCount ?? 0;
 
-          // Compute values derived from actual database items
           double calculatedCalories = liveSteps * 0.04;
           double calculatedDistance = liveSteps * 0.00075;
-
-          // Goal tracker limits
           double dailyGoalTarget = 10000;
           double goalProgress = (liveSteps / dailyGoalTarget).clamp(0.0, 1.0);
 
@@ -156,25 +99,20 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // =====================
-                // HEADER BANNER
-                // =====================
+                // STATUS HEADER
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1E90FF), Color(0xFF00BFFF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.2),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
-                        )
-                      ]
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -184,18 +122,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Welcome Back 👋",
-                              style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 16, fontWeight: FontWeight.w500),
+                              "OPERATOR STATUS: ACTIVE",
+                              style: TextStyle(color: Colors.cyan.shade700, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
                             ),
                             const SizedBox(height: 6),
-                            const Text(
-                              "Ready To Conquer?",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900, // FIXED: Changed from black to w900
-                                letterSpacing: -0.5,
-                              ),
+                            Text(
+                              player?.name.toUpperCase() ?? "EXPLORER NODE",
+                              style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
                             ),
                           ],
                         ),
@@ -203,19 +136,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
+                          color: Colors.orangeAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
-                            const Text("🔥 ", style: TextStyle(fontSize: 18)),
+                            const Text("🔥 ", style: TextStyle(fontSize: 16)),
                             Text(
-                              "$streak",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
+                              "$streak DAYS",
+                              style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
                             ),
                           ],
                         ),
@@ -223,86 +153,55 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
 
-                const SizedBox(height: 20),
-
-                // =====================
-                // SYNC STATUS FLAG
-                // =====================
+                // SYNC TELEMETRY TIMESTAMP
                 if (stepSyncService.lastSyncTime != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.sync, size: 14, color: Colors.grey.shade500),
-                        const SizedBox(width: 4),
+                        const Icon(Icons.sync_rounded, size: 13, color: Colors.black38),
+                        const SizedBox(width: 6),
                         Text(
-                          "Synced ${_getRelativeSyncTime(stepSyncService.lastSyncTime!)}",
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          "TELEMETRY UPDATED: ${_getRelativeSyncTime(stepSyncService.lastSyncTime!).toUpperCase()}",
+                          style: const TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                         ),
                       ],
                     ),
                   ),
 
-                // =====================
-                // REAL-DATA STATS GRID
-                // =====================
+                // CORE PERFORMANCE MATRIX GRID
                 GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.15,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.25,
                   children: [
-                    _buildModernStatCard(
-                      title: "Steps",
-                      value: "$liveSteps",
-                      icon: Icons.directions_walk_rounded,
-                      color: Colors.blue,
-                    ),
-                    _buildModernStatCard(
-                      title: "Calories",
-                      value: calculatedCalories.toStringAsFixed(0),
-                      icon: Icons.local_fire_department_rounded,
-                      color: Colors.orange,
-                    ),
-                    _buildModernStatCard(
-                      title: "Distance",
-                      value: "${calculatedDistance.toStringAsFixed(2)} km",
-                      icon: Icons.alt_route_rounded,
-                      color: Colors.green,
-                    ),
-                    _buildModernStatCard(
-                      title: "Level",
-                      value: "$liveLevel",
-                      icon: Icons.star_rounded,
-                      color: Colors.purple,
-                    ),
+                    _buildModernStatCard(title: "TOTAL STEPS", value: "$liveSteps", icon: Icons.directions_walk_rounded, color: Colors.cyanAccent),
+                    _buildModernStatCard(title: "ENERGY KCAL", value: calculatedCalories.toStringAsFixed(0), icon: Icons.local_fire_department_rounded, color: Colors.orangeAccent),
+                    _buildModernStatCard(title: "DISTANCE MAP", value: "${calculatedDistance.toStringAsFixed(2)} KM", icon: Icons.alt_route_rounded, color: Colors.greenAccent),
+                    _buildModernStatCard(title: "RANK LEVEL", value: "$liveLevel", icon: Icons.star_rounded, color: Colors.purpleAccent),
                   ],
                 ),
+                const SizedBox(height: 20),
 
-                const SizedBox(height: 24),
-
-                // =====================
-                // DAILY GOAL PANEL
-                // =====================
+                // SYSTEM PROGRESS BAR GOAL
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 12,
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 10,
                         offset: const Offset(0, 4),
-                      ),
+                      )
                     ],
                   ),
                   child: Column(
@@ -311,227 +210,161 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            "Daily Goal",
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            "${(goalProgress * 100).toStringAsFixed(0)}%",
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
-                          )
+                          const Text("DAILY SECTOR GOAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54, letterSpacing: 0.5)),
+                          Text("${(goalProgress * 100).toStringAsFixed(0)}%", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.cyan.shade700, fontSize: 13)),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(8),
                         child: LinearProgressIndicator(
                           value: goalProgress,
-                          minHeight: 12,
-                          backgroundColor: Colors.grey.shade100,
-                          color: Colors.blue,
+                          minHeight: 8,
+                          backgroundColor: Colors.black.withValues(alpha: 0.05),
+                          color: Colors.cyan.shade400,
                         ),
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        "$liveSteps / ${dailyGoalTarget.toStringAsFixed(0)} steps taken",
-                        style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                        "$liveSteps / ${dailyGoalTarget.toStringAsFixed(0)} STRIDES COMPLETED",
+                        style: const TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.2),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 24),
 
-                const SizedBox(height: 28),
-
-                // =====================
-                // DAILY QUESTS
-                // =====================
-                const Text(
-                  "Daily Quests",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-                ),
-                const SizedBox(height: 14),
+                // MATRICULATED QUEST SYSTEM LAYER
+                const Text("TACTICAL DAILY QUESTS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                const SizedBox(height: 12),
                 if (player != null) ...[
-                  _buildQuest(
-                    player: player,
-                    id: "morning_walker",
-                    title: "Morning Walker",
-                    target: 2000,
-                    current: liveSteps.toDouble(),
-                    reward: 100,
-                    icon: Icons.wb_sunny_rounded,
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildQuest(
-                    player: player,
-                    id: "territory_scout",
-                    title: "Territory Scout",
-                    target: 3,
-                    current: player.totalLand.toDouble(),
-                    reward: 250,
-                    icon: Icons.explore_rounded,
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildQuest(
-                    player: player,
-                    id: "xp_hunter",
-                    title: "XP Hunter",
-                    target: 500,
-                    current: liveXp.toDouble(),
-                    reward: 500,
-                    icon: Icons.bolt_rounded,
-                    color: Colors.purple,
-                  ),
+                  _buildQuest(player: player, id: "morning_walker", title: "Morning Scout Routine", target: 2000, current: liveSteps.toDouble(), reward: 100, icon: Icons.wb_sunny_rounded, color: Colors.orangeAccent),
+                  const SizedBox(height: 10),
+                  _buildQuest(player: player, id: "territory_scout", title: "Grid Perimeter Expansion", target: 3, current: player.totalLand.toDouble(), reward: 250, icon: Icons.explore_rounded, color: Colors.cyanAccent),
+                  const SizedBox(height: 10),
+                  _buildQuest(player: player, id: "xp_hunter", title: "Core Processor Linkup", target: 500, current: liveXp.toDouble(), reward: 500, icon: Icons.bolt_rounded, color: Colors.purpleAccent),
                 ],
+                const SizedBox(height: 24),
 
-                const SizedBox(height: 28),
-
-                // =====================
-                // QUICK ACTIONS
-                // =====================
-                const Text(
-                  "Quick Actions",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-                ),
-                const SizedBox(height: 14),
+                // FAST WARPING SECTOR NAVIGATION
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2196F3),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapScreen())),
-                        icon: const Icon(Icons.map_rounded),
-                        label: const Text("Open Map", style: TextStyle(fontWeight: FontWeight.bold)),
+                        icon: const Icon(Icons.map_rounded, color: Colors.cyan),
+                        label: const Text("GRID MAP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF9C27B0),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen())),
-                        icon: const Icon(Icons.shopping_bag_rounded),
-                        label: const Text("Shop", style: TextStyle(fontWeight: FontWeight.bold)),
+                        icon: const Icon(Icons.shopping_bag_rounded, color: Colors.purpleAccent),
+                        label: const Text("UPGRADES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF9800),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black87,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
-                    icon: const Icon(Icons.leaderboard_rounded),
-                    label: const Text("Leaderboard", style: TextStyle(fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.leaderboard_rounded, color: Colors.orangeAccent),
+                    label: const Text("GLOBAL STANDINGS NODE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                   ),
                 ),
+                const SizedBox(height: 24),
 
-                const SizedBox(height: 28),
-
-                // =====================
-                // REWARDS PREVIEW
-                // =====================
-                const Text(
-                  "Recent Rewards",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                // PERFORMANCE REWARD TELEMETRY LOGS
+                const Text("HISTORICAL CACHE LOGS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.01),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      _buildRewardItem(icon: Icons.flash_on_rounded, title: "Grid Conquest Matrix", subtitle: "Dispatched 100 XP allocation via tile vectors", color: Colors.amber.shade700),
+                      const Divider(height: 20, thickness: 1, color: Colors.black12),
+                      _buildRewardItem(icon: Icons.shield_rounded, title: "Node Defense Baseline", subtitle: "Secured 20 XP firewall perimeter rewards", color: Colors.cyan.shade700),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 20),
+
+                // DYNAMIC INTEGRATED CAPACITY MATRIX
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 12,
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 10,
                         offset: const Offset(0, 4),
-                      ),
+                      )
                     ],
-                  ),
-                  child: Column(
-                    children: [
-                      rewardItem(
-                        icon: Icons.flash_on_rounded,
-                        title: "Action Rewards",
-                        subtitle: "Earn 100 XP for attacking tiles",
-                        color: Colors.amber,
-                      ),
-                      const Divider(height: 24, thickness: 0.8),
-                      rewardItem(
-                        icon: Icons.shield_rounded,
-                        title: "Defensive Bonus",
-                        subtitle: "Defend tiles for 20 XP each",
-                        color: Colors.blue,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-
-                // =====================
-                // FITNESS PANEL
-                // =====================
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF00E676), Color(0xFF00B0FF)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
                   ),
                   child: Row(
                     children: [
                       ConfettiWidget(
                         confettiController: _confettiController,
                         blastDirectionality: BlastDirectionality.explosive,
-                        shouldLoop: false,
-                        colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+                        colors: const [Colors.cyanAccent, Colors.orangeAccent, Colors.purpleAccent],
                       ),
                       const CircleAvatar(
-                        radius: 26,
-                        backgroundColor: Colors.white24,
-                        child: Icon(Icons.favorite_rounded, color: Colors.white, size: 28),
+                        radius: 22,
+                        backgroundColor: Color(0xFFF5F7FA),
+                        child: Icon(Icons.favorite_rounded, color: Colors.redAccent, size: 22),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "Fitness Level",
-                              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14, fontWeight: FontWeight.w500), // FIXED: Resolved whiteAA
-                            ),
+                            const Text("BIO-INDEX ENGINE STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             Text(
-                              pedometerService.getFitnessLevel(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900, // FIXED: Changed from black to w900
-                              ),
+                              pedometerService.getFitnessLevel().toUpperCase(),
+                              style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                             ),
                           ],
                         ),
@@ -543,6 +376,33 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildModernStatCard({required String title, required String value, required IconData icon, required Color color}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 10),
+          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.black87)),
+          const SizedBox(height: 2),
+          Text(title, style: const TextStyle(fontSize: 10, color: Colors.black45, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        ],
       ),
     );
   }
@@ -562,29 +422,23 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isComplete = progress >= 1.0;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
+            color: Colors.black.withValues(alpha: 0.01),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          )
         ],
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: color, size: 26),
-          ),
-          const SizedBox(width: 16),
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -593,32 +447,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(title.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87, letterSpacing: 0.2), overflow: TextOverflow.ellipsis),
                     ),
                     const SizedBox(width: 8),
                     if (isClaimed)
-                      const Icon(Icons.check_circle_rounded, color: Colors.green, size: 22)
+                      const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 18)
                     else
-                      Text(
-                        "$reward XP",
-                        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
+                      Text("+$reward XP", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
                   ],
                 ),
-                const SizedBox(height: 10),
                 if (!isClaimed) ...[
+                  const SizedBox(height: 8),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 8,
-                      backgroundColor: Colors.grey.shade100,
-                      color: color,
-                    ),
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(value: progress, minHeight: 4, backgroundColor: Colors.black.withValues(alpha: 0.05), color: color),
                   ),
                 ],
                 if (isComplete && !isClaimed)
@@ -628,22 +470,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: color,
-                          foregroundColor: Colors.white,
+                          backgroundColor: color.withValues(alpha: 0.2),
+                          foregroundColor: color,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          side: BorderSide(color: color.withValues(alpha: 0.4)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         onPressed: () async {
-                          await firebaseService.claimQuest(
-                            uid: player.uid,
-                            questId: id,
-                            rewardXp: reward,
-                          );
+                          await firebaseService.claimQuest(uid: player.uid, questId: id, rewardXp: reward);
                           if (!mounted) return;
                           _confettiController.play();
                         },
-                        child: const Text("CLAIM REWARD", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                        child: const Text("DECRYPT ACCRUED REWARD", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                       ),
                     ),
                   ),
@@ -655,33 +493,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget rewardItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-  }) {
+  Widget _buildRewardItem({required IconData icon, required String title, required String subtitle, required Color color}) {
     return Row(
       children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: color.withOpacity(0.1),
-          child: Icon(icon, color: color, size: 22),
-        ),
-        const SizedBox(width: 16),
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 15),
-              ),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 13)),
               const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-              ),
+              Text(subtitle, style: const TextStyle(color: Colors.black45, fontSize: 11)),
             ],
           ),
         ),

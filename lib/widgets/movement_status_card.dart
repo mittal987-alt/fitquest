@@ -54,99 +54,53 @@ class MovementStatusCard
     }
 
     return Container(
-
-      margin:
-      const EdgeInsets.all(16),
-
-      padding:
-      const EdgeInsets.all(18),
-
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-
         color: Colors.white,
-
-        borderRadius:
-        BorderRadius.circular(24),
-
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.black.withValues(alpha: 0.05),
+        ),
         boxShadow: [
-
           BoxShadow(
-
-            color:
-            Colors.black12,
-
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
-
-            offset:
-            const Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-
       child: Row(
-
         children: [
-
           CircleAvatar(
-
             radius: 30,
-
-            backgroundColor:
-            statusColor
-                .withValues(
-                alpha: 0.15),
-
+            backgroundColor: statusColor.withValues(alpha: 0.1),
             child: Icon(
-
               statusIcon,
-
               color: statusColor,
-
               size: 30,
             ),
           ),
-
           const SizedBox(width: 16),
-
           Expanded(
-
             child: Column(
-
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(
-
                   status,
-
-                  style:
-                  TextStyle(
-
-                    fontSize: 22,
-
-                    fontWeight:
-                    FontWeight.bold,
-
-                    color:
-                    statusColor,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: statusColor,
                   ),
                 ),
-
-                const SizedBox(
-                    height: 6),
-
+                const SizedBox(height: 4),
                 Text(
-
                   "${speed.toStringAsFixed(1)} km/h",
-
-                  style: TextStyle(
-
-                    color:
-                    Colors.grey.shade700,
-
-                    fontSize: 16,
+                  style: const TextStyle(
+                    color: Colors.black54,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],

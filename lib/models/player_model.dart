@@ -1,26 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PlayerModel {
-
   final String uid;
   final bool isInTeam;
   final String name;
-
   final String email;
-
   final String team;
   final String? teamId;
   final int totalSteps;
-
   final int totalLand;
-
-
   final int trustScore;
-
   final int level;
-
   final int xp;
-
   final String avatar;
   final DateTime? lastTeamAction;
   final int streakCount;
@@ -48,47 +39,42 @@ class PlayerModel {
     this.activePowerUps = const {},
   });
 
-  // =========================
-  // FROM FIREBASE
-  // =========================
-
-  factory PlayerModel.fromMap(
-      Map<String, dynamic> map) {
+  factory PlayerModel.fromMap(Map<String, dynamic> map) {
     Map<String, DateTime> powerUps = {};
     if (map["activePowerUps"] != null) {
       (map["activePowerUps"] as Map<String, dynamic>).forEach((key, value) {
-        powerUps[key] = (value as Timestamp).toDate();
+        if (value is Timestamp) {
+          powerUps[key] = value.toDate();
+        }
       });
     }
 
     return PlayerModel(
-      uid: map["uid"] ?? "",
-      name: map["name"] ?? "",
-      email: map["email"] ?? "",
-      team: map["team"] ?? "No Team",
-      teamId: map["teamId"],
-      isInTeam: map["isInTeam"] ?? false,
-      totalSteps: map["totalSteps"] ?? 0,
-      totalLand: map["totalLand"] ?? 0,
-      trustScore: map["trustScore"] ?? 100,
-      level: map["level"] ?? 1,
-      xp: map["xp"] ?? 0,
-      avatar: map["avatar"] ?? "",
-      lastTeamAction: map["lastTeamAction"] != null
+      uid: map["uid"]?.toString() ?? "",
+      name: map["name"]?.toString() ?? "",
+      email: map["email"]?.toString() ?? "",
+      team: map["team"]?.toString() ?? "No Team",
+      teamId: map["teamId"]?.toString(),
+      isInTeam: map["isInTeam"] is bool ? map["isInTeam"] : false,
+      totalSteps: (map["totalSteps"] as num?)?.toInt() ?? 0,
+      totalLand: (map["totalLand"] as num?)?.toInt() ?? 0,
+      trustScore: (map["trustScore"] as num?)?.toInt() ?? 100,
+      level: (map["level"] as num?)?.toInt() ?? 1,
+      xp: (map["xp"] as num?)?.toInt() ?? 0,
+      avatar: map["avatar"]?.toString() ?? "",
+      lastTeamAction: map["lastTeamAction"] is Timestamp
           ? (map["lastTeamAction"] as Timestamp).toDate()
           : null,
-      streakCount: map["streakCount"] ?? 0,
-      lastActiveDate: map["lastActiveDate"] != null
+      streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
+      lastActiveDate: map["lastActiveDate"] is Timestamp
           ? (map["lastActiveDate"] as Timestamp).toDate()
           : null,
-      claimedQuests: List<String>.from(map["claimedQuests"] ?? []),
+      claimedQuests: map["claimedQuests"] != null
+          ? List<String>.from(map["claimedQuests"])
+          : const [],
       activePowerUps: powerUps,
     );
   }
-
-  // =========================
-  // TO FIREBASE
-  // =========================
 
   Map<String, dynamic> toMap() {
     Map<String, Timestamp> powerUps = {};
@@ -109,13 +95,9 @@ class PlayerModel {
       "isInTeam": isInTeam,
       "xp": xp,
       "avatar": avatar,
-      "lastTeamAction": lastTeamAction != null
-          ? Timestamp.fromDate(lastTeamAction!)
-          : null,
+      "lastTeamAction": lastTeamAction != null ? Timestamp.fromDate(lastTeamAction!) : null,
       "streakCount": streakCount,
-      "lastActiveDate": lastActiveDate != null
-          ? Timestamp.fromDate(lastActiveDate!)
-          : null,
+      "lastActiveDate": lastActiveDate != null ? Timestamp.fromDate(lastActiveDate!) : null,
       "claimedQuests": claimedQuests,
       "activePowerUps": powerUps,
     };

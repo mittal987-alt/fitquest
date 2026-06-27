@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:pedometer/pedometer.dart';
 
 class PedometerService {
@@ -7,144 +6,97 @@ class PedometerService {
   factory PedometerService() => _instance;
   PedometerService._internal();
 
-  StreamSubscription<StepCount>?
-  stepStream;
+  StreamSubscription<StepCount>? _stepStreamSub;
 
+  int _systemStepsOffset = -1; // Calibrates hardware steps since device reboot
   int totalSteps = 0;
   int previousSteps = 0;
   DateTime lastStepTime = DateTime.now().subtract(const Duration(minutes: 5));
+
   int get steps => totalSteps;
 
-  // =========================
-  // STEP STREAM
-  // =========================
+  // ==========================================
+  // HARDWARE EVENT CAPTURE STREAMS
+  // ==========================================
 
-  Stream<StepCount>
-  getStepStream() {
-
-    return Pedometer
-        .stepCountStream;
+  Stream<StepCount> getStepStream() {
+    return Pedometer.stepCountStream;
   }
-
-  // =========================
-  // START LISTENING
-  // =========================
 
   void startListening() {
-    if (stepStream != null) return;
-    stepStream = Pedometer.stepCountStream.listen(updateSteps);
+    if (_stepStreamSub != null) return;
+    _stepStreamSub = Pedometer.stepCountStream.listen(updateSteps);
   }
-
-  // =========================
-  // STOP LISTENING
-  // =========================
 
   void stopListening() {
-
-    stepStream?.cancel();
+    _stepStreamSub?.cancel();
+    _stepStreamSub = null;
   }
 
-  // =========================
-  // UPDATE STEPS
-  // =========================
+  void updateSteps(StepCount event) {
+    // Calibrate baseline on initial event to counter boot step pollution
+    if (_systemStepsOffset == -1) {
+      _systemStepsOffset = event.steps;
+    }
 
-  void updateSteps(
-      StepCount event) {
+    int sessionSteps = event.steps - _systemStepsOffset;
 
-    if (event.steps > totalSteps) {
+    if (sessionSteps > totalSteps) {
       lastStepTime = DateTime.now();
     }
 
     previousSteps = totalSteps;
-
-    totalSteps = event.steps;
+    totalSteps = sessionSteps;
   }
 
-  // =========================
-  // REAL WALKING CHECK
-  // =========================
+  // ==========================================
+  // METRICS & ANALYSIS MATRIX
+  // ==========================================
 
   bool isRealWalking() {
-    // If we received a step update in the last 15 seconds, we are walking
+    // Validates true if a telemetry event occurred within the past 15 seconds
     return DateTime.now().difference(lastStepTime).inSeconds < 15;
   }
 
-  // =========================
-  // STEP DIFFERENCE
-  // =========================
-
   int getStepDifference() {
-
-    return totalSteps -
-        previousSteps;
+    return totalSteps - previousSteps;
   }
 
-  // =========================
-  // CALORIES
-  // =========================
-
   double calculateCalories() {
-
     return totalSteps * 0.04;
   }
 
-  // =========================
-  // DISTANCE
-  // =========================
-
   double calculateDistanceKm() {
-
     return totalSteps * 0.0008;
   }
 
-  // =========================
-  // DAILY GOAL %
-  // =========================
-
-  double getGoalProgress({
-
-    int dailyGoal = 10000,
-  }) {
-
-    return totalSteps /
-        dailyGoal;
+  double getGoalProgress({int dailyGoal = 10000}) {
+    if (dailyGoal <= 0) return 0.0;
+    return totalSteps / dailyGoal;
   }
 
-  // =========================
-  // FITNESS LEVEL
-  // =========================
+  // ==========================================
+  // EVALUATION LEVELS (TACTICAL HUB THEME)
+  // ==========================================
 
   int getLevel() {
-
-    return (totalSteps / 2000)
-        .floor() + 1;
+    return (totalSteps / 2000).floor() + 1;
   }
 
   String getFitnessLevel() {
-
-    if (totalSteps < 3000) {
-      return "Beginner";
-    }
-
-    if (totalSteps < 7000) {
-      return "Active";
-    }
-
-    if (totalSteps < 12000) {
-      return "Fit";
-    }
-
-    return "Athlete";
+    if (totalSteps < 3000) return "RECRUIT / BEGINNER";
+    if (totalSteps < 7000) return "ACTIVE OPERATOR";
+    if (totalSteps < 12000) return "FIT VETERAN";
+    return "APEX ATHLETE";
   }
 
-  // =========================
-  // RESET
-  // =========================
+  // ==========================================
+  // RESET SEQUENCE
+  // ==========================================
 
   void reset() {
-
+    _systemStepsOffset = -1; // Recalibrates next hardware frame broadcast
     totalSteps = 0;
-
     previousSteps = 0;
   }
 }

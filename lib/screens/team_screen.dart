@@ -30,32 +30,46 @@ class _TeamScreenState extends State<TeamScreen> {
         final bool alreadyInTeam = currentPlayer?.isInTeam ?? false;
 
         return Scaffold(
-          backgroundColor: Colors.grey.shade100,
+          backgroundColor: const Color(0xFFF5F7FA),
           appBar: AppBar(
-            title: const Text("Teams"),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            title: const Text(
+              "SQUAD CHANNELS",
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+                fontSize: 16,
+                color: Colors.black87,
+              ),
+            ),
             centerTitle: true,
+            iconTheme: const IconThemeData(color: Colors.black87),
           ),
           floatingActionButton: alreadyInTeam
               ? null
               : FloatingActionButton.extended(
-                  backgroundColor: Colors.blue,
-                  onPressed: () {
-                    showCreateTeamDialog(currentPlayer);
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text("Create Team"),
-                ),
+            backgroundColor: Colors.blueAccent,
+            onPressed: () => showCreateTeamDialog(currentPlayer),
+            icon: const Icon(Icons.add_moderator_rounded, color: Colors.white),
+            label: const Text("FOUND NEW SQUAD", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)),
+          ),
           body: StreamBuilder<List<TeamModel>>(
             stream: firebaseService.getTeams(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
               }
               if (snapshot.hasError) {
-                return Center(child: Text(snapshot.error.toString()));
+                return Center(child: Text(snapshot.error.toString(), style: const TextStyle(color: Colors.redAccent)));
               }
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(child: Text("No Teams Found"));
+                return const Center(
+                  child: Text(
+                    "NO NETWORK SQUADS INSTANTIATED",
+                    style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold),
+                  ),
+                );
               }
 
               final teams = snapshot.data!;
@@ -65,71 +79,66 @@ class _TeamScreenState extends State<TeamScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // TOP PROFILE NODE SQUAD BANNER
                     Container(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.blue, Colors.lightBlue],
-                        ),
-                        borderRadius: BorderRadius.circular(28),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "Your Team",
-                            style: TextStyle(color: Colors.white70, fontSize: 18),
+                            "CURRENT OPERATIONAL UNIT",
+                            style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Text(
-                            selectedTeam,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            selectedTeam.toUpperCase(),
+                            style: const TextStyle(color: Colors.black87, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                           ),
                           if (alreadyInTeam)
                             Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: ElevatedButton(
+                              padding: const EdgeInsets.only(top: 14),
+                              child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white.withValues(alpha: 0.2),
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                                  foregroundColor: Colors.redAccent,
                                   elevation: 0,
+                                  side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 ),
                                 onPressed: () async {
                                   final team = teams.firstWhere(
-                                      (t) => t.name == selectedTeam,
-                                      orElse: () => TeamModel(
-                                          id: "",
-                                          name: "Unknown",
-                                          color: "blue",
-                                          members: 0,
-                                          maxMembers: 50,
-                                          totalLand: 0,
-                                          totalSteps: 0,
-                                          leaderId: "",
-                                          logo: ""));
+                                        (t) => t.name == selectedTeam,
+                                    orElse: () => TeamModel(id: "", name: "Unknown", color: "blue", members: 0, maxMembers: 50, totalLand: 0, totalSteps: 0, leaderId: "", logo: ""),
+                                  );
 
                                   if (team.id.isEmpty) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("Team not found")),
+                                      const SnackBar(content: Text("NODE LINK RESOLUTION FAULT")),
                                     );
                                     return;
                                   }
 
-                                  if (currentPlayer != null &&
-                                      currentPlayer.lastTeamAction != null) {
-                                    final diff = DateTime.now()
-                                        .difference(currentPlayer.lastTeamAction!);
+                                  if (currentPlayer?.lastTeamAction != null) {
+                                    final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);
                                     if (diff.inHours < 24) {
                                       final hoursLeft = 24 - diff.inHours;
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
-                                          content: Text(
-                                              "You must wait $hoursLeft more hours before changing teams."),
-                                          backgroundColor: Colors.orange,
+                                          content: Text("COOLDOWN INJECTED: WAIT $hoursLeft HOURS TO TRANSIT"),
+                                          backgroundColor: Colors.orangeAccent,
                                         ),
                                       );
                                       return;
@@ -137,48 +146,41 @@ class _TeamScreenState extends State<TeamScreen> {
                                   }
 
                                   bool confirm = await showDialog(
-                                        context: context,
-                                        builder: (context) => AlertDialog(
-                                          title: const Text("Leave Team"),
-                                          content: Text(
-                                              "Are you sure you want to leave ${team.name}?"),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, false),
-                                              child: const Text("Cancel"),
-                                            ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, true),
-                                              child: const Text("Leave",
-                                                  style: TextStyle(
-                                                      color: Colors.red)),
-                                            ),
-                                          ],
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      backgroundColor: Colors.white,
+                                      title: const Text("TERMINATE LINK", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+                                      content: Text("Sever connection vectors with ${team.name.toUpperCase()}?", style: const TextStyle(color: Colors.black54)),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text("ABORT", style: TextStyle(color: Colors.black54)),
                                         ),
-                                      ) ??
-                                      false;
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text("SEVER LINK", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ),
+                                  ) ?? false;
 
                                   if (confirm) {
-                                    await firebaseService.leaveTeam(
-                                      uid: currentUid,
-                                      teamId: team.id,
-                                    );
+                                    await firebaseService.leaveTeam(uid: currentUid, teamId: team.id);
                                   }
                                 },
-                                child: const Text("Leave Team"),
+                                icon: const Icon(Icons.link_off_rounded, size: 16),
+                                label: const Text("SEVER SQUAD CONNECTION", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                               ),
                             ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 24),
                     const Text(
-                      "All Teams",
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      "AVAILABLE COHORT SECTORS",
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     ...teams.map((team) {
                       final isLeader = currentUid == team.leaderId;
 
@@ -200,17 +202,14 @@ class _TeamScreenState extends State<TeamScreen> {
                               );
                             },
                             onJoin: () async {
-                              if (currentPlayer != null &&
-                                  currentPlayer.lastTeamAction != null) {
-                                final diff = DateTime.now()
-                                    .difference(currentPlayer.lastTeamAction!);
+                              if (currentPlayer?.lastTeamAction != null) {
+                                final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);
                                 if (diff.inHours < 24) {
                                   final hoursLeft = 24 - diff.inHours;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(
-                                          "You must wait $hoursLeft more hours before performing another team action."),
-                                      backgroundColor: Colors.orange,
+                                      content: Text("ACTION LOCKOUT: TIME CONTEXT RESTRAINED BY $hoursLeft HOURS"),
+                                      backgroundColor: Colors.orangeAccent,
                                     ),
                                   );
                                   return;
@@ -220,8 +219,8 @@ class _TeamScreenState extends State<TeamScreen> {
                               if (team.members >= team.maxMembers) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    backgroundColor: Colors.red,
-                                    content: Text("Team is Full"),
+                                    backgroundColor: Colors.redAccent,
+                                    content: Text("CRITICAL OVERFLOW: TARGET SECTOR CAPACITY EXCEEDED"),
                                   ),
                                 );
                                 return;
@@ -229,11 +228,9 @@ class _TeamScreenState extends State<TeamScreen> {
 
                               final user = FirebaseAuth.instance.currentUser!;
                               TeamRequestModel request = TeamRequestModel(
-                                requestId: DateTime.now()
-                                    .millisecondsSinceEpoch
-                                    .toString(),
+                                requestId: DateTime.now().millisecondsSinceEpoch.toString(),
                                 playerId: user.uid,
-                                playerName: user.email ?? "Player",
+                                playerName: user.email ?? "Anonymous Node",
                                 teamId: team.id,
                                 teamName: team.name,
                                 status: "pending",
@@ -241,34 +238,36 @@ class _TeamScreenState extends State<TeamScreen> {
 
                               await firebaseService.sendJoinRequest(request);
 
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    backgroundColor: Colors.green,
-                                    content: Text(
-                                        "Request sent to ${team.name}"),
-                                  ),
-                                );
-                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: Colors.greenAccent.withValues(alpha: 0.2),
+                                  content: Text("HANDSHAKE BROADCAST DISPATCHED TO ${team.name.toUpperCase()}", style: const TextStyle(color: Colors.greenAccent)),
+                                ),
+                              );
                             },
                           ),
                           if (isLeader)
                             Align(
                               alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => TeamRequestsScreen(
-                                        teamId: team.id,
-                                        teamName: team.name,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                                child: TextButton.icon(
+                                  style: TextButton.styleFrom(foregroundColor: Colors.orangeAccent),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => TeamRequestsScreen(
+                                          teamId: team.id,
+                                          teamName: team.name,
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.notifications),
-                                label: const Text("View Requests"),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.satellite_alt_rounded, size: 16),
+                                  label: const Text("DECRYPT HANDSHAKE REQUESTS", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                ),
                               ),
                             ),
                           const SizedBox(height: 8),
@@ -290,35 +289,40 @@ class _TeamScreenState extends State<TeamScreen> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
-          title: const Text("Create Team"),
+          backgroundColor: Colors.white,
+          title: const Text(
+            "INITIALIZE NEW SQUAD NODE",
+            style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
+          ),
           content: TextField(
             controller: controller,
+            style: const TextStyle(color: Colors.black87),
             decoration: const InputDecoration(
-              hintText: "Enter team name",
+              hintText: "Assign alpha identifier string",
+              hintStyle: TextStyle(color: Colors.black38, fontSize: 13),
+              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
+              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text("Cancel"),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("ABORT", style: TextStyle(color: Colors.black38)),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
               onPressed: () async {
-                if (currentPlayer != null &&
-                    currentPlayer.lastTeamAction != null) {
-                  final diff = DateTime.now()
-                      .difference(currentPlayer.lastTeamAction!);
+                if (currentPlayer?.lastTeamAction != null) {
+                  final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);
                   if (diff.inHours < 24) {
                     final hoursLeft = 24 - diff.inHours;
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(
-                            "You must wait $hoursLeft more hours before creating a team."),
-                        backgroundColor: Colors.orange,
+                        content: Text("COOLDOWN ACTIVE: INITIALIZATION HALTED FOR $hoursLeft HOURS"),
+                        backgroundColor: Colors.orangeAccent,
                       ),
                     );
                     return;
@@ -340,25 +344,25 @@ class _TeamScreenState extends State<TeamScreen> {
 
                   await firebaseService.createTeam(team);
 
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("Team '${team.name}' created!"),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
+                  if (!context.mounted) return;
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("SQUAD COMPILING COMPLETED: ${team.name.toUpperCase()} RECRUITING NOW"),
+                      backgroundColor: Colors.greenAccent.withValues(alpha: 0.8),
+                    ),
+                  );
                 } else {
+                  if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text("Please enter a team name"),
-                      backgroundColor: Colors.red,
+                      content: Text("EMPTY PARAMETER: SPECIFY SQUAD IDENTIFIER"),
+                      backgroundColor: Colors.redAccent,
                     ),
                   );
                 }
               },
-              child: const Text("Create"),
+              child: const Text("INSTANTIATE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
             ),
           ],
         );
@@ -383,18 +387,12 @@ class TeamStat extends StatelessWidget {
       children: [
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white70,
-          ),
+          title.toUpperCase(),
+          style: const TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold),
         ),
       ],
     );

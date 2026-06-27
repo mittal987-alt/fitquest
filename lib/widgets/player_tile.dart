@@ -44,116 +44,72 @@ class PlayerTile extends StatelessWidget {
     }
 
     return Container(
-
-      margin:
-      const EdgeInsets.only(
-          bottom: 16),
-
-      padding:
-      const EdgeInsets.all(18),
-
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-
         color: Colors.white,
-
-        borderRadius:
-        BorderRadius.circular(24),
-
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.black.withValues(alpha: 0.05),
+        ),
         boxShadow: [
-
           BoxShadow(
-
-            color:
-            Colors.black12,
-
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
-
-            offset:
-            const Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-
       child: Row(
-
         children: [
-
           // =====================
           // RANK
           // =====================
-
           CircleAvatar(
-
             radius: 26,
-
-            backgroundColor:
-            rankColor,
-
+            backgroundColor: rankColor.withValues(alpha: 0.1),
             child: Text(
-
               "#$rank",
-
-              style:
-              const TextStyle(
-
-                color: Colors.white,
-
-                fontWeight:
-                FontWeight.bold,
-
+              style: TextStyle(
+                color: rankColor,
+                fontWeight: FontWeight.w900,
                 fontSize: 18,
               ),
             ),
           ),
-
           const SizedBox(width: 16),
-
           // =====================
           // PLAYER INFO
           // =====================
-
           Expanded(
-
             child: Column(
-
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(
-
                   player.name,
-
-                  style:
-                  const TextStyle(
-
-                    fontSize: 22,
-
-                    fontWeight:
-                    FontWeight.bold,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black87,
                   ),
                 ),
-
-                const SizedBox(
-                    height: 8),
-
+                const SizedBox(height: 4),
                 Text(
                   "👣 ${player.totalSteps} Steps",
+                  style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
-
                 Text(
                   "🌍 ${player.totalLand} Land",
+                  style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
-
                 Text(
                   "👥 ${player.team}",
+                  style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
-
                 Text(
                   "⭐ Level ${player.level}",
+                  style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
-
                 if (player.streakCount > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
@@ -161,25 +117,20 @@ class PlayerTile extends StatelessWidget {
                       "🔥 ${player.streakCount} Day Streak",
                       style: const TextStyle(
                         color: Colors.orange,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
                       ),
                     ),
                   ),
               ],
             ),
           ),
-
           // =====================
           // TROPHY
           // =====================
-
           Icon(
-
             trophyIcon,
-
             color: rankColor,
-
             size: 34,
           ),
         ],

@@ -1,576 +1,257 @@
 import 'package:flutter/material.dart';
-
 import 'package:firebase_auth/firebase_auth.dart';
-
 import '../models/player_model.dart';
-
 import '../services/firebase_service.dart';
-
 import 'login_screen.dart';
 
-class ProfileScreen
-    extends StatelessWidget {
-
-  const ProfileScreen(
-      {super.key});
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-
-    final user =
-        FirebaseAuth
-            .instance
-            .currentUser;
+    final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-
       return const Scaffold(
-
+        backgroundColor: Color(0xFFF5F7FA),
         body: Center(
-
           child: Text(
-              "User Not Logged In"),
+            "User Not Logged In",
+            style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
         ),
       );
     }
 
-    return StreamBuilder<
-        PlayerModel?>(
-
-      stream:
-      FirebaseService()
-          .getPlayerStream(
-          user.uid),
-
-      builder:
-          (context, snapshot) {
-
-        // LOADING
-        if (snapshot
-            .connectionState ==
-            ConnectionState
-                .waiting) {
-
+    return StreamBuilder<PlayerModel?>(
+      stream: FirebaseService().getPlayerStream(user.uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-
+            backgroundColor: Color(0xFFF5F7FA),
             body: Center(
-
-              child:
-              CircularProgressIndicator(),
+              child: CircularProgressIndicator(color: Colors.blueAccent),
             ),
           );
         }
 
-        // NO DATA
-        if (!snapshot.hasData ||
-
-            snapshot.data ==
-                null) {
-
+        if (!snapshot.hasData || snapshot.data == null) {
           return const Scaffold(
-
+            backgroundColor: Color(0xFFF5F7FA),
             body: Center(
-
-              child:
-              Text(
-                  "Player Not Found"),
+              child: Text(
+                "Player Profile Not Found",
+                style: TextStyle(color: Colors.redAccent, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ),
           );
         }
 
-        final player =
-        snapshot.data!;
+        final player = snapshot.data!;
 
         return Scaffold(
-
-          backgroundColor:
-          Colors.grey
-              .shade100,
-
+          backgroundColor: const Color(0xFFF5F7FA),
           appBar: AppBar(
-
-            title:
-            const Text(
-                "Profile"),
-
-            centerTitle:
-            true,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            title: const Text(
+              "OPERATOR PROFILE",
+              style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 1.5, fontSize: 18),
+            ),
+            centerTitle: true,
+            iconTheme: const IconThemeData(color: Colors.black87),
           ),
-
-          body:
-          SingleChildScrollView(
-
-            padding:
-            const EdgeInsets
-                .all(16),
-
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
-
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
-                // =====================
-                // PROFILE HEADER
-                // =====================
-
                 Container(
-
-                  width:
-                  double.infinity,
-
-                  padding:
-                  const EdgeInsets
-                      .all(24),
-
-                  decoration:
-                  BoxDecoration(
-
-                    gradient:
-                    const LinearGradient(
-
-                      colors: [
-
-                        Colors.purple,
-
-                        Colors
-                            .deepPurple,
-                      ],
-                    ),
-
-                    borderRadius:
-                    BorderRadius.circular(
-                        28),
-                  ),
-
-                  child: Column(
-
-                    children: [
-
-                      const CircleAvatar(
-
-                        radius:
-                        50,
-
-                        backgroundColor:
-                        Colors
-                            .white24,
-
-                        child: Icon(
-
-                          Icons
-                              .person,
-
-                          size:
-                          60,
-
-                          color:
-                          Colors
-                              .white,
-                        ),
-                      ),
-
-                      const SizedBox(
-                          height:
-                          16),
-
-                      Text(
-
-                        player.name,
-
-                        style:
-                        const TextStyle(
-
-                          color: Colors
-                              .white,
-
-                          fontSize:
-                          24,
-
-                          fontWeight:
-                          FontWeight
-                              .bold,
-                        ),
-                      ),
-
-                      const SizedBox(
-                          height:
-                          8),
-
-                      Text(
-
-                        player.email,
-
-                        style:
-                        const TextStyle(
-
-                          color: Colors
-                              .white70,
-
-                          fontSize:
-                          16,
-                        ),
-                      ),
-
-                      const SizedBox(
-                          height:
-                          12),
-
-                      Text(
-
-                        "Level ${player.level} Explorer",
-
-                        style:
-                        const TextStyle(
-
-                          color: Colors
-                              .white,
-
-                          fontSize:
-                          18,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(
-                    height: 24),
-
-                // =====================
-                // STATS
-                // =====================
-
-                Row(
-
-                  children: [
-
-                    Expanded(
-
-                      child:
-                      profileStat(
-
-                        title:
-                        "Steps",
-
-                        value: player
-                            .totalSteps
-                            .toString(),
-
-                        icon: Icons
-                            .directions_walk,
-
-                        color:
-                        Colors
-                            .blue,
-                      ),
-                    ),
-
-                    const SizedBox(
-                        width:
-                        12),
-
-                    Expanded(
-
-                      child:
-                      profileStat(
-
-                        title:
-                        "Land",
-
-                        value: player
-                            .totalLand
-                            .toString(),
-
-                        icon: Icons
-                            .public,
-
-                        color:
-                        Colors
-                            .green,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(
-                    height: 12),
-
-                Row(
-
-                  children: [
-
-                    Expanded(
-
-                      child:
-                      profileStat(
-
-                        title:
-                        "Level",
-
-                        value: player
-                            .level
-                            .toString(),
-
-                        icon:
-                        Icons
-                            .star,
-
-                        color:
-                        Colors
-                            .orange,
-                      ),
-                    ),
-
-                    const SizedBox(
-                        width:
-                        12),
-
-                    Expanded(
-
-                      child:
-                      profileStat(
-
-                        title:
-                        "Trust",
-
-                        value: player
-                            .trustScore
-                            .toString(),
-
-                        icon: Icons
-                            .verified,
-
-                        color:
-                        Colors
-                            .purple,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(
-                    height: 12),
-
-                Row(
-
-                  children: [
-
-                    Expanded(
-
-                      child:
-                      profileStat(
-
-                        title:
-                        "XP",
-
-                        value: player
-                            .xp
-                            .toString(),
-
-                        icon: Icons
-                            .flash_on,
-
-                        color:
-                        Colors
-                            .amber,
-                      ),
-                    ),
-
-                    const SizedBox(
-                        width:
-                        12),
-
-                    Expanded(
-
-                      child:
-                      profileStat(
-
-                        title:
-                        "Team",
-
-                        value:
-                        player
-                            .team,
-
-                        icon:
-                        Icons
-                            .groups,
-
-                        color:
-                        Colors
-                            .teal,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(
-                    height: 30),
-
-                // =====================
-                // ACHIEVEMENTS
-                // =====================
-
-                Container(
-
-                  width:
-                  double.infinity,
-
-                  padding:
-                  const EdgeInsets
-                      .all(20),
-
-                  decoration:
-                  BoxDecoration(
-
-                    color:
-                    Colors
-                        .white,
-
-                    borderRadius:
-                    BorderRadius.circular(
-                        24),
-
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.05), width: 1.5),
                     boxShadow: [
-
                       BoxShadow(
-
-                        color: Colors
-                            .black12,
-
-                        blurRadius:
-                        10,
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.blueAccent, width: 2),
+                        ),
+                        child: const CircleAvatar(
+                          radius: 46,
+                          backgroundColor: Color(0xFFF5F7FA),
+                          child: Icon(Icons.person_rounded, size: 55, color: Colors.blueAccent),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        player.name,
+                        style: const TextStyle(color: Colors.black87, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        player.email,
+                        style: const TextStyle(color: Colors.black54, fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          "LEVEL ${player.level} EXPLORER",
+                          style: const TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                        ),
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 24),
 
+                const Text(
+                  "METRICS",
+                  style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.5),
+                ),
+                const SizedBox(height: 12),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 1.1,
+                  children: [
+                    profileStat(
+                      title: "Steps Taken",
+                      value: player.totalSteps.toString(),
+                      icon: Icons.directions_walk_rounded,
+                      color: Colors.blueAccent,
+                    ),
+                    profileStat(
+                      title: "Claimed Land",
+                      value: player.totalLand.toString(),
+                      icon: Icons.grid_view_rounded,
+                      color: Colors.green,
+                    ),
+                    profileStat(
+                      title: "Trust Index",
+                      value: "${player.trustScore}/100",
+                      icon: Icons.verified_user_rounded,
+                      color: Colors.purple,
+                    ),
+                    profileStat(
+                      title: "Active Domain",
+                      value: player.team,
+                      icon: Icons.groups_rounded,
+                      color: Colors.teal,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                profileStat(
+                  title: "Accumulated Experience Score",
+                  value: "${player.xp} XP",
+                  icon: Icons.flash_on_rounded,
+                  color: Colors.orange,
+                  isFullWidth: true,
+                ),
+                const SizedBox(height: 32),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      )
+                    ],
+                  ),
                   child: Column(
-
-                    crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-
                       const Text(
-
-                        "Achievements",
-
-                        style:
-                        TextStyle(
-
-                          fontSize:
-                          22,
-
-                          fontWeight:
-                          FontWeight
-                              .bold,
-                        ),
+                        "UNLOCKED ACHIEVEMENTS",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 1.1),
                       ),
-
-                      const SizedBox(
-                          height:
-                          20),
-
+                      const SizedBox(height: 20),
                       achievementTile(
-                        icon: Icons.emoji_events,
-                        title: "Walker",
-                        subtitle: "${player.totalSteps} total steps",
+                        icon: Icons.emoji_events_rounded,
+                        title: "Apex Walker",
+                        subtitle: "${player.totalSteps} total tracking units logged",
                         isUnlocked: player.totalSteps >= 1000,
                       ),
+                      const Divider(color: Colors.black12, height: 24),
                       achievementTile(
-                        icon: Icons.public,
-                        title: "Territory",
-                        subtitle: "${player.totalLand} lands captured",
+                        icon: Icons.public_rounded,
+                        title: "Realm Conqueror",
+                        subtitle: "${player.totalLand} hex lands secured instantly",
                         isUnlocked: player.totalLand >= 10,
                       ),
+                      const Divider(color: Colors.black12, height: 24),
                       achievementTile(
-                        icon: Icons.shield,
-                        title: "Trust Score",
-                        subtitle: "${player.trustScore}/100 trusted",
+                        icon: Icons.gavel_rounded,
+                        title: "Honored Scout",
+                        subtitle: "Maintained structural integrity level",
                         isUnlocked: player.trustScore >= 90,
                       ),
+                      const Divider(color: Colors.black12, height: 24),
                       achievementTile(
-                        icon: Icons.flash_on,
-                        title: "XP Veteran",
-                        subtitle: "${player.xp}/5000 XP reached",
+                        icon: Icons.bolt_rounded,
+                        title: "Grid Veteran",
+                        subtitle: "Reached 5,000 baseline network points",
                         isUnlocked: player.xp >= 5000,
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(
-                    height: 30),
-
-                // =====================
-                // LOGOUT
-                // =====================
+                const SizedBox(height: 32),
 
                 SizedBox(
-
-                  width:
-                  double.infinity,
-
-                  child:
-                  ElevatedButton.icon(
-
-                    style:
-                    ElevatedButton
-                        .styleFrom(
-
-                      backgroundColor:
-                      Colors.red,
-
-                      padding:
-                      const EdgeInsets.symmetric(
-                        vertical:
-                        18,
-                      ),
-
-                      shape:
-                      RoundedRectangleBorder(
-
-                        borderRadius:
-                        BorderRadius.circular(
-                            18),
-                      ),
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent.withValues(alpha: 0.05),
+                      foregroundColor: Colors.redAccent,
+                      side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.2), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
                     ),
-
-                    onPressed:
-                        () async {
-
-                      await FirebaseAuth
-                          .instance
-                          .signOut();
-
-                      if (context
-                          .mounted) {
-
-                        Navigator
-                            .pushReplacement(
-
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) {
+                        Navigator.pushReplacement(
                           context,
-
-                          MaterialPageRoute(
-
-                            builder:
-                                (_) =>
-                            const LoginScreen(),
-                          ),
+                          MaterialPageRoute(builder: (_) => const LoginScreen()),
                         );
                       }
                     },
-
-                    icon:
-                    const Icon(
-                        Icons
-                            .logout),
-
-                    label:
-                    const Text(
-                        "Logout"),
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text("ABORT SESSION (LOGOUT)", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1)),
                   ),
                 ),
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -579,99 +260,63 @@ class ProfileScreen
     );
   }
 
-  // =========================
-  // PROFILE STAT
-  // =========================
-
   Widget profileStat({
-
     required String title,
-
     required String value,
-
     required IconData icon,
-
     required Color color,
+    bool isFullWidth = false,
   }) {
-
     return Container(
-
-      padding:
-      const EdgeInsets
-          .all(18),
-
-      decoration:
-      BoxDecoration(
-
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
         color: Colors.white,
-
-        borderRadius:
-        BorderRadius.circular(
-            22),
-
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
         boxShadow: [
-
           BoxShadow(
-
-            color:
-            Colors.black12,
-
-            blurRadius: 10,
-          ),
+            color: Colors.black.withValues(alpha: 0.01),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          )
         ],
       ),
-
-      child: Column(
-
+      child: Row(
+        mainAxisSize: MainAxisSize.max,
+        mainAxisAlignment: isFullWidth ? MainAxisAlignment.start : MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-
           CircleAvatar(
-
-            radius: 28,
-
-            backgroundColor:
-            color.withValues(
-                alpha: 0.15),
-
-            child: Icon(
-
-              icon,
-
-              color: color,
-
-              size: 28,
+            radius: 26,
+            backgroundColor: color.withValues(alpha: 0.1),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          SizedBox(width: isFullWidth ? 18 : 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black87),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
           ),
-
-          const SizedBox(
-              height: 12),
-
-          Text(
-
-            value,
-
-            style:
-            const TextStyle(
-
-              fontSize: 20,
-
-              fontWeight:
-              FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(
-              height: 8),
-
-          Text(title),
         ],
       ),
     );
   }
-
-  // =========================
-  // ACHIEVEMENT TILE
-  // =========================
 
   Widget achievementTile({
     required IconData icon,
@@ -679,33 +324,44 @@ class ProfileScreen
     required String subtitle,
     required bool isUnlocked,
   }) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(
-        backgroundColor: isUnlocked
-            ? Colors.orange.withValues(alpha: 0.15)
-            : Colors.grey.withValues(alpha: 0.15),
-        child: Icon(
-          icon,
-          color: isUnlocked ? Colors.orange : Colors.grey,
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: isUnlocked ? Colors.orange.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
+          child: Icon(icon, color: isUnlocked ? Colors.orange : Colors.black26, size: 22),
         ),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: isUnlocked ? Colors.black : Colors.grey,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: isUnlocked ? Colors.black87 : Colors.black38,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isUnlocked ? Colors.black54 : Colors.black26,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          color: isUnlocked ? Colors.black87 : Colors.grey,
+        const SizedBox(width: 8),
+        Icon(
+          isUnlocked ? Icons.check_circle_outline_rounded : Icons.lock_outline_rounded,
+          color: isUnlocked ? Colors.green : Colors.black12,
+          size: 22,
         ),
-      ),
-      trailing: isUnlocked
-          ? const Icon(Icons.check_circle, color: Colors.green)
-          : const Icon(Icons.lock, color: Colors.grey, size: 20),
+      ],
     );
   }
 }
