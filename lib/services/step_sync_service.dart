@@ -43,9 +43,10 @@ class StepSyncService {
 
           // Handle first-time initialization or device reboots (where hardware steps < last stored)
           if (lastHardwareSteps == -1 || currentHardwareSteps < lastHardwareSteps) {
-            await firebaseService.firestore.collection("players").doc(uid).update({
-              "lastHardwareStepCount": currentHardwareSteps,
-            });
+            await firebaseService.updateLastHardwareSteps(
+              uid: uid,
+              hardwareSteps: currentHardwareSteps,
+            );
             return;
           }
 
@@ -64,9 +65,10 @@ class StepSyncService {
             }
 
             // Sync hardware baseline to cloud
-            await firebaseService.firestore.collection("players").doc(uid).update({
-              "lastHardwareStepCount": currentHardwareSteps,
-            });
+            await firebaseService.updateLastHardwareSteps(
+              uid: uid,
+              hardwareSteps: currentHardwareSteps,
+            );
 
             lastSyncTime = DateTime.now();
 
@@ -75,6 +77,9 @@ class StepSyncService {
             if (xpGain > 0) {
               await firebaseService.incrementXP(uid: uid, xpToAdd: xpGain);
             }
+
+            // CONTRIBUTE TO GLOBAL OPS
+            await firebaseService.contributeToGlobalEvent(deltaSteps);
 
             doublePrint("HYBRID SYNC: +$deltaSteps steps processed via Hardware Delta.");
           }

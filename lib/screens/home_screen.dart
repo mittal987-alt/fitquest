@@ -7,6 +7,7 @@ import '../services/step_sync_service.dart';
 import '../services/firebase_service.dart';
 import '../models/player_model.dart';
 import '../models/power_up_model.dart';
+import '../models/global_event_model.dart';
 import 'leaderboard_screen.dart';
 import 'map_screen.dart';
 import 'shop_screen.dart';
@@ -23,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final StepSyncService stepSyncService = StepSyncService();
   final FirebaseService firebaseService = FirebaseService();
   late ConfettiController _confettiController;
+  late Stream<PlayerModel?> _playerStream;
   Timer? refreshTimer;
 
   @override
@@ -30,13 +32,16 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _confettiController = ConfettiController(duration: const Duration(seconds: 3));
 
-    final uid = firebaseService.auth.currentUser?.uid;
-    if (uid != null) {
-      firebaseService.checkAndResetDailyStats(uid);
+    final String currentUid = firebaseService.auth.currentUser?.uid ?? "";
+    _playerStream = firebaseService.getPlayerStream(currentUid);
+
+    if (currentUid.isNotEmpty) {
+      firebaseService.checkAndResetDailyStats(currentUid);
+      stepSyncService.startTracking();
     }
 
     refreshTimer = Timer.periodic(
-      const Duration(seconds: 2),
+      const Duration(seconds: 30),
           (timer) {
         if (mounted) {
           setState(() {});
@@ -49,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _confettiController.dispose();
     refreshTimer?.cancel();
+    stepSyncService.stopTracking();
     super.dispose();
   }
 
@@ -76,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: StreamBuilder<PlayerModel?>(
-        stream: firebaseService.getPlayerStream(currentUid),
+        stream: _playerStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
@@ -87,6 +93,15 @@ class _HomeScreenState extends State<HomeScreen> {
           final int liveLevel = player?.level ?? 1;
           final int liveXp = player?.xp ?? 0;
           final int streak = player?.streakCount ?? 0;
+
+          // AUGMENTATION CHECK
+          bool hasExpBoost = player?.activePowerUps.containsKey("boost") ?? false;
+          if (hasExpBoost) {
+            DateTime? expiry = player?.activePowerUps["boost"];
+            if (expiry != null && expiry.isBefore(DateTime.now())) {
+              hasExpBoost = false;
+            }
+          }
 
           // BIO-INDEX CALCULATIONS
           double calculatedCalories = liveSteps * 0.04;
@@ -103,6 +118,94 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // GLOBAL OPS MONITORING
+                StreamBuilder<GlobalEventModel?>(
+                  stream: firebaseService.getActiveGlobalEvent(),
+                  builder: (context, eventSnapshot) {
+                    if (!eventSnapshot.hasData || eventSnapshot.data == null) return const SizedBox.shrink();
+
+                    final event = eventSnapshot.data!;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 20),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.blue.shade900, Colors.blue.shade700],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.withValues(alpha: 0.2),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          )
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                "ACTIVE GLOBAL OPERATION",
+                                style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white24,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  "LIVE",
+                                  style: TextStyle(color: Colors.blue.shade100, fontSize: 8, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            event.title.toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            event.description,
+                            style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.3),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "${(event.progress * 100).toStringAsFixed(1)}% COMPLETE",
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                              ),
+                              Text(
+                                "${event.currentSteps} / ${event.targetSteps} STEPS",
+                                style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: event.progress,
+                              minHeight: 6,
+                              backgroundColor: Colors.white10,
+                              color: Colors.blueAccent.shade100,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+
                 // STATUS HEADER
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -130,9 +233,25 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: TextStyle(color: Colors.cyan.shade700, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
                             ),
                             const SizedBox(height: 6),
-                            Text(
-                              player?.name.toUpperCase() ?? "EXPLORER NODE",
-                              style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                            Row(
+                              children: [
+                                Text(
+                                  player?.name.toUpperCase() ?? "EXPLORER NODE",
+                                  style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                                ),
+                                if (hasExpBoost) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.purple.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                                    ),
+                                    child: const Text("XP 2X", style: TextStyle(color: Colors.purple, fontSize: 8, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ],
                             ),
                             Text(
                               firebaseService.getRankTitle(player?.level ?? 1),

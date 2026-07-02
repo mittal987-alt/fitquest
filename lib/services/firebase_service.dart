@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import '../models/player_model.dart';
 import '../models/team_model.dart';
 import '../models/hex_tile_model.dart';
 import '../models/team_request_model.dart';
+import '../models/global_event_model.dart';
 
 class FirebaseService {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -108,6 +110,23 @@ class FirebaseService {
       debugPrint("STEPS UPDATED => +$stepsToAdd");
     } catch (e) {
       debugPrint("STEP UPDATE ERROR => $e");
+    }
+  }
+
+  // =========================
+  // UPDATE HARDWARE BASELINE
+  // =========================
+  Future<void> updateLastHardwareSteps({
+    required String uid,
+    required int hardwareSteps,
+  }) async {
+    try {
+      await firestore.collection("players").doc(uid).update({
+        "lastHardwareStepCount": hardwareSteps,
+      });
+      debugPrint("HARDWARE BASELINE UPDATED => $hardwareSteps");
+    } catch (e) {
+      debugPrint("HARDWARE BASELINE UPDATE ERROR => $e");
     }
   }
 
@@ -284,6 +303,20 @@ class FirebaseService {
     await firestore.collection("players").doc(uid).update({
       "avatar": avatarUrl,
     });
+  }
+
+  // =========================
+  // UPLOAD AVATAR FILE
+  // =========================
+  Future<String?> uploadAvatarFile(String uid, Uint8List fileBytes) async {
+    try {
+      final ref = FirebaseStorage.instance.ref().child("avatars").child("$uid.jpg");
+      await ref.putData(fileBytes, SettableMetadata(contentType: 'image/jpeg'));
+      return await ref.getDownloadURL();
+    } catch (e) {
+      debugPrint("UPLOAD ERROR: $e");
+      return null;
+    }
   }
 
   // =========================
@@ -579,5 +612,38 @@ class FirebaseService {
         });
       }
     });
+  }
+
+  // =========================
+  // GLOBAL EVENTS
+  // =========================
+  Stream<GlobalEventModel?> getActiveGlobalEvent() {
+    return firestore
+        .collection("global_events")
+        .where("isActive", isEqualTo: true)
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isEmpty) return null;
+      return GlobalEventModel.fromMap(
+        snapshot.docs.first.data(),
+        snapshot.docs.first.id,
+      );
+    });
+  }
+
+  Future<void> contributeToGlobalEvent(int steps) async {
+    final query = await firestore
+        .collection("global_events")
+        .where("isActive", isEqualTo: true)
+        .limit(1)
+        .get();
+
+    if (query.docs.isNotEmpty) {
+      final docRef = query.docs.first.reference;
+      await docRef.update({
+        "currentSteps": FieldValue.increment(steps),
+      });
+    }
   }
 }

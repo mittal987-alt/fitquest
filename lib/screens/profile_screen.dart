@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
 import '../models/player_model.dart';
 import '../services/firebase_service.dart';
 import 'login_screen.dart';
@@ -9,54 +11,114 @@ class ProfileScreen extends StatelessWidget {
 
   void _showUpdateAvatarDialog(BuildContext context, String uid) {
     final controller = TextEditingController();
+    final ImagePicker picker = ImagePicker();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text("UPDATE AVATAR", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Enter Image URL for profile photo", style: TextStyle(color: Colors.black54, fontSize: 13)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: "https://example.com/photo.jpg",
-                hintStyle: const TextStyle(color: Colors.black26),
-                filled: true,
-                fillColor: const Color(0xFFF5F7FA),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: const Text("UPDATE AVATAR", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("DIRECT UPLOAD", style: TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF5F7FA),
+                          foregroundColor: Colors.blueAccent,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                          if (image != null) {
+                            final bytes = await image.readAsBytes();
+                            final url = await FirebaseService().uploadAvatarFile(uid, bytes);
+                            if (url != null) {
+                              await FirebaseService().updateAvatar(uid: uid, avatarUrl: url);
+                              if (context.mounted) Navigator.pop(context);
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.photo_library_rounded, size: 18),
+                        label: const Text("GALLERY", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF5F7FA),
+                          foregroundColor: Colors.blueAccent,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                          if (image != null) {
+                            final bytes = await image.readAsBytes();
+                            final url = await FirebaseService().uploadAvatarFile(uid, bytes);
+                            if (url != null) {
+                              await FirebaseService().updateAvatar(uid: uid, avatarUrl: url);
+                              if (context.mounted) Navigator.pop(context);
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                        label: const Text("CAMERA", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 20),
+                const Text("OR ENTER IMAGE URL", style: TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  decoration: InputDecoration(
+                    hintText: "https://example.com/photo.jpg",
+                    hintStyle: const TextStyle(color: Colors.black26),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F7FA),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () async {
-              if (controller.text.isNotEmpty) {
-                await FirebaseService().updateAvatar(uid: uid, avatarUrl: controller.text);
-                if (context.mounted) Navigator.pop(context);
-              }
-            },
-            child: const Text("UPDATE", style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  if (controller.text.isNotEmpty) {
+                    await FirebaseService().updateAvatar(uid: uid, avatarUrl: controller.text);
+                    if (context.mounted) Navigator.pop(context);
+                  }
+                },
+                child: const Text("UPDATE URL", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -189,9 +251,24 @@ class ProfileScreen extends StatelessWidget {
                           border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
                         ),
                         child: Text(
-                          "LEVEL ${player.level} ${FirebaseService().getRankTitle(player.level)}",
-                          style: const TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                          "LEVEL ${player.level} | ${FirebaseService().getRankTitle(player.level)}",
+                          style: const TextStyle(color: Colors.blueAccent, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.2),
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: LinearProgressIndicator(
+                          value: (player.xp % 1000) / 1000,
+                          minHeight: 6,
+                          backgroundColor: Colors.black.withValues(alpha: 0.05),
+                          color: Colors.blueAccent,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "${1000 - (player.xp % 1000)} XP UNTIL NEXT RANK",
+                        style: const TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
