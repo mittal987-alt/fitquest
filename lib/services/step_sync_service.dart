@@ -74,13 +74,6 @@ class StepSyncService {
             int xpGain = deltaSteps ~/ 10;
             if (xpGain > 0) {
               await firebaseService.incrementXP(uid: uid, xpToAdd: xpGain);
-              
-              // Level up logic
-              int newTotalXp = player.xp + xpGain;
-              int calculatedLevel = (newTotalXp ~/ 1000) + 1;
-              if (calculatedLevel > player.level) {
-                await firebaseService.updateLevel(uid: uid, level: calculatedLevel);
-              }
             }
 
             doublePrint("HYBRID SYNC: +$deltaSteps steps processed via Hardware Delta.");

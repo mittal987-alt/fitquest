@@ -16,6 +16,17 @@ class FirebaseService {
   User? get currentUser => auth.currentUser;
 
   // =========================
+  // RANK LOGIC
+  // =========================
+  String getRankTitle(int level) {
+    if (level < 5) return "RECRUIT";
+    if (level < 15) return "OPERATOR";
+    if (level < 30) return "VETERAN";
+    if (level < 50) return "COMMANDER";
+    return "APEX LEGEND";
+  }
+
+  // =========================
   // CREATE PLAYER
   // =========================
   Future<void> createPlayer({
@@ -130,28 +141,42 @@ class FirebaseService {
   }
 
   // =========================
-  // UPDATE XP
+  // UPDATE XP & LEVEL
   // =========================
   Future<void> incrementXP({
     required String uid,
     required int xpToAdd,
   }) async {
-    try {
-      await firestore.collection("players").doc(uid).update({
-        "xp": FieldValue.increment(xpToAdd),
-      });
-      debugPrint("XP ADDED => $xpToAdd");
-    } catch (e) {
-      debugPrint("XP UPDATE ERROR => $e");
-    }
-  }
+    final docRef = firestore.collection("players").doc(uid);
 
-  Future<void> updateXP({
-    required String uid,
-    required int xp,
-  }) async {
-    await firestore.collection("players").doc(uid).update({
-      "xp": xp,
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data()!;
+      int currentXp = data["xp"] ?? 0;
+      int currentLevel = data["level"] ?? 1;
+
+      // Apply XP Booster if active
+      int finalXpToAdd = xpToAdd;
+      Map<String, dynamic> activePowerUps = Map<String, dynamic>.from(data["activePowerUps"] ?? {});
+      if (activePowerUps.containsKey("boost")) {
+        Timestamp expiry = activePowerUps["boost"] as Timestamp;
+        if (expiry.toDate().isAfter(DateTime.now())) {
+          finalXpToAdd = (xpToAdd * 2);
+        }
+      }
+
+      int newXp = currentXp + finalXpToAdd;
+      int newLevel = (newXp ~/ 1000) + 1;
+
+      Map<String, dynamic> updates = {"xp": newXp};
+      if (newLevel > currentLevel) {
+        updates["level"] = newLevel;
+      }
+
+      transaction.update(docRef, updates);
+      debugPrint("XP INCREMENTED: $xpToAdd (Final: $finalXpToAdd) -> New XP: $newXp, Level: $newLevel");
     });
   }
 
@@ -215,13 +240,24 @@ class FirebaseService {
       final data = snapshot.data()!;
       List<String> claimed = List<String>.from(data["claimedQuests"] ?? []);
       int currentXp = data["xp"] ?? 0;
+      int currentLevel = data["level"] ?? 1;
 
       if (!claimed.contains(questId)) {
         claimed.add(questId);
-        transaction.update(docRef, {
+        
+        int newXp = currentXp + rewardXp;
+        int newLevel = (newXp ~/ 1000) + 1;
+
+        Map<String, dynamic> updates = {
           "claimedQuests": claimed,
-          "xp": currentXp + rewardXp,
-        });
+          "xp": newXp,
+        };
+        
+        if (newLevel > currentLevel) {
+          updates["level"] = newLevel;
+        }
+        
+        transaction.update(docRef, updates);
       }
     });
   }
@@ -525,7 +561,16 @@ class FirebaseService {
       Map<String, dynamic> activePowerUps = Map<String, dynamic>.from(data["activePowerUps"] ?? {});
 
       if (currentXp >= cost) {
-        final expiryDate = DateTime.now().add(duration);
+        DateTime baseTime = DateTime.now();
+        if (activePowerUps.containsKey(powerUpId)) {
+          Timestamp currentExpiryTs = activePowerUps[powerUpId] as Timestamp;
+          DateTime currentExpiry = currentExpiryTs.toDate();
+          if (currentExpiry.isAfter(baseTime)) {
+            baseTime = currentExpiry;
+          }
+        }
+        
+        final expiryDate = baseTime.add(duration);
         activePowerUps[powerUpId] = Timestamp.fromDate(expiryDate);
 
         transaction.update(docRef, {

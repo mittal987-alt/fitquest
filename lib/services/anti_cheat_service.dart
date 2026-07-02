@@ -188,8 +188,10 @@ class AntiCheatService {
     required bool userIsWalking,
     required bool captureBlocked,
     required double distanceToTileMeters,
+    double distanceMultiplier = 1.0,
   }) {
-    double maxValidProximity = 0.002 * 2.0 * 111000;
+    // Base radius (~222m) multiplied by augmentation factor
+    double maxValidProximity = (0.002 * 2.0 * 111000) * distanceMultiplier;
     return userIsWalking && !captureBlocked && (distanceToTileMeters < maxValidProximity);
   }
 }

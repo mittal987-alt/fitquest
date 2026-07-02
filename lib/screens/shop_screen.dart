@@ -108,93 +108,125 @@ class ShopScreen extends StatelessWidget {
                     final item = shopItems[index];
                     final bool canAfford = player.xp >= item.cost;
                     final Color itemThemeColor = item.color;
+                    final bool isActive = player.activePowerUps.containsKey(item.id) &&
+                        player.activePowerUps[item.id]!.isAfter(DateTime.now());
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(24),
                         border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 8,
+                            blurRadius: 10,
                             offset: const Offset(0, 4),
                           )
                         ],
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: itemThemeColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: itemThemeColor.withValues(alpha: 0.2)),
-                          ),
-                          child: Icon(item.icon, color: itemThemeColor, size: 26),
-                        ),
-                        title: Text(
-                          item.name.toUpperCase(),
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.black87, letterSpacing: 0.5),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
                           children: [
-                            const SizedBox(height: 6),
-                            Text(
-                              item.description,
-                              style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.3),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: itemThemeColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: itemThemeColor.withValues(alpha: 0.2)),
+                              ),
+                              child: Icon(item.icon, color: itemThemeColor, size: 28),
                             ),
-                            const SizedBox(height: 10),
-                            Text(
-                              "${item.cost} XP",
-                              style: TextStyle(color: itemThemeColor, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        item.name.toUpperCase(),
+                                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.black87, letterSpacing: 0.5),
+                                      ),
+                                      if (isActive) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.greenAccent.withValues(alpha: 0.2),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            "ACTIVE",
+                                            style: TextStyle(color: Colors.green, fontSize: 8, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    item.description,
+                                    style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.3),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    "${item.cost} XP",
+                                    style: TextStyle(color: itemThemeColor, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: canAfford ? itemThemeColor.withValues(alpha: 0.15) : Colors.transparent,
+                                foregroundColor: canAfford ? itemThemeColor : Colors.black12,
+                                elevation: 0,
+                                side: BorderSide(
+                                  color: canAfford ? itemThemeColor.withValues(alpha: 0.4) : Colors.black12,
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                minimumSize: const Size(70, 45),
+                              ),
+                              onPressed: canAfford ? () async {
+                                try {
+                                  await firebaseService.purchasePowerUp(
+                                    uid: player.uid,
+                                    powerUpId: item.id,
+                                    cost: item.cost,
+                                    duration: item.duration,
+                                  );
+
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("DEPLOYED: ${item.name.toUpperCase()} ACCESSED"),
+                                      backgroundColor: itemThemeColor.withValues(alpha: 0.9),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("ACQUISITION FAULT: $e"),
+                                      backgroundColor: Colors.redAccent,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              } : null,
+                              child: Text(
+                                isActive ? "EXTEND" : "BUY",
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                              ),
                             ),
                           ],
-                        ),
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: canAfford ? itemThemeColor.withValues(alpha: 0.15) : Colors.transparent,
-                            foregroundColor: canAfford ? itemThemeColor : Colors.black12,
-                            elevation: 0,
-                            side: BorderSide(
-                              color: canAfford ? itemThemeColor.withValues(alpha: 0.4) : Colors.black12,
-                              width: 1.5,
-                            ),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          onPressed: canAfford ? () async {
-                            try {
-                              await firebaseService.purchasePowerUp(
-                                uid: player.uid,
-                                powerUpId: item.id,
-                                cost: item.cost,
-                                duration: item.duration,
-                              );
-
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("DEPLOYED: ${item.name.toUpperCase()} ACCESSED"),
-                                  backgroundColor: itemThemeColor.withValues(alpha: 0.8),
-                                ),
-                              );
-                            } catch (e) {
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("ACQUISITION FAULT: $e"),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
-                            }
-                          } : null,
-                          child: const Text(
-                            "BUY",
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
-                          ),
                         ),
                       ),
                     );

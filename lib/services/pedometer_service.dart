@@ -83,10 +83,10 @@ class PedometerService {
     return (totalSteps / 2000).floor() + 1;
   }
 
-  String getFitnessLevel() {
-    if (totalSteps < 3000) return "RECRUIT / BEGINNER";
-    if (totalSteps < 7000) return "ACTIVE OPERATOR";
-    if (totalSteps < 12000) return "FIT VETERAN";
+  String getFitnessLevel(int currentSteps) {
+    if (currentSteps < 3000) return "RECRUIT / BEGINNER";
+    if (currentSteps < 7000) return "ACTIVE OPERATOR";
+    if (currentSteps < 12000) return "FIT VETERAN";
     return "APEX ATHLETE";
   }
 

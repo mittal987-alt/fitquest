@@ -189,7 +189,7 @@ class ProfileScreen extends StatelessWidget {
                           border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
                         ),
                         child: Text(
-                          "LEVEL ${player.level} EXPLORER",
+                          "LEVEL ${player.level} ${FirebaseService().getRankTitle(player.level)}",
                           style: const TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.2),
                         ),
                       ),

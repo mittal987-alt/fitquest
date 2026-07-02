@@ -88,10 +88,15 @@ class _HomeScreenState extends State<HomeScreen> {
           final int liveXp = player?.xp ?? 0;
           final int streak = player?.streakCount ?? 0;
 
+          // BIO-INDEX CALCULATIONS
           double calculatedCalories = liveSteps * 0.04;
           double calculatedDistance = liveSteps * 0.00075;
           double dailyGoalTarget = 10000;
           double goalProgress = (liveSteps / dailyGoalTarget).clamp(0.0, 1.0);
+
+          // Telemetry Health Score (Simplified BIO-INDEX)
+          int healthScore = (goalProgress * 100).toInt();
+          String bioStatus = pedometerService.getFitnessLevel(liveSteps);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -128,6 +133,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               player?.name.toUpperCase() ?? "EXPLORER NODE",
                               style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                            ),
+                            Text(
+                              firebaseService.getRankTitle(player?.level ?? 1),
+                              style: TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2),
                             ),
                           ],
                         ),
@@ -407,7 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // DYNAMIC INTEGRATED CAPACITY MATRIX
+                // DYNAMIC INTEGRATED BIO-INDEX
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -422,35 +431,63 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     ],
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      ConfettiWidget(
-                        confettiController: _confettiController,
-                        blastDirectionality: BlastDirectionality.explosive,
-                        colors: const [Colors.cyanAccent, Colors.orangeAccent, Colors.purpleAccent],
-                      ),
-                      const CircleAvatar(
-                        radius: 22,
-                        backgroundColor: Color(0xFFF5F7FA),
-                        child: Icon(Icons.favorite_rounded, color: Colors.redAccent, size: 22),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("BIO-INDEX ENGINE STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(
-                              pedometerService.getFitnessLevel().toUpperCase(),
-                              style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                      Row(
+                        children: [
+                          ConfettiWidget(
+                            confettiController: _confettiController,
+                            blastDirectionality: BlastDirectionality.explosive,
+                            colors: const [Colors.cyanAccent, Colors.orangeAccent, Colors.purpleAccent],
+                          ),
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              SizedBox(
+                                width: 50,
+                                height: 50,
+                                child: CircularProgressIndicator(
+                                  value: goalProgress,
+                                  strokeWidth: 5,
+                                  backgroundColor: Colors.black.withValues(alpha: 0.05),
+                                  color: healthScore > 75 ? Colors.greenAccent : (healthScore > 40 ? Colors.orangeAccent : Colors.redAccent),
+                                ),
+                              ),
+                              Text(
+                                "$healthScore",
+                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text("BIO-INDEX CORE STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  bioStatus.toUpperCase(),
+                                  style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildBioMetric("PULSE", "OPTIMAL", Icons.favorite_rounded, Colors.redAccent),
+                          _buildBioMetric("SYNC", "100%", Icons.sync_rounded, Colors.cyan),
+                          _buildBioMetric("INTEGRITY", "${player?.trustScore}%", Icons.shield_rounded, Colors.greenAccent),
+                        ],
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 40),
               ],
             ),
           );
@@ -603,6 +640,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildBioMetric(String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(height: 6),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.black87)),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 8, color: Colors.black38, letterSpacing: 0.5)),
       ],
     );
   }

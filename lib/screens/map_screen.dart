@@ -217,10 +217,14 @@ class _MapScreenState extends State<MapScreen> {
       endLng: tileCenter.longitude,
     );
 
+    bool hasMegaRadar = player.activePowerUps.containsKey("radar") &&
+        player.activePowerUps["radar"]!.isAfter(DateTime.now());
+
     if (!antiCheatService.canCapture(
       userIsWalking: isWalking,
       captureBlocked: captureBlocked,
       distanceToTileMeters: distToCenter,
+      distanceMultiplier: hasMegaRadar ? 2.0 : 1.0,
     )) {
       return;
     }
@@ -286,6 +290,26 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
+    // SHIELD CHECK: Verify if target owner is shielded
+    if (tile.ownerType == "solo") {
+      final ownerDoc = await firebaseService.firestore.collection("players").doc(tile.ownerId).get();
+      if (ownerDoc.exists) {
+        final ownerData = PlayerModel.fromMap(ownerDoc.data()!);
+        if (ownerData.activePowerUps.containsKey("shield") &&
+            ownerData.activePowerUps["shield"]!.isAfter(DateTime.now())) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: Colors.blueGrey,
+                content: Text("🛡️ TARGET SECURED: Territory Shield is Active!"),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    }
+
     int newPower = tile.power - 20;
 
     if (newPower <= 0) {
@@ -304,10 +328,6 @@ class _MapScreenState extends State<MapScreen> {
       await firebaseService.saveHexTile(newTile);
 
       int xpReward = 100;
-      final boostExpiry = player.activePowerUps["boost"];
-      if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
-        xpReward *= 2;
-      }
       await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
 
       if (mounted) {
@@ -376,10 +396,6 @@ class _MapScreenState extends State<MapScreen> {
 
     await firebaseService.saveHexTile(defendedTile);
     int xpReward = 20;
-    final boostExpiry = player.activePowerUps["boost"];
-    if (boostExpiry != null && boostExpiry.isAfter(DateTime.now())) {
-      xpReward *= 2;
-    }
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
   }
 
