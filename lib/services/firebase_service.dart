@@ -235,6 +235,18 @@ class FirebaseService {
   }
 
   // =========================
+  // UPDATE AVATAR
+  // =========================
+  Future<void> updateAvatar({
+    required String uid,
+    required String avatarUrl,
+  }) async {
+    await firestore.collection("players").doc(uid).update({
+      "avatar": avatarUrl,
+    });
+  }
+
+  // =========================
   // GLOBAL LEADERBOARD
   // =========================
   Stream<List<PlayerModel>> getLeaderboard() {
