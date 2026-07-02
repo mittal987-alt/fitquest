@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_service.dart';
@@ -11,129 +12,96 @@ class StepSyncService {
 
   final FirebaseService firebaseService = FirebaseService();
   StreamSubscription<StepCount>? stepStream;
-
-  int? lastStepCount;
-  int pendingXpSteps = 0;
   DateTime? lastSyncTime;
-  bool initialized = false;
-  bool _isProcessing = false; // Concurrency protection lock flag
+
+  bool _isProcessing = false;
   PlayerModel? cachedPlayer;
 
   void updateConfig(PlayerModel? player) {
     cachedPlayer = player;
   }
 
-  // ==========================================
-  // START BACKGROUND SYNC CHANNEL
-  // ==========================================
-
   void startTracking() {
     if (stepStream != null) return;
 
     stepStream = Pedometer.stepCountStream.listen(
-            (StepCount event) async {
-          final uid = FirebaseAuth.instance.currentUser?.uid;
-          if (uid == null) return;
+      (StepCount event) async {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid == null) return;
 
-          // Prevent race-condition data overrides if previous write loop is pending
-          if (_isProcessing) {
-            doublePrint("TELEMETRY ALERT: Hardware frame dropped. Cloud sync loop active.");
+        if (_isProcessing) return;
+        _isProcessing = true;
+
+        try {
+          // 1. Fetch latest player state from cloud to get lastHardwareStepCount
+          final player = await firebaseService.getPlayer(uid);
+          if (player == null) return;
+          cachedPlayer = player;
+
+          int currentHardwareSteps = event.steps;
+          int lastHardwareSteps = player.lastHardwareStepCount;
+
+          // Handle first-time initialization or device reboots (where hardware steps < last stored)
+          if (lastHardwareSteps == -1 || currentHardwareSteps < lastHardwareSteps) {
+            await firebaseService.firestore.collection("players").doc(uid).update({
+              "lastHardwareStepCount": currentHardwareSteps,
+            });
             return;
           }
 
-          _isProcessing = true;
+          int deltaSteps = currentHardwareSteps - lastHardwareSteps;
 
-          try {
-            // Initialize tracking session baselines on first system execution frame
-            if (!initialized) {
-              lastStepCount = event.steps;
-              cachedPlayer = await firebaseService.getPlayer(uid);
-              initialized = true;
-              _isProcessing = false;
-              return;
+          if (deltaSteps > 0) {
+            // Update base metrics
+            await firebaseService.updateSteps(uid: uid, stepsToAdd: deltaSteps);
+            
+            // Sync to team if applicable
+            if (player.isInTeam && player.teamId != null) {
+              await firebaseService.updateTeamSteps(
+                teamId: player.teamId!,
+                stepsToAdd: deltaSteps,
+              );
             }
 
-            int stepsToAdd = event.steps - (lastStepCount ?? event.steps);
+            // Sync hardware baseline to cloud
+            await firebaseService.firestore.collection("players").doc(uid).update({
+              "lastHardwareStepCount": currentHardwareSteps,
+            });
 
-            if (stepsToAdd <= 0) {
-              lastStepCount = event.steps;
-              _isProcessing = false;
-              return;
-            }
-
-            // Instantly cache baseline before dispatching async network writes
-            lastStepCount = event.steps;
             lastSyncTime = DateTime.now();
 
-            // 1. UPDATE HARDWARE STRIDE VECTOR TO CLOUD METRICS
-            await firebaseService.updateSteps(
-              uid: uid,
-              stepsToAdd: stepsToAdd,
-            );
-
-            // 2. DISPATCH COHORT TOTAL ALLOCATIONS IF LINKED TO SQUAD
-            if (cachedPlayer != null && cachedPlayer!.isInTeam && cachedPlayer!.teamId != null) {
-              await firebaseService.updateTeamSteps(
-                teamId: cachedPlayer!.teamId!,
-                stepsToAdd: stepsToAdd,
-              );
-            }
-
-            // 3. COMPUTE DYNAMIC EXPERIENCE COEFFICIENTS
-            pendingXpSteps += stepsToAdd;
-
-            if (pendingXpSteps >= 10) {
-              int xpGain = pendingXpSteps ~/ 10;
-              pendingXpSteps = pendingXpSteps % 10;
-
-              await firebaseService.incrementXP(
-                uid: uid,
-                xpToAdd: xpGain,
-              );
-
-              // Re-fetch current model to calculate precise milestone bounds
-              cachedPlayer = await firebaseService.getPlayer(uid);
-
-              if (cachedPlayer != null) {
-                int calculatedLevel = (cachedPlayer!.xp ~/ 1000) + 1;
-
-                if (calculatedLevel > cachedPlayer!.level) {
-                  await firebaseService.updateLevel(
-                    uid: uid,
-                    level: calculatedLevel,
-                  );
-                }
+            // Process XP increments (1 XP per 10 steps)
+            int xpGain = deltaSteps ~/ 10;
+            if (xpGain > 0) {
+              await firebaseService.incrementXP(uid: uid, xpToAdd: xpGain);
+              
+              // Level up logic
+              int newTotalXp = player.xp + xpGain;
+              int calculatedLevel = (newTotalXp ~/ 1000) + 1;
+              if (calculatedLevel > player.level) {
+                await firebaseService.updateLevel(uid: uid, level: calculatedLevel);
               }
             }
-          } catch (e) {
-            doublePrint("SYNCHRONIZATION ERROR ENCOUNTERED: $e");
-          } finally {
-            _isProcessing = false; // Safely release system operational lock
+
+            doublePrint("HYBRID SYNC: +$deltaSteps steps processed via Hardware Delta.");
           }
-        },
-        onError: (error) {
-          doublePrint("HARDWARE PEDOMETER INTERFACE FAULT: $error");
+        } catch (e) {
+          doublePrint("SYNC ERROR: $e");
+        } finally {
+          _isProcessing = false;
         }
+      },
+      onError: (error) => doublePrint("PEDOMETER FAULT: $error"),
     );
   }
-
-  // ==========================================
-  // STOP BACKGROUND SYNC CHANNEL
-  // ==========================================
 
   void stopTracking() {
     stepStream?.cancel();
     stepStream = null;
-    initialized = false;
     _isProcessing = false;
-    lastStepCount = null;
   }
 
   void doublePrint(String message) {
-    // Utility log mapping matching cyberpunk system terminal protocols
-    assert(() {
-      print("[SQUAD CORE ENGINE] -> $message");
-      return true;
-    }());
+    debugPrint("[TELEMETRY] $message");
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/player_model.dart';
 import '../models/team_request_model.dart';
 import '../services/firebase_service.dart';
 
@@ -32,7 +33,7 @@ class TeamRequestsScreen extends StatelessWidget {
         stream: firebaseService.getTeamRequests(teamId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
+            return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
           }
 
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -52,122 +53,134 @@ class TeamRequestsScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final request = requests[index];
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    )
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // APPLICANT DOSSIER INFO
-                    Row(
+              return StreamBuilder<PlayerModel?>(
+                stream: firebaseService.getPlayerStream(request.playerId),
+                builder: (context, playerSnapshot) {
+                  final player = playerSnapshot.data;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
+                    ),
+                    child: Column(
                       children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.greenAccent.withValues(alpha: 0.05),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
-                          ),
-                          child: const Icon(Icons.person_search_rounded, color: Colors.greenAccent, size: 22),
+                        // APPLICANT DOSSIER INFO
+                        Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.blueAccent.withValues(alpha: 0.05),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+                              ),
+                              child: player?.avatar != null && player!.avatar.isNotEmpty
+                                  ? ClipRRect(
+                                borderRadius: BorderRadius.circular(24),
+                                child: Image.network(player.avatar, fit: BoxFit.cover),
+                              )
+                                  : const Icon(Icons.person_search_rounded, color: Colors.blueAccent, size: 22),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    request.playerName.toUpperCase(),
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "REQUESTING LINK TO ${teamName.toUpperCase()}",
+                                    style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                request.playerName.toUpperCase(),
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
-                                overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 18),
+
+                        // COMMAND OPERATIONS PANEL BUTTONS
+                        Row(
+                          children: [
+                            // REJECT INBOUND REQUEST
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                                  foregroundColor: Colors.redAccent,
+                                  elevation: 0,
+                                  side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () async {
+                                  await firebaseService.rejectRequest(request.requestId);
+
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: Colors.redAccent,
+                                      content: Text("REJECTED: ${request.playerName.toUpperCase()} TRANSMISSION PURGED"),
+                                    ),
+                                  );
+                                },
+                                child: const Text("DENY ACCESS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "REQUESTING LINK TO ${teamName.toUpperCase()}",
-                                style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.2),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // ACCEPT INBOUND REQUEST
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.greenAccent.withValues(alpha: 0.1),
+                                  foregroundColor: Colors.greenAccent,
+                                  elevation: 0,
+                                  side: BorderSide(color: Colors.greenAccent.withValues(alpha: 0.3)),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () async {
+                                  await firebaseService.acceptRequest(
+                                    requestId: request.requestId,
+                                    playerId: request.playerId,
+                                    teamId: request.teamId,
+                                    teamName: request.teamName,
+                                  );
+
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: Colors.greenAccent,
+                                      content: Text("ACCEPTED: ${request.playerName.toUpperCase()} ALLOCATED TO SQUAD"),
+                                    ),
+                                  );
+                                },
+                                child: const Text("GRANT ACCESS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-
-                    // COMMAND OPERATIONS PANEL BUTTONS
-                    Row(
-                      children: [
-                        // REJECT INBOUND REQUEST
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                              foregroundColor: Colors.redAccent,
-                              elevation: 0,
-                              side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: () async {
-                              await firebaseService.rejectRequest(request.requestId);
-
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: Colors.redAccent,
-                                  content: Text("REJECTED: ${request.playerName.toUpperCase()} TRANSMISSION PURGED"),
-                                ),
-                              );
-                            },
-                            child: const Text("DENY ACCESS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-
-                        // ACCEPT INBOUND REQUEST
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.greenAccent.withValues(alpha: 0.1),
-                              foregroundColor: Colors.greenAccent,
-                              elevation: 0,
-                              side: BorderSide(color: Colors.greenAccent.withValues(alpha: 0.3)),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: () async {
-                              await firebaseService.acceptRequest(
-                                requestId: request.requestId,
-                                playerId: request.playerId,
-                                teamId: request.teamId,
-                                teamName: request.teamName,
-                              );
-
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: Colors.greenAccent,
-                                  content: Text("ACCEPTED: ${request.playerName.toUpperCase()} ALLOCATED TO SQUAD"),
-                                ),
-                              );
-                            },
-                            child: const Text("GRANT ACCESS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           );

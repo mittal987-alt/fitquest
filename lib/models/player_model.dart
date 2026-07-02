@@ -8,6 +8,8 @@ class PlayerModel {
   final String team;
   final String? teamId;
   final int totalSteps;
+  final int dailySteps;
+  final int lastHardwareStepCount;
   final int totalLand;
   final int trustScore;
   final int level;
@@ -27,6 +29,8 @@ class PlayerModel {
     required this.team,
     this.teamId,
     required this.totalSteps,
+    required this.dailySteps,
+    required this.lastHardwareStepCount,
     required this.totalLand,
     required this.trustScore,
     required this.level,
@@ -57,6 +61,8 @@ class PlayerModel {
       teamId: map["teamId"]?.toString(),
       isInTeam: map["isInTeam"] is bool ? map["isInTeam"] : false,
       totalSteps: (map["totalSteps"] as num?)?.toInt() ?? 0,
+      dailySteps: (map["dailySteps"] as num?)?.toInt() ?? 0,
+      lastHardwareStepCount: (map["lastHardwareStepCount"] as num?)?.toInt() ?? -1,
       totalLand: (map["totalLand"] as num?)?.toInt() ?? 0,
       trustScore: (map["trustScore"] as num?)?.toInt() ?? 100,
       level: (map["level"] as num?)?.toInt() ?? 1,
@@ -89,6 +95,8 @@ class PlayerModel {
       "team": team,
       "teamId": teamId,
       "totalSteps": totalSteps,
+      "dailySteps": dailySteps,
+      "lastHardwareStepCount": lastHardwareStepCount,
       "totalLand": totalLand,
       "trustScore": trustScore,
       "level": level,

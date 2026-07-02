@@ -101,17 +101,22 @@ class TeamMembersScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: playerIsLeader
                                 ? Colors.orangeAccent.withValues(alpha: 0.1)
-                                : Colors.greenAccent.withValues(alpha: 0.05),
+                                : Colors.blueAccent.withValues(alpha: 0.05),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: playerIsLeader ? Colors.orangeAccent : Colors.greenAccent.withValues(alpha: 0.4),
+                              color: playerIsLeader ? Colors.orangeAccent : Colors.blueAccent.withValues(alpha: 0.4),
                             ),
                           ),
-                          child: Center(
+                          child: player.avatar.isNotEmpty
+                              ? ClipRRect(
+                            borderRadius: BorderRadius.circular(22),
+                            child: Image.network(player.avatar, fit: BoxFit.cover),
+                          )
+                              : Center(
                             child: Text(
                               "#${index + 1}",
                               style: TextStyle(
-                                color: playerIsLeader ? Colors.orangeAccent : Colors.greenAccent,
+                                color: playerIsLeader ? Colors.orangeAccent : Colors.blueAccent,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
                               ),

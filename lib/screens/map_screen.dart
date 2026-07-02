@@ -100,6 +100,7 @@ class _MapScreenState extends State<MapScreen> {
     positionStream?.cancel();
     positionStream = locationService.getLocationStream().listen(
           (position) async {
+        // High-accuracy GPS tracking strictly in the foreground
         final now = DateTime.now();
         double calculatedSpeed = position.speed * 3.6;
 

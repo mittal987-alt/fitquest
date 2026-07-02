@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:confetti/confetti.dart';
 import 'package:intl/intl.dart';
-import '../widgets/stat_card.dart';
 import '../services/pedometer_service.dart';
 import '../services/step_sync_service.dart';
 import '../services/firebase_service.dart';
 import '../models/player_model.dart';
+import '../models/power_up_model.dart';
 import 'leaderboard_screen.dart';
 import 'map_screen.dart';
 import 'shop_screen.dart';
@@ -84,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           final player = snapshot.data;
-          final int liveSteps = player?.totalSteps ?? 0;
+          final int liveSteps = player?.dailySteps ?? 0;
           final int liveLevel = player?.level ?? 1;
           final int liveXp = player?.xp ?? 0;
           final int streak = player?.streakCount ?? 0;
@@ -181,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.25,
                   children: [
-                    _buildModernStatCard(title: "TOTAL STEPS", value: "$liveSteps", icon: Icons.directions_walk_rounded, color: Colors.cyanAccent),
+                    _buildModernStatCard(title: "DAILY STRIDES", value: "$liveSteps", icon: Icons.directions_walk_rounded, color: Colors.cyanAccent),
                     _buildModernStatCard(title: "ENERGY KCAL", value: calculatedCalories.toStringAsFixed(0), icon: Icons.local_fire_department_rounded, color: Colors.orangeAccent),
                     _buildModernStatCard(title: "DISTANCE MAP", value: "${calculatedDistance.toStringAsFixed(2)} KM", icon: Icons.alt_route_rounded, color: Colors.greenAccent),
                     _buildModernStatCard(title: "RANK LEVEL", value: "$liveLevel", icon: Icons.star_rounded, color: Colors.purpleAccent),
@@ -233,6 +232,63 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+
+                // ACTIVE AUGMENTATIONS LAYER
+                if (player != null && player.activePowerUps.entries.any((e) => e.value.isAfter(DateTime.now()))) ...[
+                  const Text("ACTIVE AUGMENTATIONS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 80,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: player.activePowerUps.entries.where((e) => e.value.isAfter(DateTime.now())).map((entry) {
+                        final powerUp = shopItems.firstWhere((s) => s.id == entry.key);
+                        final remaining = entry.value.difference(DateTime.now());
+                        final minutes = remaining.inMinutes;
+                        final seconds = remaining.inSeconds % 60;
+
+                        return Container(
+                          width: 160,
+                          margin: const EdgeInsets.only(right: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: powerUp.color.withValues(alpha: 0.15), width: 1.5),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: powerUp.color.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(powerUp.icon, color: powerUp.color, size: 18),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(powerUp.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      "${minutes}m ${seconds}s REMAINING",
+                                      style: TextStyle(color: powerUp.color, fontWeight: FontWeight.bold, fontSize: 9),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
 
                 // MATRICULATED QUEST SYSTEM LAYER
                 const Text("TACTICAL DAILY QUESTS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
@@ -326,7 +382,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
+
+                // LIFETIME OPERATIONAL DATA
+                const Text("LIFETIME OPERATIONAL DATA", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildLifetimeStat("TOTAL STRIDES", "${player?.totalSteps ?? 0}"),
+                      Container(width: 1, height: 30, color: Colors.black12),
+                      _buildLifetimeStat("SECTORS HELD", "${player?.totalLand ?? 0}"),
+                      Container(width: 1, height: 30, color: Colors.black12),
+                      _buildLifetimeStat("CORE TRUST", "${player?.trustScore ?? 0}%"),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
 
                 // DYNAMIC INTEGRATED CAPACITY MATRIX
                 Container(
@@ -490,6 +569,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLifetimeStat(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black87),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black38, letterSpacing: 0.5),
+        ),
+      ],
     );
   }
 

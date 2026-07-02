@@ -31,6 +31,8 @@ class FirebaseService {
       teamId: null,
       isInTeam: false,
       totalSteps: 0,
+      dailySteps: 0,
+      lastHardwareStepCount: -1,
       totalLand: 0,
       trustScore: 100,
       level: 1,
@@ -90,6 +92,7 @@ class FirebaseService {
     try {
       await firestore.collection("players").doc(uid).update({
         "totalSteps": FieldValue.increment(stepsToAdd),
+        "dailySteps": FieldValue.increment(stepsToAdd),
       });
       debugPrint("STEPS UPDATED => +$stepsToAdd");
     } catch (e) {
@@ -182,6 +185,7 @@ class FirebaseService {
         Map<String, dynamic> updates = {
           "lastActiveDate": Timestamp.fromDate(today),
           "claimedQuests": [],
+          "dailySteps": 0,
         };
 
         if (difference == 1) {

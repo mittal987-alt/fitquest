@@ -79,10 +79,8 @@ class TelemetryTrackingService {
       if (_antiCheat.isCaptureBlocked && speedKmH < 12.0) {
         _antiCheat.resetCaptureBlock();
       }
-
-      // Accrue step allocations safely to cloud profile
-      int calculatedSteps = (currentPosition.speed * 1.4).clamp(1, 4).toInt();
-      await _firebaseService.updateSteps(uid: uid, stepsToAdd: calculatedSteps);
+      // Note: Step counting is now handled by StepSyncService using hardware pedometer delta.
+      // We no longer accrue steps based on GPS speed to avoid double-counting and inaccuracy.
     }
 
     // 3. Cache position data state for next tracking node validation loop

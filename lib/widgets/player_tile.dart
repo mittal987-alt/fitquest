@@ -63,19 +63,51 @@ class PlayerTile extends StatelessWidget {
       child: Row(
         children: [
           // =====================
-          // RANK
+          // RANK / AVATAR
           // =====================
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: rankColor.withValues(alpha: 0.1),
-            child: Text(
-              "#$rank",
-              style: TextStyle(
-                color: rankColor,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
+          Stack(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: rankColor.withValues(alpha: 0.3),
+                    width: 2,
+                  ),
+                ),
+                child: player.avatar.isNotEmpty
+                    ? ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: Image.network(player.avatar, fit: BoxFit.cover),
+                )
+                    : CircleAvatar(
+                  backgroundColor: rankColor.withValues(alpha: 0.1),
+                  child: Icon(Icons.person_rounded, color: rankColor, size: 30),
+                ),
               ),
-            ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: rankColor,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: Text(
+                    "#$rank",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 16),
           // =====================

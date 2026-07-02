@@ -51,7 +51,7 @@ class _MainNavigationState extends State<MainNavigation> {
     if (!mounted) return;
     _setupTeamNotifications();
 
-    pedometerService.startListening();
+    // Foreground-only service triggers
     stepSyncService.startTracking();
   }
 

@@ -50,9 +50,10 @@ class _TeamScreenState extends State<TeamScreen> {
               ? null
               : FloatingActionButton.extended(
             backgroundColor: Colors.blueAccent,
+            elevation: 2,
             onPressed: () => showCreateTeamDialog(currentPlayer),
             icon: const Icon(Icons.add_moderator_rounded, color: Colors.white),
-            label: const Text("FOUND NEW SQUAD", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)),
+            label: const Text("FOUND NEW SQUAD", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.white)),
           ),
           body: StreamBuilder<List<TeamModel>>(
             stream: firebaseService.getTeams(),
@@ -149,12 +150,13 @@ class _TeamScreenState extends State<TeamScreen> {
                                     context: context,
                                     builder: (context) => AlertDialog(
                                       backgroundColor: Colors.white,
-                                      title: const Text("TERMINATE LINK", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                      title: const Text("TERMINATE LINK", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 18)),
                                       content: Text("Sever connection vectors with ${team.name.toUpperCase()}?", style: const TextStyle(color: Colors.black54)),
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(context, false),
-                                          child: const Text("ABORT", style: TextStyle(color: Colors.black54)),
+                                          child: const Text("ABORT", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
                                         ),
                                         TextButton(
                                           onPressed: () => Navigator.pop(context, true),
@@ -292,27 +294,45 @@ class _TeamScreenState extends State<TeamScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Text(
             "INITIALIZE NEW SQUAD NODE",
             style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
           ),
-          content: TextField(
-            controller: controller,
-            style: const TextStyle(color: Colors.black87),
-            decoration: const InputDecoration(
-              hintText: "Assign alpha identifier string",
-              hintStyle: TextStyle(color: Colors.black38, fontSize: 13),
-              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
-              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Assign alpha identifier string for the squad", style: TextStyle(color: Colors.black54, fontSize: 13)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                style: const TextStyle(color: Colors.black87),
+                decoration: InputDecoration(
+                  hintText: "SQUAD_NAME",
+                  hintStyle: const TextStyle(color: Colors.black26),
+                  filled: true,
+                  fillColor: const Color(0xFFF5F7FA),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("ABORT", style: TextStyle(color: Colors.black38)),
+              child: const Text("ABORT", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               onPressed: () async {
                 if (currentPlayer?.lastTeamAction != null) {
                   final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);

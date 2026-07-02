@@ -137,17 +137,38 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.blueAccent, width: 2),
-                        ),
-                        child: const CircleAvatar(
-                          radius: 46,
-                          backgroundColor: Color(0xFFF5F7FA),
-                          child: Icon(Icons.person_rounded, size: 55, color: Colors.blueAccent),
-                        ),
+                      Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.blueAccent, width: 2),
+                            ),
+                            child: CircleAvatar(
+                              radius: 46,
+                              backgroundColor: const Color(0xFFF5F7FA),
+                              backgroundImage: player.avatar.isNotEmpty ? NetworkImage(player.avatar) : null,
+                              child: player.avatar.isEmpty ? const Icon(Icons.person_rounded, size: 55, color: Colors.blueAccent) : null,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () => _showUpdateAvatarDialog(context, player.uid),
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       Text(
