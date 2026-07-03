@@ -269,6 +269,9 @@ class _GearListItem extends StatelessWidget {
       case 'shoe_icon': return Icons.run_circle_rounded;
       case 'goggles_icon': return Icons.visibility_rounded;
       case 'radio_icon': return Icons.settings_input_antenna_rounded;
+      case 'vest_icon': return Icons.accessibility_new_rounded;
+      case 'sleeve_icon': return Icons.sports_handball_rounded;
+      case 'mask_icon': return Icons.air_rounded;
       default: return Icons. construction_rounded;
     }
   }

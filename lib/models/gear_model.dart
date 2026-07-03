@@ -85,4 +85,31 @@ final List<GearModel> allGear = [
     price: 1500,
     icon: 'radio_icon',
   ),
+  GearModel(
+    id: 'weighted_vest',
+    name: 'Tactical Weighted Vest',
+    description: '+4 Strength. Increases XP gain from steps.',
+    slot: GearSlot.footwear, // Using footwear as a placeholder or maybe add a new slot?
+    modifiers: {'strength': 4.0, 'step_xp_mult': 1.2},
+    price: 2500,
+    icon: 'vest_icon',
+  ),
+  GearModel(
+    id: 'compression_sleeves',
+    name: 'Agility Sleeves',
+    description: '+3 Agility. Decreases Stamina cost for Capture.',
+    slot: GearSlot.communication,
+    modifiers: {'agility': 3.0, 'capture_stamina_mult': 0.8},
+    price: 1800,
+    icon: 'sleeve_icon',
+  ),
+  GearModel(
+    id: 'oxygen_mask',
+    name: 'Endurance Mask',
+    description: '+5 Endurance. Improves Stamina regeneration.',
+    slot: GearSlot.optics,
+    modifiers: {'endurance': 5.0},
+    price: 3000,
+    icon: 'mask_icon',
+  ),
 ];

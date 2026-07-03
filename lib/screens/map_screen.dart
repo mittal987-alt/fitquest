@@ -261,6 +261,11 @@ class _MapScreenState extends State<MapScreen> {
           return;
         }
         await regenerateTerritories();
+        
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await firebaseService.regenerateStamina(user.uid);
+        }
       },
     );
   }
@@ -475,15 +480,27 @@ class _MapScreenState extends State<MapScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       onPressed: canClaim ? () async {
-                        Navigator.pop(context);
+                        final navigator = Navigator.of(context);
+                        final scaffoldMessenger = ScaffoldMessenger.of(context);
+                        navigator.pop();
                         final user = FirebaseAuth.instance.currentUser;
                         if (user != null) {
-                          await firebaseService.claimBounty(user.uid, bounty);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Bounty Claimed!"), backgroundColor: Colors.green),
+                          // Bounty Claim costs 15 Stamina
+                          bool hasStamina = await firebaseService.consumeStamina(user.uid, 15);
+                          if (!hasStamina) {
+                            scaffoldMessenger.showSnackBar(
+                              const SnackBar(
+                                content: Text("Insufficient Stamina to claim bounty!"),
+                                backgroundColor: Colors.orange,
+                              ),
                             );
+                            return;
                           }
+
+                          await firebaseService.claimBounty(user.uid, bounty);
+                          scaffoldMessenger.showSnackBar(
+                            const SnackBar(content: Text("Bounty Claimed!"), backgroundColor: Colors.green),
+                          );
                         }
                       } : null,
                       icon: const Icon(Icons.check_circle_outline_rounded),
@@ -592,6 +609,24 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
+    // Stamina Check: Capturing a tile costs 5 Stamina
+    double agilityMult = player.getModifier('capture_stamina_mult', allGear);
+    int baseCost = 5;
+    int finalCost = (baseCost * (agilityMult == 1.0 ? 1.0 : agilityMult)).round();
+
+    bool hasStamina = await firebaseService.consumeStamina(uid, finalCost);
+    if (!hasStamina) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Insufficient Stamina! Rest to recover energy."),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
     String ownerId = player.isInTeam ? (player.teamId ?? player.uid) : player.uid;
     String ownerType = player.isInTeam ? "team" : "solo";
     String ownerName = player.isInTeam ? player.team : player.name;
@@ -623,9 +658,10 @@ class _MapScreenState extends State<MapScreen> {
 
     // FLOW STATE BONUS: 4.5 to 7.0 km/h is the sweet spot
     double flowMultiplier = (speedKmh >= 4.5 && speedKmh <= 7.0) ? 1.5 : 1.0;
-    double gearMultiplier = player.getModifier('xp_multiplier', allGear);
+    double gearMultiplier = player.getModifier('xp_mult', allGear);
+    double stepXpMultiplier = player.getModifier('step_xp_mult', allGear);
     int baseXP = 15;
-    int finalXP = (baseXP * flowMultiplier * gearMultiplier).toInt();
+    int finalXP = (baseXP * flowMultiplier * gearMultiplier * stepXpMultiplier).toInt();
 
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: finalXP);
 
@@ -679,7 +715,25 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
-    int newPower = tile.power - 20;
+    // STRONGHOLD DEFENSE BONUS
+    bool isStronghold = false;
+    for (var team in allTeams) {
+      if (team.id == tile.ownerId) {
+        for (var centerId in team.strongholdClusters) {
+          if (tile.tileId == centerId || territoryService.getNeighbors(centerId).contains(tile.tileId)) {
+            isStronghold = true;
+            break;
+          }
+        }
+      }
+    }
+
+    int damage = 20 + (player.effectiveStrength ~/ 2);
+    if (isStronghold) {
+      damage = (damage / 2).floor();
+    }
+
+    int newPower = tile.power - damage;
 
     if (newPower <= 0) {
       HexTileModel newTile = HexTileModel(
@@ -749,7 +803,8 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    int newPower = (tile.power + 10).clamp(0, 100);
+    int repair = 10 + (player.effectiveEndurance ~/ 2);
+    int newPower = (tile.power + repair).clamp(0, 100);
 
     HexTileModel defendedTile = HexTileModel(
       tileId: tile.tileId,
@@ -845,7 +900,37 @@ class _MapScreenState extends State<MapScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       onPressed: () async {
-                        Navigator.pop(context);
+                        final navigator = Navigator.of(context);
+                        final scaffoldMessenger = ScaffoldMessenger.of(context);
+                        navigator.pop();
+                        
+                        // Check if it's a stronghold
+                        bool isStronghold = false;
+                        for (var team in allTeams) {
+                          if (team.id == tile.ownerId) {
+                            for (var centerId in team.strongholdClusters) {
+                              if (tile.tileId == centerId || territoryService.getNeighbors(centerId).contains(tile.tileId)) {
+                                isStronghold = true;
+                                break;
+                              }
+                            }
+                          }
+                        }
+
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null) return;
+                        final uid = user.uid;
+
+                        // Attack costs 10 Stamina, Strongholds cost 20
+                        int cost = isStronghold ? 20 : 10;
+                        bool hasStamina = await firebaseService.consumeStamina(uid, cost);
+                        if (!hasStamina) {
+                          scaffoldMessenger.showSnackBar(
+                            const SnackBar(content: Text("Insufficient Stamina to attack!"), backgroundColor: Colors.orange),
+                          );
+                          return;
+                        }
+                        
                         await attackTile(tile);
                       },
                       icon: const Icon(Icons.flash_on_rounded),
@@ -864,7 +949,23 @@ class _MapScreenState extends State<MapScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       onPressed: () async {
-                        Navigator.pop(context);
+                        final navigator = Navigator.of(context);
+                        final scaffoldMessenger = ScaffoldMessenger.of(context);
+                        navigator.pop();
+                        
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null) return;
+                        final uid = user.uid;
+
+                        // Fortify costs 10 Stamina
+                        bool hasStamina = await firebaseService.consumeStamina(uid, 10);
+                        if (!hasStamina) {
+                          scaffoldMessenger.showSnackBar(
+                            const SnackBar(content: Text("Insufficient Stamina to fortify!"), backgroundColor: Colors.orange),
+                          );
+                          return;
+                        }
+
                         await defendTile(tile);
                       },
                       icon: const Icon(Icons.shield_rounded),

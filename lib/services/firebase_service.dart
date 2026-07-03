@@ -792,7 +792,40 @@ class FirebaseService {
     }
   }
 
-// Action helper to spend stamina during Hex Captures or Bounties
+  // RPG Class Selection
+  Future<void> setCharacterClass(String uid, String className) async {
+    try {
+      int strBonus = 0;
+      int agiBonus = 0;
+      int endBonus = 0;
+
+      if (className == 'tank') strBonus = 5;
+      if (className == 'scout') agiBonus = 5;
+      if (className == 'medic') endBonus = 5;
+
+      final docRef = firestore.collection("players").doc(uid);
+      await firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) return;
+
+        int currentStr = snapshot.data()?["strength"] ?? 10;
+        int currentAgi = snapshot.data()?["agility"] ?? 10;
+        int currentEnd = snapshot.data()?["endurance"] ?? 10;
+
+        transaction.update(docRef, {
+          "characterClass": className,
+          "strength": currentStr + strBonus,
+          "agility": currentAgi + agiBonus,
+          "endurance": currentEnd + endBonus,
+        });
+      });
+    } catch (e) {
+      debugPrint("DATABASE ERROR SETTING CHARACTER CLASS: $e");
+      rethrow;
+    }
+  }
+
+  // Action helper to spend stamina during Hex Captures or Bounties
   Future<bool> consumeStamina(String uid, int amount) async {
     final docRef = firestore.collection("players").doc(uid);
 
@@ -805,6 +838,27 @@ class FirebaseService {
 
       transaction.update(docRef, {"currentStamina": current - amount});
       return true;
+    });
+  }
+
+  Future<void> regenerateStamina(String uid) async {
+    final docRef = firestore.collection("players").doc(uid);
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+
+      int current = snapshot.data()?["currentStamina"] ?? 0;
+      int max = snapshot.data()?["maxStamina"] ?? 100;
+      int endurance = snapshot.data()?["endurance"] ?? 10;
+
+      if (current < max) {
+        // Regen rate tied to endurance (1% of max + endurance/5)
+        int effectiveEndurance = endurance + PlayerModel.fromMap(snapshot.data()!).getModifier('endurance', allGear).toInt();
+        int regenAmount = (max * 0.01 + effectiveEndurance / 5).ceil();
+        transaction.update(docRef, {
+          "currentStamina": (current + regenAmount).clamp(0, max)
+        });
+      }
     });
   }
 

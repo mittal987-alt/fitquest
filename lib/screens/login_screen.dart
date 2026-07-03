@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firebase_service.dart';
 import '../services/auth_service.dart';
 import 'main_navigation.dart';
+import 'class_selection_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -57,14 +58,15 @@ class _LoginScreenState extends State<LoginScreen> {
           name: name,
           email: email,
         );
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => ClassSelectionScreen(uid: userCredential.user!.uid)),
+          );
+        }
       }
 
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainNavigation()),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -168,7 +170,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     verificationCompleted: (cred) async {
                       try {
                         UserCredential userCredential = await auth.signInWithCredential(cred);
-                        if (userCredential.additionalUserInfo?.isNewUser == true) {
+                        bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
+                        if (isNew) {
                           await firebaseService.createPlayer(
                             uid: userCredential.user!.uid,
                             name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
@@ -179,7 +182,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (mounted) {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => const MainNavigation()),
+                            MaterialPageRoute(
+                              builder: (_) => isNew 
+                                ? ClassSelectionScreen(uid: userCredential.user!.uid) 
+                                : const MainNavigation()
+                            ),
                           );
                         }
                       } catch (e) {
@@ -208,7 +215,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       vId!,
                       codeController.text.trim(),
                     );
-                    if (userCredential.additionalUserInfo?.isNewUser == true) {
+                    bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
+                    if (isNew) {
                       await firebaseService.createPlayer(
                         uid: userCredential.user!.uid,
                         name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
@@ -219,7 +227,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     if (mounted) {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => const MainNavigation()),
+                        MaterialPageRoute(
+                          builder: (_) => isNew 
+                            ? ClassSelectionScreen(uid: userCredential.user!.uid) 
+                            : const MainNavigation()
+                        ),
                       );
                     }
                   } catch (e) {
@@ -353,15 +365,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       onTap: () async {
                         try {
                           UserCredential? userCredential = await authService.signInWithGoogle();
-                          if (userCredential != null && userCredential.additionalUserInfo?.isNewUser == true) {
-                            await firebaseService.createPlayer(
-                              uid: userCredential.user!.uid,
-                              name: userCredential.user!.displayName ?? "Explorer",
-                              email: userCredential.user!.email ?? "",
-                            );
-                          }
-                          if (mounted) {
-                            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainNavigation()));
+                          if (userCredential != null) {
+                            bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
+                            if (isNew) {
+                              await firebaseService.createPlayer(
+                                uid: userCredential.user!.uid,
+                                name: userCredential.user!.displayName ?? "Explorer",
+                                email: userCredential.user!.email ?? "",
+                              );
+                            }
+                            if (mounted) {
+                              Navigator.pushReplacement(
+                                context, 
+                                MaterialPageRoute(
+                                  builder: (_) => isNew 
+                                    ? ClassSelectionScreen(uid: userCredential.user!.uid) 
+                                    : const MainNavigation()
+                                )
+                              );
+                            }
                           }
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -380,7 +402,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             email: "Anonymous Node",
                           );
                           if (mounted) {
-                            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainNavigation()));
+                            Navigator.pushReplacement(
+                              context, 
+                              MaterialPageRoute(builder: (_) => ClassSelectionScreen(uid: userCredential.user!.uid))
+                            );
                           }
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
