@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'dart:ui';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../services/location_service.dart';
 import '../services/pedometer_service.dart';
 import '../services/territory_service.dart';
@@ -11,6 +13,9 @@ import '../services/anti_cheat_service.dart';
 import '../services/firebase_service.dart';
 import '../models/hex_tile_model.dart';
 import '../models/player_model.dart';
+import '../models/bounty_model.dart';
+import '../models/team_model.dart';
+import '../models/gear_model.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -29,10 +34,27 @@ class _MapScreenState extends State<MapScreen> {
 
   StreamSubscription<Position>? positionStream;
   StreamSubscription<List<HexTileModel>>? hexTilesStream;
+  StreamSubscription<List<BountyModel>>? bountiesStream;
+  StreamSubscription<List<TeamModel>>? teamsStream;
+
   LatLng currentPosition = const LatLng(28.6139, 77.2090);
   final Set<Polygon> hexagons = {};
   final Set<Marker> markers = {};
+  final Set<Circle> circles = {};
+  final Set<Polyline> polylines = {};
+  List<LatLng> breadcrumbs = [];
+  String? trackedBountyId;
   List<HexTileModel> allTiles = [];
+  List<BountyModel> allBounties = [];
+  List<TeamModel> allTeams = [];
+  List<GearModel> allGear = [];
+  PlayerModel? currentPlayer;
+  StreamSubscription<PlayerModel?>? playerStream;
+  StreamSubscription<List<GearModel>>? gearStream;
+
+  BitmapDescriptor? playerIcon;
+  String? lastAvatarUrl;
+
   double speedKmh = 0;
   String? lastCapturedTile;
   String? _mapStyleJson;
@@ -45,7 +67,59 @@ class _MapScreenState extends State<MapScreen> {
     _loadMapStyle();
     initializeLocation();
     listenToHexTiles();
+    listenToBounties();
+    listenToTeams();
+    listenToPlayer();
+    listenToGear();
     startRegenLoop();
+  }
+
+  void listenToGear() {
+    gearStream?.cancel();
+    gearStream = firebaseService.getGear().listen((gear) {
+      if (mounted) {
+        setState(() {
+          allGear = gear;
+        });
+      }
+    });
+  }
+
+  void listenToPlayer() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      playerStream?.cancel();
+      playerStream = firebaseService.getPlayerStream(user.uid).listen((p) async {
+        if (mounted && p != null) {
+          if (p.avatar != lastAvatarUrl) {
+            lastAvatarUrl = p.avatar;
+            await _updatePlayerIcon(p.avatar);
+          }
+          setState(() {
+            currentPlayer = p;
+            updateMarkers();
+          });
+        }
+      });
+    }
+  }
+
+  void listenToBounties() {
+    bountiesStream?.cancel();
+    bountiesStream = firebaseService.getActiveBounties().listen((bounties) {
+      allBounties = bounties;
+      updateMarkers();
+      if (mounted) setState(() {});
+    });
+  }
+
+  void listenToTeams() {
+    teamsStream?.cancel();
+    teamsStream = firebaseService.getTeams().listen((teams) {
+      allTeams = teams;
+      generateGrid();
+      if (mounted) setState(() {});
+    });
   }
 
   void _loadMapStyle() async {
@@ -140,6 +214,17 @@ class _MapScreenState extends State<MapScreen> {
         lastTimestamp = now;
         currentPosition = LatLng(position.latitude, position.longitude);
 
+        // Update Ghost Trail
+        if (breadcrumbs.isEmpty || 
+            locationService.calculateDistance(
+              startLat: breadcrumbs.last.latitude,
+              startLng: breadcrumbs.last.longitude,
+              endLat: currentPosition.latitude,
+              endLng: currentPosition.longitude) > 10) {
+          breadcrumbs.add(currentPosition);
+          if (breadcrumbs.length > 100) breadcrumbs.removeAt(0);
+        }
+
         if (!mounted) return;
 
         bool isWalking = antiCheatService.isWalking(speedKmh);
@@ -180,15 +265,293 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void updatePlayerMarker() {
+  Future<void> _updatePlayerIcon(String url) async {
+    try {
+      if (url.isEmpty) {
+        playerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
+        return;
+      }
+
+      final response = await http.get(Uri.parse(url));
+      final Uint8List bytes = response.bodyBytes;
+
+      final ui.Codec codec = await ui.instantiateImageCodec(bytes, targetWidth: 120, targetHeight: 120);
+      final ui.FrameInfo fi = await codec.getNextFrame();
+      final ui.Image image = fi.image;
+
+      final pictureRecorder = ui.PictureRecorder();
+      final canvas = Canvas(pictureRecorder);
+      const center = Offset(70, 70);
+      const radius = 60.0;
+
+      // Glow Ring
+      final Paint glowPaint = Paint()
+        ..color = Colors.cyan.withValues(alpha: 0.5)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      canvas.drawCircle(center, radius + 4, glowPaint);
+
+      // Border Ring
+      final Paint borderPaint = Paint()..color = Colors.cyan;
+      canvas.drawCircle(center, radius, borderPaint);
+
+      // Clip for Image
+      final Path clipPath = Path()..addOval(Rect.fromCircle(center: center, radius: radius - 4));
+      canvas.clipPath(clipPath);
+
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        Rect.fromLTWH(center.dx - radius, center.dy - radius, radius * 2, radius * 2),
+        Paint(),
+      );
+
+      final img = await pictureRecorder.endRecording().toImage(140, 140);
+      final data = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (mounted) {
+        setState(() {
+          playerIcon = BitmapDescriptor.bytes(data!.buffer.asUint8List());
+        });
+      }
+    } catch (e) {
+      debugPrint("Error creating avatar icon: $e");
+      playerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
+    }
+  }
+
+  void updateMarkers() {
     markers.clear();
+    circles.clear();
+    polylines.clear();
+
+    // Player Marker
     markers.add(
       Marker(
         markerId: const MarkerId("player"),
         position: currentPosition,
-        infoWindow: const InfoWindow(title: "You"),
+        icon: playerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+        anchor: const Offset(0.5, 0.5),
+        zIndexInt: 5,
+        flat: true,
       ),
     );
+
+    // Ghost Trail (Breadcrumbs)
+    if (breadcrumbs.length > 1) {
+      polylines.add(Polyline(
+        polylineId: const PolylineId("ghost_trail"),
+        points: breadcrumbs,
+        color: Colors.cyan.withValues(alpha: 0.3),
+        width: 5,
+        jointType: JointType.round,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+      ));
+    }
+
+    // Bounty Tracker Line
+    if (trackedBountyId != null) {
+      try {
+        final b = allBounties.firstWhere((element) => element.id == trackedBountyId);
+        polylines.add(Polyline(
+          polylineId: const PolylineId("nav_line"),
+          points: [currentPosition, LatLng(b.latitude, b.longitude)],
+          color: Colors.orange,
+          width: 3,
+          patterns: [PatternItem.dash(20), PatternItem.gap(10)],
+        ));
+      } catch (_) {
+        trackedBountyId = null;
+      }
+    }
+
+    // Proximity Radar Ring (only if near bounty)
+    for (var bounty in allBounties) {
+      double dist = locationService.calculateDistance(
+        startLat: currentPosition.latitude,
+        startLng: currentPosition.longitude,
+        endLat: bounty.latitude,
+        endLng: bounty.longitude,
+      );
+
+        if (dist < 200) {
+          circles.add(
+            Circle(
+              circleId: const CircleId("radar"),
+              center: currentPosition,
+              radius: 200,
+              strokeWidth: 2,
+              strokeColor: Colors.cyan.withValues(alpha: 0.3),
+              fillColor: Colors.cyan.withValues(alpha: 0.05),
+            ),
+          );
+          break; // Show only one radar ring
+        }
+    }
+
+    // Bounty Markers
+    for (var bounty in allBounties) {
+      markers.add(
+        Marker(
+          markerId: MarkerId("bounty_${bounty.id}"),
+          position: LatLng(bounty.latitude, bounty.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+          onTap: () => showBountyDetails(bounty),
+        ),
+      );
+    }
+
+    // Stronghold Markers (Center of clusters)
+    for (var team in allTeams) {
+      for (var centerId in team.strongholdClusters) {
+        LatLng centerPos = territoryService.getHexCenter(centerId);
+        markers.add(
+          Marker(
+            markerId: MarkerId("stronghold_${team.id}_$centerId"),
+            position: centerPos,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+            infoWindow: InfoWindow(title: "${team.name} Stronghold", snippet: "Strategic Defense Hub"),
+          ),
+        );
+      }
+    }
+  }
+
+  void showBountyDetails(BountyModel bounty) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        double dist = locationService.calculateDistance(
+          startLat: currentPosition.latitude,
+          startLng: currentPosition.longitude,
+          endLat: bounty.latitude,
+          endLng: bounty.longitude,
+        );
+
+        double radiusMult = currentPlayer?.getModifier('bounty_radius', allGear) ?? 1.0;
+        double effectiveRadius = 50 * radiusMult;
+
+        bool canClaim = dist < effectiveRadius;
+
+        return Container(
+          padding: const EdgeInsets.all(28),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.stars_rounded, size: 64, color: Colors.orange),
+              const SizedBox(height: 16),
+              const Text(
+                "TACTICAL BOUNTY",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Recover this objective for rewards.",
+                style: const TextStyle(fontSize: 16, color: Colors.black54),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _rewardChip(Icons.add_circle_outline, "${bounty.xpReward} XP"),
+                  if (bounty.itemReward != null)
+                    _rewardChip(Icons.inventory_2_outlined, "GEAR CACHE"),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: canClaim ? Colors.orange : Colors.grey[300],
+                        foregroundColor: canClaim ? Colors.white : Colors.grey[600],
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: canClaim ? () async {
+                        Navigator.pop(context);
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          await firebaseService.claimBounty(user.uid, bounty);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Bounty Claimed!"), backgroundColor: Colors.green),
+                            );
+                          }
+                        }
+                      } : null,
+                      icon: const Icon(Icons.check_circle_outline_rounded),
+                      label: Text(
+                        canClaim ? "CLAIM" : "OUT OF RANGE",
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
+                        foregroundColor: Colors.blueAccent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        side: const BorderSide(color: Colors.blueAccent, width: 1),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          trackedBountyId = bounty.id;
+                          updateMarkers();
+                        });
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.navigation_rounded),
+                      label: const Text("TRACK", style: TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ],
+              ),
+              if (radiusMult > 1.0 && !canClaim)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    "Thermal Goggles Active (+${((radiusMult - 1) * 100).toInt()}% Range)",
+                    style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _rewardChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: Colors.orange),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+        ],
+      ),
+    );
+  }
+
+  void updatePlayerMarker() {
+    updateMarkers();
   }
 
   Future<void> captureTile() async {
@@ -258,7 +621,13 @@ class _MapScreenState extends State<MapScreen> {
     allTiles.add(newTile);
     lastCapturedTile = tileId;
 
-    await firebaseService.incrementXP(uid: player.uid, xpToAdd: 15);
+    // FLOW STATE BONUS: 4.5 to 7.0 km/h is the sweet spot
+    double flowMultiplier = (speedKmh >= 4.5 && speedKmh <= 7.0) ? 1.5 : 1.0;
+    double gearMultiplier = player.getModifier('xp_multiplier', allGear);
+    int baseXP = 15;
+    int finalXP = (baseXP * flowMultiplier * gearMultiplier).toInt();
+
+    await firebaseService.incrementXP(uid: player.uid, xpToAdd: finalXP);
 
     final myTilesCount = allTiles.where((t) => t.ownerId == ownerId).length;
     if (player.isInTeam && player.teamId != null) {
@@ -559,10 +928,22 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       List<String> tileIds = tiles.map((t) => t.tileId).toList();
+
+      Set<String> strongholdTiles = {};
+      for (var team in allTeams) {
+        if (team.id == sampleTile.ownerId) {
+          for (var clusterCenter in team.strongholdClusters) {
+            strongholdTiles.add(clusterCenter);
+            strongholdTiles.addAll(territoryService.getNeighbors(clusterCenter));
+          }
+        }
+      }
+
       hexagons.addAll(territoryService.buildUnifiedTerritory(
         groupKey: key,
         tileIds: tileIds,
         color: territoryColor,
+        strongholdTileIds: strongholdTiles,
         onTap: (tileId) {
           final tile = tiles.firstWhere((t) => t.tileId == tileId);
           showTileDetails(tile);
@@ -575,6 +956,8 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     positionStream?.cancel();
     hexTilesStream?.cancel();
+    bountiesStream?.cancel();
+    teamsStream?.cancel();
     super.dispose();
   }
 
@@ -588,7 +971,9 @@ class _MapScreenState extends State<MapScreen> {
             style: _mapStyleJson,
             polygons: hexagons,
             markers: markers,
-            myLocationEnabled: true,
+            circles: circles,
+            polylines: polylines,
+            myLocationEnabled: false, // Using custom marker instead
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             compassEnabled: false,
@@ -668,14 +1053,31 @@ class _MapScreenState extends State<MapScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          antiCheatService.getMovementStatus(speedKmh).toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.black87,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              antiCheatService.getMovementStatus(speedKmh).toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.black87,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            if (speedKmh >= 4.5 && speedKmh <= 7.0)
+                              Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  "FLOW STATE: 1.5x XP",
+                                  style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 3),
                         Text(

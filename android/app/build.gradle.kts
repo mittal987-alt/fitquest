@@ -7,7 +7,8 @@ plugins {
 }
 
 android {
-    namespace = "com.example.untitled"
+    //  Fixed: Changed from "com.example.untitled" to match your active Firebase configuration
+    namespace = "com.fitquest.game"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -22,10 +23,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // This now perfectly aligns with the updated namespace above
         applicationId = "com.fitquest.game"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -40,6 +40,7 @@ android {
         }
     }
 }
+
 dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")

@@ -19,26 +19,19 @@ class TeamModel {
   final String leaderId;
 
   final String logo;
+  final List<String> strongholdClusters; // List of first tileId in each 7-hex cluster
 
   TeamModel({
-
     required this.id,
-
     required this.name,
-
     required this.color,
-
     required this.members,
-
     required this.maxMembers,
-
     required this.totalLand,
-
     required this.totalSteps,
-
     required this.leaderId,
-
     required this.logo,
+    this.strongholdClusters = const [],
   });
 
   // =========================
@@ -71,6 +64,10 @@ class TeamModel {
       map["leaderId"] ?? "",
 
       logo: map["logo"] ?? "",
+
+      strongholdClusters: map["strongholdClusters"] != null
+          ? List<String>.from(map["strongholdClusters"])
+          : const [],
     );
   }
 
@@ -103,6 +100,8 @@ class TeamModel {
       leaderId,
 
       "logo": logo,
+
+      "strongholdClusters": strongholdClusters,
     };
   }
 

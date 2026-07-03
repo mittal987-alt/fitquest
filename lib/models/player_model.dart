@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'gear_model.dart';
 
 class PlayerModel {
   final String uid;
@@ -20,6 +21,34 @@ class PlayerModel {
   final DateTime? lastActiveDate;
   final List<String> claimedQuests;
   final Map<String, DateTime> activePowerUps;
+  final List<String> ownedGear;
+  final Map<String, String> equippedGear;
+
+  // Physical Telemetry Nodes
+  final double? heightCm;
+  final double? weightKg;
+  final int dailyStepTarget;
+  final int dailyExerciseTargetMinutes;
+
+  // New RPG Attributes & Resource Pools
+  final int strength;
+  final int agility;
+  final int endurance;
+  final int currentStamina;
+  final int maxStamina;
+
+  double getModifier(String key, List<GearModel> allGear) {
+    double total = 1.0;
+    equippedGear.forEach((slot, gearId) {
+      try {
+        final gear = allGear.firstWhere((g) => g.id == gearId);
+        if (gear.modifiers.containsKey(key)) {
+          total *= gear.modifiers[key]!;
+        }
+      } catch (_) {}
+    });
+    return total;
+  }
 
   PlayerModel({
     required this.uid,
@@ -41,6 +70,17 @@ class PlayerModel {
     this.lastActiveDate,
     this.claimedQuests = const [],
     this.activePowerUps = const {},
+    this.ownedGear = const [],
+    this.equippedGear = const {},
+    this.heightCm,
+    this.weightKg,
+    this.dailyStepTarget = 10000,
+    this.dailyExerciseTargetMinutes = 30,
+    this.strength = 10,
+    this.agility = 10,
+    this.endurance = 10,
+    this.currentStamina = 100,
+    this.maxStamina = 100,
   });
 
   factory PlayerModel.fromMap(Map<String, dynamic> map) {
@@ -68,17 +108,22 @@ class PlayerModel {
       level: (map["level"] as num?)?.toInt() ?? 1,
       xp: (map["xp"] as num?)?.toInt() ?? 0,
       avatar: map["avatar"]?.toString() ?? "",
-      lastTeamAction: map["lastTeamAction"] is Timestamp
-          ? (map["lastTeamAction"] as Timestamp).toDate()
-          : null,
+      lastTeamAction: map["lastTeamAction"] is Timestamp ? (map["lastTeamAction"] as Timestamp).toDate() : null,
       streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
-      lastActiveDate: map["lastActiveDate"] is Timestamp
-          ? (map["lastActiveDate"] as Timestamp).toDate()
-          : null,
-      claimedQuests: map["claimedQuests"] != null
-          ? List<String>.from(map["claimedQuests"])
-          : const [],
+      lastActiveDate: map["lastActiveDate"] is Timestamp ? (map["lastActiveDate"] as Timestamp).toDate() : null,
+      claimedQuests: map["claimedQuests"] != null ? List<String>.from(map["claimedQuests"]) : const [],
       activePowerUps: powerUps,
+      ownedGear: map["ownedGear"] != null ? List<String>.from(map["ownedGear"]) : const [],
+      equippedGear: Map<String, String>.from(map["equippedGear"] ?? {}),
+      heightCm: (map["heightCm"] as num?)?.toDouble(),
+      weightKg: (map["weightKg"] as num?)?.toDouble(),
+      dailyStepTarget: (map["dailyStepTarget"] as num?)?.toInt() ?? 10000,
+      dailyExerciseTargetMinutes: (map["dailyExerciseTargetMinutes"] as num?)?.toInt() ?? 30,
+      strength: (map["strength"] as num?)?.toInt() ?? 10,
+      agility: (map["agility"] as num?)?.toInt() ?? 10,
+      endurance: (map["endurance"] as num?)?.toInt() ?? 10,
+      currentStamina: (map["currentStamina"] as num?)?.toInt() ?? 100,
+      maxStamina: (map["maxStamina"] as num?)?.toInt() ?? 100,
     );
   }
 
@@ -108,6 +153,17 @@ class PlayerModel {
       "lastActiveDate": lastActiveDate != null ? Timestamp.fromDate(lastActiveDate!) : null,
       "claimedQuests": claimedQuests,
       "activePowerUps": powerUps,
+      "ownedGear": ownedGear,
+      "equippedGear": equippedGear,
+      "heightCm": heightCm,
+      "weightKg": weightKg,
+      "dailyStepTarget": dailyStepTarget,
+      "dailyExerciseTargetMinutes": dailyExerciseTargetMinutes,
+      "strength": strength,
+      "agility": agility,
+      "endurance": endurance,
+      "currentStamina": currentStamina,
+      "maxStamina": maxStamina,
     };
   }
 }

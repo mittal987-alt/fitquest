@@ -13,10 +13,23 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    // Force your new bucket parameters directly into the options layer
+    final firebaseOptions = DefaultFirebaseOptions.currentPlatform;
+
     await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
+      options: FirebaseOptions(
+        apiKey: firebaseOptions.apiKey,
+        appId: firebaseOptions.appId,
+        messagingSenderId: firebaseOptions.messagingSenderId,
+        projectId: firebaseOptions.projectId,
+        authDomain: firebaseOptions.authDomain,
+        databaseURL: firebaseOptions.databaseURL,
+        //  Hardcoding the correct bucket explicitly to bypass caching bugs
+        storageBucket: "territory-game-462f9.firebasestorage.app",
+        measurementId: firebaseOptions.measurementId,
+      ),
     );
-    debugPrint("✅ Firebase Initialized");
+    debugPrint("✅ Firebase Initialized with explicit storage bucket");
   } catch (e) {
     debugPrint("❌ Firebase Init Error: $e");
   }

@@ -17,7 +17,8 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBueMcRT8oZp-725XbpVNdaDVfWnj6PraU',
-    appId: '1:78178298285:android:6bd4030361785373d19924',
+    // Fixed: Updated to match your actual com.fitquest.game App ID profile
+    appId: '1:78178298285:android:7d21cefb60dd5f60d19924',
     messagingSenderId: '78178298285',
     projectId: 'territory-game-462f9',
     storageBucket: 'territory-game-462f9.firebasestorage.app',

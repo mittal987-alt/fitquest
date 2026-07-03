@@ -63,6 +63,7 @@ class TerritoryService {
     required List<String> tileIds,
     required Color color,
     required Function(String) onTap,
+    Set<String>? strongholdTileIds,
   }) {
     List<Polygon> finalPolygons = [];
 
@@ -73,6 +74,8 @@ class TerritoryService {
       String tileId = tileIds[i];
       LatLng center = getHexCenter(tileId);
       List<LatLng> points = createHexagon(center, hexSize);
+
+      bool isStronghold = strongholdTileIds?.contains(tileId) ?? false;
 
       // CRITICAL FIX: Check if this tile touches a space NOT owned by this specific group
       bool isActualEdge = false;
@@ -89,12 +92,15 @@ class TerritoryService {
           points: points,
           consumeTapEvents: true,
           onTap: () => onTap(tileId),
-          // Clean aesthetic: Solid glowing opacity fill
-          fillColor: color.withValues(alpha: 0.35),
-          // If it's inside the kingdom, keep it transparent to melt the shapes together
-          strokeColor: isActualEdge ? color.withValues(alpha: 0.9) : Colors.transparent,
-          // Set stroke to 0 for internal tiles to remove overlapping lines entirely
-          strokeWidth: isActualEdge ? 3 : 0,
+          // Strongholds have deeper, more saturated colors
+          fillColor: isStronghold 
+              ? color.withValues(alpha: 0.6) 
+              : color.withValues(alpha: 0.35),
+          strokeColor: isStronghold 
+              ? Colors.white.withValues(alpha: 0.8)
+              : (isActualEdge ? color.withValues(alpha: 0.9) : Colors.transparent),
+          strokeWidth: isStronghold ? 4 : (isActualEdge ? 3 : 0),
+          zIndex: isStronghold ? 2 : 1,
         ),
       );
     }
