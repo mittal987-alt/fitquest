@@ -258,11 +258,7 @@ class FirebaseService {
   // =========================
   // CLAIM QUEST
   // =========================
-  Future<void> claimQuest({
-    required String uid,
-    required String questId,
-    required int rewardXp,
-  }) async {
+  Future<void> claimQuestReward(String uid, String questId, int rewardXp) async {
     final docRef = firestore.collection("players").doc(uid);
 
     await firestore.runTransaction((transaction) async {
@@ -876,8 +872,38 @@ class FirebaseService {
   }
 
   // =========================
-  // STRONGHOLDS
+  // SHARED RAIDS & INVENTORY
   // =========================
+
+  /// Applies damage to a shared team raid target.
+  Future<void> contributeRaidDamage(String teamId, double damage) async {
+    final teamRef = firestore.collection("teams").doc(teamId);
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(teamRef);
+      if (!snapshot.exists) return;
+
+      double currentHp = (snapshot.data()?["raidBossHp"] ?? 100000.0).toDouble();
+      transaction.update(teamRef, {
+        "raidBossHp": (currentHp - damage).clamp(0.0, 1000000.0),
+      });
+    });
+  }
+
+  /// Persists discovered materials to the player's inventory.
+  Future<void> addInventoryItem(String uid, String materialId, int count) async {
+    final docRef = firestore.collection("players").doc(uid);
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+
+      Map<String, int> inventory = Map<String, int>.from(snapshot.data()?["inventory"] ?? {});
+      inventory[materialId] = (inventory[materialId] ?? 0) + count;
+
+      transaction.update(docRef, {"inventory": inventory});
+    });
+  }
+
+  // Stronghold logic ...
   Future<void> checkAndCreateStronghold(String teamId, String centerTileId) async {
     final teamRef = firestore.collection("teams").doc(teamId);
     await teamRef.update({

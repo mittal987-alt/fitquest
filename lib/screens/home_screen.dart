@@ -71,10 +71,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _subscribeToTacticalPulse() {
     _pulseSubscription?.cancel();
-    _pulseSubscription = pedometerService.tacticalPulseStream.listen((pulse) {
+    _pulseSubscription = pedometerService.tacticalPulseStream.listen((pulse) async {
+      final String currentUid = firebaseService.auth.currentUser?.uid ?? "";
+      final player = await firebaseService.getPlayer(currentUid);
+      
       if (mounted) {
         setState(() {
-          // Update Raid HP
+          // Update Local Visual Raid HP (for immediate feedback)
           _colossusHp = (_colossusHp - pulse.raidDamage).clamp(0.0, _colossusMaxHp);
           
           // Update Anomaly Scanning
@@ -92,6 +95,19 @@ class _HomeScreenState extends State<HomeScreen> {
             _showLootNotification("SCANNED: Found ${pulse.discoveredMaterial}");
           }
         });
+
+        // Background Persistence
+        if (player != null) {
+          // Contribute damage to shared team raid if in a team
+          if (player.teamId != null) {
+            await firebaseService.contributeRaidDamage(player.teamId!, pulse.raidDamage);
+          }
+
+          // Persist discovered materials to Firebase inventory
+          if (pulse.discoveredMaterial != null) {
+            await firebaseService.addInventoryItem(player.uid, pulse.discoveredMaterial!, 1);
+          }
+        }
       }
     });
   }
@@ -976,101 +992,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // UI COMPONENT: CO-OP RAID HEALTH TRACKER
   Widget _buildColossusRaidDashboard() {
-    double colossusIntegrityPct = _colossusHp / _colossusMaxHp;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.gavel_rounded, color: Colors.orangeAccent),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "COLOSSUS GRID-BREAKER RAID",
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
-                  ),
-                ],
+              const Icon(Icons.gavel_rounded, color: Colors.orangeAccent),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  "COLOSSUS GRID-BREAKER RAID",
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orangeAccent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  "ACTIVE TARGET",
-                  style: TextStyle(color: Colors.orangeAccent, fontSize: 8, fontWeight: FontWeight.bold),
-                ),
-              )
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           const Text(
-            "Every step taken by the Operator Cell inflicts structural damage to defenses targeting a collectively aggregated pool of \$100,000\\text{ HP}\$.",
-            style: TextStyle(color: Colors.black45, fontSize: 11),
+            "Every step taken by the Operator Cell inflicts structural damage to defenses targeting a collectively aggregated pool of 100,000 HP.",
+            style: TextStyle(color: Colors.black54, fontSize: 12),
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "GLITCH COLOSSUS INTEGRITY:",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.black87),
-              ),
-              Text(
-                "\${_colossusHp.toStringAsFixed(0)} / \${_colossusMaxHp.toStringAsFixed(0)} HP",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.orangeAccent),
-              ),
-            ],
+          // FIXED: Interpolation and layout constraints
+          Text(
+            "GLITCH COLOSSUS INTEGRITY: ${_colossusHp.toStringAsFixed(0)} HP",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
           ),
           const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: colossusIntegrityPct,
-              minHeight: 12,
-              backgroundColor: Colors.orangeAccent.withValues(alpha: 0.1),
-              color: Colors.orangeAccent,
-            ),
+          LinearProgressIndicator(
+            value: _colossusHp / _colossusMaxHp,
+            backgroundColor: Colors.black.withValues(alpha: 0.05),
+            color: Colors.orangeAccent,
           ),
-          if (_systemHackActive) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.redAccent.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.redAccent.withValues(alpha: 0.2)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "SYSTEM HACK: Active node debuff active (-20% XP penalty applied). Reach 3,000 strides to patch baseline firewalls.",
-                      style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  // UI COMPONENT: SEQUENTIAL CO-OP TELEMETRY RELAY
   Widget _buildTelemetryRelayCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1082,84 +1048,29 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.swap_horizontal_circle_outlined, color: Colors.purpleAccent),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "TELEMETRY RELAY SHIFT",
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _isMyRelayShiftActive ? Colors.greenAccent.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  _isMyRelayShiftActive ? "YOUR SHIFT" : "LINK STANDBY",
-                  style: TextStyle(
-                    color: _isMyRelayShiftActive ? Colors.green.shade700 : Colors.grey,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              )
-            ],
-          ),
+          const Text("TELEMETRY RELAY SHIFT", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+          const SizedBox(height: 12),
+          const Text("YOUR REMAINING TARGET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
           const SizedBox(height: 8),
-          const Text(
-            "Sequential daily walking targets. Pass the dynamic link to secure consecutive multi-session tracking.",
-            style: TextStyle(color: Colors.black45, fontSize: 11),
-          ),
-          const SizedBox(height: 16),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("YOUR REMAINING TARGET", style: TextStyle(fontSize: 9, color: Colors.black38, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text("\$_relayStepsRemaining\$ Strides", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black87)),
-                ],
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isMyRelayShiftActive ? Colors.purpleAccent : Colors.grey,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              // FIXED: Expanded prevents Row overflow
+              Expanded(
+                child: Text(
+                  "$_relayStepsRemaining Strides",
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                 ),
-                icon: const Icon(Icons.send_rounded, size: 14, color: Colors.white),
-                onPressed: _isMyRelayShiftActive
-                    ? () {
-                  setState(() {
-                    _isMyRelayShiftActive = false;
-                    _relayStepsRemaining = 0;
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("LINK TRANSFERRED TO \$_activeRelayPartner SUCCESSFUL!"),
-                      backgroundColor: Colors.purpleAccent,
-                    ),
-                  );
-                }
-                    : null,
-                label: const Text("PASS THE LINK", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
-              )
+              ),
+              ElevatedButton(
+                onPressed: () {},
+                child: const Text("PASS TOKEN"),
+              ),
             ],
-          )
+          ),
         ],
       ),
     );
   }
-
   Widget _buildQuest({
     required PlayerModel player,
     required String id,
@@ -1252,7 +1163,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               onPressed: () async {
                 _confettiController.play();
-                await firebaseService.claimQuest(uid: player.uid, questId: id, rewardXp: reward);
+                await firebaseService.claimQuestReward(player.uid, id, reward);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
