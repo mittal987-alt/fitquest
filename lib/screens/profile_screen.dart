@@ -5,6 +5,7 @@ import '../models/player_model.dart';
 import '../services/firebase_service.dart';
 import 'login_screen.dart';
 import 'armory_screen.dart';
+import 'activity_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -324,6 +325,23 @@ class ProfileScreen extends StatelessWidget {
                   icon: Icons.monitor_heart_rounded,
                   color: Colors.teal,
                   onTap: () => _showBiometricsModal(context, player),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ACTIVITY SESSION QUICK ACCESS
+                _profileActionTile(
+                  context,
+                  title: "ACTIVE SESSION",
+                  subtitle: "START TACTICAL WORKOUT",
+                  icon: Icons.fitness_center_rounded,
+                  color: Colors.orange,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => ActivityScreen(player: player)),
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 12),

@@ -7,6 +7,7 @@ import 'map_screen.dart';
 import 'leaderboard_screen.dart';
 import 'team_screen.dart';
 import 'profile_screen.dart';
+import 'activity_screen.dart';
 import '../services/pedometer_service.dart';
 import '../services/step_sync_service.dart';
 import '../services/firebase_service.dart';
@@ -31,7 +32,7 @@ class _MainNavigationState extends State<MainNavigation> {
   final List<Widget> pages = [
     const HomeScreen(),
     const MapScreen(),
-    const LeaderboardScreen(),
+    const ActivityScreen(),
     const TeamScreen(),
     const ProfileScreen(),
   ];
@@ -131,7 +132,7 @@ class _MainNavigationState extends State<MainNavigation> {
             destinations: const [
               NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: "HQ"),
               NavigationDestination(icon: Icon(Icons.map_rounded), label: "GRID MAP"),
-              NavigationDestination(icon: Icon(Icons.leaderboard_rounded), label: "RANKS"),
+              NavigationDestination(icon: Icon(Icons.fitness_center_rounded), label: "SESSION"),
               NavigationDestination(icon: Icon(Icons.groups_rounded), label: "TEAMS"),
               NavigationDestination(icon: Icon(Icons.person_rounded), label: "PROFILE"),
             ],

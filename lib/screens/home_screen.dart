@@ -11,6 +11,9 @@ import '../models/global_event_model.dart';
 import 'leaderboard_screen.dart';
 import 'map_screen.dart';
 import 'shop_screen.dart';
+import 'relay_screen.dart';
+import 'crafting_screen.dart';
+import '../features/tactical/widgets/activity_heatmap.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -508,11 +511,38 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Text("TACTICAL DAILY QUESTS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
                 const SizedBox(height: 12),
                 if (player != null) ...[
-                  _buildQuest(player: player, id: "morning_walker", title: "Morning Scout Routine", target: 2000, current: liveSteps.toDouble(), reward: 100, icon: Icons.wb_sunny_rounded, color: Colors.orangeAccent),
+                  _buildQuest(
+                    player: player, 
+                    id: "morning_walker", 
+                    title: "Morning Scout Routine", 
+                    target: 2000, 
+                    current: player.dailySteps.toDouble(), 
+                    reward: 100, 
+                    icon: Icons.wb_sunny_rounded, 
+                    color: Colors.orangeAccent
+                  ),
                   const SizedBox(height: 10),
-                  _buildQuest(player: player, id: "territory_scout", title: "Grid Perimeter Expansion", target: 3, current: player.totalLand.toDouble(), reward: 250, icon: Icons.explore_rounded, color: Colors.cyanAccent),
+                  _buildQuest(
+                    player: player, 
+                    id: "territory_scout", 
+                    title: "Grid Perimeter Expansion", 
+                    target: 3, 
+                    current: player.totalLand.toDouble(), 
+                    reward: 250, 
+                    icon: Icons.explore_rounded, 
+                    color: Colors.cyanAccent
+                  ),
                   const SizedBox(height: 10),
-                  _buildQuest(player: player, id: "xp_hunter", title: "Core Processor Linkup", target: 500, current: liveXp.toDouble(), reward: 500, icon: Icons.bolt_rounded, color: Colors.purpleAccent),
+                  _buildQuest(
+                    player: player, 
+                    id: "xp_hunter", 
+                    title: "Core Processor Linkup", 
+                    target: 500, 
+                    current: player.xp.toDouble(), 
+                    reward: 500, 
+                    icon: Icons.bolt_rounded, 
+                    color: Colors.purpleAccent
+                  ),
                 ],
                 const SizedBox(height: 24),
 
@@ -528,9 +558,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapScreen())),
-                        icon: const Icon(Icons.map_rounded, color: Colors.cyan),
-                        label: const Text("GRID MAP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CraftingScreen())),
+                        icon: const Icon(Icons.build_circle_rounded, color: Colors.cyan),
+                        label: const Text("CRAFTING", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -546,7 +576,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen())),
                         icon: const Icon(Icons.shopping_bag_rounded, color: Colors.purpleAccent),
-                        label: const Text("UPGRADES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+                        label: const Text("ARMORY", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                       ),
                     ),
                   ],
@@ -1062,7 +1092,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  final String currentUid = firebaseService.auth.currentUser?.uid ?? "";
+                  firebaseService.getPlayer(currentUid).then((player) {
+                    if (player != null && player.teamId != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RelayScreen(
+                            teamId: player.teamId!,
+                            teamName: player.team,
+                          ),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("JOIN A SQUAD TO ACCESS RELAY CHANNELS")),
+                      );
+                    }
+                  });
+                },
                 child: const Text("PASS TOKEN"),
               ),
             ],
@@ -1162,6 +1211,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
               onPressed: () async {
+                if (id == "morning_walker") {
+                  final now = DateTime.now();
+                  if (now.hour < 5 || now.hour > 11) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("ACCESS DENIED: MORNING ROUTINE ONLY AVAILABLE 0500-1100 HOURS."),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                    return;
+                  }
+                }
                 _confettiController.play();
                 await firebaseService.claimQuestReward(player.uid, id, reward);
                 if (mounted) {

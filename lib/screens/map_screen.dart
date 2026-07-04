@@ -16,6 +16,7 @@ import '../models/player_model.dart';
 import '../models/bounty_model.dart';
 import '../models/team_model.dart';
 import '../models/gear_model.dart';
+import '../models/anomaly_model.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -36,6 +37,7 @@ class _MapScreenState extends State<MapScreen> {
   StreamSubscription<List<HexTileModel>>? hexTilesStream;
   StreamSubscription<List<BountyModel>>? bountiesStream;
   StreamSubscription<List<TeamModel>>? teamsStream;
+  StreamSubscription<List<AnomalyModel>>? anomaliesStream;
 
   LatLng currentPosition = const LatLng(28.6139, 77.2090);
   final Set<Polygon> hexagons = {};
@@ -48,7 +50,12 @@ class _MapScreenState extends State<MapScreen> {
   List<BountyModel> allBounties = [];
   List<TeamModel> allTeams = [];
   List<GearModel> allGear = [];
+  List<AnomalyModel> allAnomalies = [];
   PlayerModel? currentPlayer;
+
+  AnomalyModel? scanningAnomaly;
+  double anomalyScanProgress = 0.0;
+  StreamSubscription<TacticalPulse>? pulseSubscription;
   StreamSubscription<PlayerModel?>? playerStream;
   StreamSubscription<List<GearModel>>? gearStream;
 
@@ -69,6 +76,7 @@ class _MapScreenState extends State<MapScreen> {
     listenToHexTiles();
     listenToBounties();
     listenToTeams();
+    listenToAnomalies();
     listenToPlayer();
     listenToGear();
     startRegenLoop();
@@ -80,6 +88,18 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) {
         setState(() {
           allGear = gear;
+        });
+      }
+    });
+  }
+
+  void listenToAnomalies() {
+    anomaliesStream?.cancel();
+    anomaliesStream = firebaseService.getAnomalies().listen((anomalies) {
+      if (mounted) {
+        setState(() {
+          allAnomalies = anomalies;
+          updateMarkers();
         });
       }
     });
@@ -172,6 +192,20 @@ class _MapScreenState extends State<MapScreen> {
 
   void startTracking() {
     positionStream?.cancel();
+    pulseSubscription?.cancel();
+    
+    // Subscribe to TacticalPulse for Anomaly Scanning
+    pulseSubscription = pedometerService.tacticalPulseStream.listen((pulse) {
+      if (mounted && scanningAnomaly != null) {
+        setState(() {
+          anomalyScanProgress += pulse.scanProgress;
+          if (anomalyScanProgress >= 1.0) {
+            _completeAnomalyScan();
+          }
+        });
+      }
+    });
+
     positionStream = locationService.getLocationStream().listen(
           (position) async {
         // High-accuracy GPS tracking strictly in the foreground
@@ -240,6 +274,7 @@ class _MapScreenState extends State<MapScreen> {
 
         updatePlayerMarker();
         generateGrid();
+        _checkAnomalyProximity();
 
         if (mounted && mapController != null) {
           try {
@@ -321,6 +356,47 @@ class _MapScreenState extends State<MapScreen> {
     } catch (e) {
       debugPrint("Error creating avatar icon: $e");
       playerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
+    }
+  }
+
+  void _checkAnomalyProximity() {
+    if (scanningAnomaly != null) {
+      double dist = locationService.calculateDistance(
+        startLat: currentPosition.latitude,
+        startLng: currentPosition.longitude,
+        endLat: scanningAnomaly!.position.latitude,
+        endLng: scanningAnomaly!.position.longitude,
+      );
+      if (dist > 50) {
+        setState(() {
+          scanningAnomaly = null;
+          anomalyScanProgress = 0.0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Signal Lost: Too far from anomaly!"), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _completeAnomalyScan() async {
+    if (scanningAnomaly == null || currentPlayer == null) return;
+    
+    final anomaly = scanningAnomaly!;
+    setState(() {
+      scanningAnomaly = null;
+      anomalyScanProgress = 0.0;
+    });
+
+    await firebaseService.claimAnomaly(currentPlayer!.uid, anomaly);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Anomaly Decrypted: ${anomaly.type} rewards acquired!"),
+          backgroundColor: Colors.cyan,
+        ),
+      );
     }
   }
 
@@ -406,6 +482,18 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
+    // Anomaly Markers
+    for (var anomaly in allAnomalies) {
+      markers.add(
+        Marker(
+          markerId: MarkerId("anomaly_${anomaly.id}"),
+          position: anomaly.position,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+          onTap: () => _showAnomalyDetails(anomaly),
+        ),
+      );
+    }
+
     // Stronghold Markers (Center of clusters)
     for (var team in allTeams) {
       for (var centerId in team.strongholdClusters) {
@@ -420,6 +508,72 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
     }
+  }
+
+  void _showAnomalyDetails(AnomalyModel anomaly) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        double dist = locationService.calculateDistance(
+          startLat: currentPosition.latitude,
+          startLng: currentPosition.longitude,
+          endLat: anomaly.position.latitude,
+          endLng: anomaly.position.longitude,
+        );
+
+        bool canScan = dist < 50;
+
+        return Container(
+          padding: const EdgeInsets.all(28),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.radar_rounded, size: 64, color: Colors.cyan),
+              const SizedBox(height: 16),
+              Text(
+                anomaly.type.toUpperCase(),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Decrypt the signal trace for data fragments.",
+                style: TextStyle(fontSize: 16, color: Colors.black54),
+              ),
+              const SizedBox(height: 24),
+              if (canScan)
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.cyan,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      scanningAnomaly = anomaly;
+                      anomalyScanProgress = 0.0;
+                    });
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.sync),
+                  label: const Text("INITIALIZE SCAN", style: TextStyle(fontWeight: FontWeight.w900)),
+                )
+              else
+                Text(
+                  "Coordinates located ${dist.toStringAsFixed(0)}m away. Move within 50m to initialize scan.",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void showBountyDetails(BountyModel bounty) {
@@ -658,10 +812,20 @@ class _MapScreenState extends State<MapScreen> {
 
     // FLOW STATE BONUS: 4.5 to 7.0 km/h is the sweet spot
     double flowMultiplier = (speedKmh >= 4.5 && speedKmh <= 7.0) ? 1.5 : 1.0;
+    
+    // BIOMETRIC RECHARGE BONUS
+    double rechargeMultiplier = 1.0;
+    if (player.activePowerUps.containsKey("metabolic_recharge")) {
+      DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+      if (expiry.isAfter(DateTime.now())) {
+        rechargeMultiplier = 1.5;
+      }
+    }
+
     double gearMultiplier = player.getModifier('xp_mult', allGear);
     double stepXpMultiplier = player.getModifier('step_xp_mult', allGear);
     int baseXP = 15;
-    int finalXP = (baseXP * flowMultiplier * gearMultiplier * stepXpMultiplier).toInt();
+    int finalXP = (baseXP * flowMultiplier * rechargeMultiplier * gearMultiplier * stepXpMultiplier).toInt();
 
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: finalXP);
 
@@ -1059,6 +1223,8 @@ class _MapScreenState extends State<MapScreen> {
     hexTilesStream?.cancel();
     bountiesStream?.cancel();
     teamsStream?.cancel();
+    anomaliesStream?.cancel();
+    pulseSubscription?.cancel();
     super.dispose();
   }
 
@@ -1082,6 +1248,41 @@ class _MapScreenState extends State<MapScreen> {
               mapController = controller;
             },
           ),
+
+          if (scanningAnomaly != null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 80,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("DECRYPTING ANOMALY", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w900, fontSize: 12)),
+                        Text("${(anomalyScanProgress * 100).toStringAsFixed(1)}%", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(
+                      value: anomalyScanProgress,
+                      backgroundColor: Colors.white10,
+                      valueColor: const AlwaysStoppedAnimation(Colors.cyanAccent),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text("Physical movement required to progress decryption array.", style: TextStyle(color: Colors.white54, fontSize: 10)),
+                  ],
+                ),
+              ),
+            ),
 
           if (antiCheatService.isCaptureBlocked)
             Positioned(

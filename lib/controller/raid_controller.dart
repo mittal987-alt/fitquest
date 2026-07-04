@@ -102,14 +102,14 @@ class RaidController extends ChangeNotifier {
 
   /// Processes steps synced by a player, translates them to damage vector,
   /// and validates firewall patches.
-  void registerPlayerSteps(String playerUid, int stepsToSync) {
+  void registerPlayerSteps(String playerUid, int stepsToSync, {double damageMultiplier = 1.0}) {
     if (!isRaidActive) return;
 
     final participant = _participants[playerUid];
     if (participant == null) return;
 
-    // 1 step = 1 HP damage dealt to Colossus defenses
-    final double rawDamage = stepsToSync * GameplayRules.damagePerStep;
+    // 1 step = 1 HP damage dealt to Colossus defenses (modified by tier multiplier)
+    final double rawDamage = stepsToSync * GameplayRules.damagePerStep * damageMultiplier;
     _bossCurrentHp = (_bossCurrentHp - rawDamage).clamp(0.0, _bossMaxHp);
 
     // Track total steps contributed during this operational shift

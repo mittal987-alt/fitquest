@@ -20,17 +20,16 @@ class RelayController {
     required String teamId,
     required List<String> sequence,
     required int targetPerOperator,
+    String operatorName = "Operator 1",
   }) async {
     if (sequence.isEmpty) return;
 
     final firstOperatorId = sequence.first;
-    // In a real app, you'd fetch the name here
-    const firstOperatorName = "Operator 1"; 
 
     final relay = RelayModel(
       teamId: teamId,
       currentOperatorId: firstOperatorId,
-      currentOperatorName: firstOperatorName,
+      currentOperatorName: operatorName,
       targetSteps: targetPerOperator,
       currentSteps: 0,
       isActive: true,
@@ -72,11 +71,14 @@ class RelayController {
     
     if (currentIndex != -1 && currentIndex < relay.sequence.length - 1) {
       final nextOperatorId = relay.sequence[currentIndex + 1];
-      // Fetch next operator name...
+      
+      // Fetch next operator name
+      final nextPlayer = await _firebaseService.getPlayer(nextOperatorId);
+      final nextName = nextPlayer?.name ?? "Operator ${currentIndex + 2}";
       
       await docRef.update({
         'currentOperatorId': nextOperatorId,
-        'currentOperatorName': "Next Operator",
+        'currentOperatorName': nextName,
         'currentSteps': 0,
         'startTime': FieldValue.serverTimestamp(),
       });

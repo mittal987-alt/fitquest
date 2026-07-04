@@ -1,6 +1,8 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
 
 class NotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
@@ -16,6 +18,7 @@ class NotificationService {
   );
 
   Future<void> initialize() async {
+    tz.initializeTimeZones();
     // 1. Request remote alert credentials and check platform payload clearance
     await _fcm.requestPermission(
       alert: true,
@@ -76,6 +79,40 @@ class NotificationService {
       body,
       platformDetails,
     );
+  }
+
+  /// Schedules a notification for a tactical event (e.g., rest end, buff expiry)
+  Future<void> scheduleNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+  }) async {
+    final androidDetails = AndroidNotificationDetails(
+      _channel.id,
+      _channel.name,
+      channelDescription: _channel.description,
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iosDetails = DarwinNotificationDetails();
+    final platformDetails = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    await _localNotifications.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      platformDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  Future<void> cancelNotification(int id) async {
+    await _localNotifications.cancel(id);
   }
 
   // ==========================================
