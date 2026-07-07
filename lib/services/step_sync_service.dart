@@ -4,7 +4,7 @@ import 'package:pedometer/pedometer.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_service.dart';
 import '../models/player_model.dart';
-import '../controller/relay_controller.dart';
+import '../controller/tactical_relay_controller.dart';
 
 class StepSyncService {
   static final StepSyncService _instance = StepSyncService._internal();
@@ -12,7 +12,7 @@ class StepSyncService {
   StepSyncService._internal();
 
   final FirebaseService firebaseService = FirebaseService();
-  final RelayController relayController = RelayController();
+  final TacticalRelayController challengeController = TacticalRelayController();
   StreamSubscription<StepCount>? stepStream;
   DateTime? lastSyncTime;
 
@@ -65,10 +65,10 @@ class StepSyncService {
                 stepsToAdd: deltaSteps,
               );
 
-              // Update relay progress if this player is the current operator
-              final relay = await relayController.getTeamRelay(player.teamId!).first;
-              if (relay != null && relay.isActive && relay.currentOperatorId == uid) {
-                await relayController.updateRelayProgress(player.teamId!, deltaSteps);
+              // Update relay progress if this player is the current player
+              final challenge = await challengeController.getTeamRelay(player.teamId!).first;
+              if (challenge != null && challenge.isActive && challenge.currentPlayerId == uid) {
+                await challengeController.updateRelayProgress(player.teamId!, deltaSteps);
               }
             }
 

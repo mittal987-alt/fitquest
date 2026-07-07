@@ -421,11 +421,11 @@ class ProfileScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          Expanded(child: _attributeCard(label: "STRENGTH", value: player.strength, icon: Icons.fitness_center_rounded, color: Colors.redAccent)),
+                          Expanded(child: _attributeCard(label: "STRENGTH", value: player.effectiveStrength, icon: Icons.fitness_center_rounded, color: Colors.redAccent)),
                           const SizedBox(width: 12),
-                          Expanded(child: _attributeCard(label: "AGILITY", value: player.agility, icon: Icons.bolt_rounded, color: Colors.cyan)),
+                          Expanded(child: _attributeCard(label: "AGILITY", value: player.effectiveAgility, icon: Icons.bolt_rounded, color: Colors.cyan)),
                           const SizedBox(width: 12),
-                          Expanded(child: _attributeCard(label: "ENDURANCE", value: player.endurance, icon: Icons.shield_rounded, color: Colors.orange)),
+                          Expanded(child: _attributeCard(label: "ENDURANCE", value: player.effectiveEndurance, icon: Icons.shield_rounded, color: Colors.orange)),
                         ],
                       ),
                       const SizedBox(height: 24),

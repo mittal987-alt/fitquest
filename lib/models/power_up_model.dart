@@ -49,9 +49,9 @@ final List<PowerUp> shopItems = [
     duration: const Duration(hours: 1),
   ),
   PowerUp(
-    id: "metabolic_recharge",
-    name: "Metabolic Recharge",
-    description: "1.5x XP and Raid Damage after a tactical session.",
+    id: "energy_boost",
+    name: "Energy Boost",
+    description: "1.5x XP and Raid Damage after a fitness session.",
     cost: 0,
     icon: Icons.offline_bolt,
     color: Colors.orange,

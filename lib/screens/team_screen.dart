@@ -7,7 +7,7 @@ import '../widgets/team_card.dart';
 import 'team_request_screen.dart';
 import '../models/player_model.dart';
 import 'team_members_screen.dart';
-import 'relay_screen.dart';
+import 'tactical_relay_screen.dart';
 
 import 'package:provider/provider.dart';
 import '../controller/raid_controller.dart';
@@ -263,16 +263,16 @@ class _TeamScreenState extends State<TeamScreen> {
                               ),
                               onPressed: () async {
                                 final scaffoldMessenger = ScaffoldMessenger.of(context);
-                                  // BIOMETRIC RECHARGE BONUS
-                                  double rechargeMult = 1.0;
-                                  if (currentPlayer?.activePowerUps.containsKey("metabolic_recharge") == true) {
-                                    DateTime expiry = currentPlayer!.activePowerUps["metabolic_recharge"]!;
+                                  // ENERGY BOOST BONUS
+                                  double energyBoostMult = 1.0;
+                                  if (currentPlayer?.activePowerUps.containsKey("energy_boost") == true) {
+                                    DateTime expiry = currentPlayer!.activePowerUps["energy_boost"]!;
                                     if (expiry.isAfter(DateTime.now())) {
-                                      rechargeMult = currentPlayer.rechargeRaidMultiplier;
+                                      energyBoostMult = currentPlayer.energyBoostRaidMultiplier;
                                     }
                                   }
 
-                                  double totalDmg = ((currentPlayer?.effectiveStrength ?? 10) + (currentPlayer?.effectiveAgility ?? 10)) * 1.0 * (currentTeam.strongholdActive ? 1.5 : 1.0) * rechargeMult;
+                                  double totalDmg = ((currentPlayer?.effectiveStrength ?? 10) + (currentPlayer?.effectiveAgility ?? 10)) * 1.0 * (currentTeam.strongholdActive ? 1.5 : 1.0) * energyBoostMult;
 
                                   bool success = await firebaseService.executeTeamRaidAttack(currentUid, currentTeam.id);
                                 if (!success) {
@@ -317,7 +317,7 @@ class _TeamScreenState extends State<TeamScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => RelayScreen(
+                                    builder: (context) => TacticalRelayScreen(
                                       teamId: currentTeam.id,
                                       teamName: currentTeam.name,
                                     ),
@@ -325,7 +325,7 @@ class _TeamScreenState extends State<TeamScreen> {
                                 );
                               },
                               icon: const Icon(Icons.sync_alt_rounded, size: 18),
-                              label: const Text("TEAM CHALLENGE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                              label: const Text("TACTICAL RELAY", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                             ),
                             const SizedBox(height: 12),
                             const TacticalPingFeed(),

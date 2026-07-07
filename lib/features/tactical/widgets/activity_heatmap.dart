@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class ActivityHeatmap extends StatelessWidget {
-  final Map<String, dynamic> hourlyTelemetry;
+  final Map<String, dynamic> hourlySteps;
 
-  const ActivityHeatmap({super.key, required this.hourlyTelemetry});
+  const ActivityHeatmap({super.key, required this.hourlySteps});
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +34,7 @@ class ActivityHeatmap extends StatelessWidget {
     List<BarChartGroupData> bars = [];
     for (int i = 0; i < 24; i++) {
       // Safely parse the steps for this hour
-      int steps = int.tryParse(hourlyTelemetry[i.toString()].toString()) ?? 0;
+      int steps = int.tryParse(hourlySteps[i.toString()].toString()) ?? 0;
 
       bars.add(
         BarChartGroupData(

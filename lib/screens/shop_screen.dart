@@ -48,7 +48,7 @@ class ShopScreen extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // XP BALANCE CARD
+              // CURRENCY BALANCE CARD
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(20),
@@ -79,7 +79,7 @@ class ShopScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          "${player.xp} XP",
+                          "${player.currency} CURRENCY",
                           style: const TextStyle(color: Colors.black87, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                         ),
                       ],
@@ -99,14 +99,14 @@ class ShopScreen extends StatelessWidget {
 
               const SizedBox(height: 4),
 
-              // SHOP MATRIX ITEMS LIST
+              // SHOP ITEMS LIST
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: shopItems.length,
                   itemBuilder: (context, index) {
                     final item = shopItems[index];
-                    final bool canAfford = player.xp >= item.cost;
+                    final bool canAfford = player.currency >= item.cost;
                     final Color itemThemeColor = item.color;
                     final bool isActive = player.activePowerUps.containsKey(item.id) &&
                         player.activePowerUps[item.id]!.isAfter(DateTime.now());
@@ -172,7 +172,7 @@ class ShopScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 10),
                                   Text(
-                                    "${item.cost} XP",
+                                    "${item.cost} CURRENCY",
                                     style: TextStyle(color: itemThemeColor, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
                                   ),
                                 ],

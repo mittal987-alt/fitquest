@@ -17,14 +17,23 @@ class ActivityScreen extends StatefulWidget {
 class _ActivityScreenState extends State<ActivityScreen> {
   final FirebaseService _service = FirebaseService();
   final NotificationService _notifications = NotificationService();
+  ActivityModel? _activityModel;
   bool isResting = false;
   int currentLap = 1;
   final int totalLaps = 3;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.player != null) {
+      _activityModel = ActivityModel.fromBmiAndGoal(widget.player?.bmi, widget.player?.fitnessGoal);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (widget.player != null) {
-      return _buildContent(widget.player!);
+      return _buildContent(widget.player!, _activityModel!);
     }
 
     // If player not provided, fetch it using StreamBuilder
@@ -42,23 +51,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
             body: Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
           );
         }
-        return _buildContent(snapshot.data!);
+        final player = snapshot.data!;
+        _activityModel ??= ActivityModel.fromBmiAndGoal(player.bmi, player.fitnessGoal);
+        return _buildContent(player, _activityModel!);
       },
     );
   }
 
-  Widget _buildContent(PlayerModel player) {
-    // Generate tier model based on user BMI and Fitness Goal for biometric scaling
-    // This uses the heuristic 'ML' model to adjust session intensity
-    final activityModel = ActivityModel.fromBmiAndGoal(player.bmi, player.fitnessGoal);
-
+  Widget _buildContent(PlayerModel player, ActivityModel activityModel) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          "FITNESS SESSION: ${activityModel.tier}",
+          "SESSION: ${activityModel.tier}",
           style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 16),
         ),
         centerTitle: true,
@@ -67,13 +74,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            _buildStatusHeader(player, activityModel),
+            _buildProgressIndicator(),
             const SizedBox(height: 32),
-            _buildLapCounter(),
+            _buildStatusHeader(player, activityModel),
             const SizedBox(height: 32),
             _buildTimerSection(activityModel),
             const SizedBox(height: 24),
-            _buildExerciseList(activityModel),
+            _buildInstructionList(activityModel),
             const SizedBox(height: 48),
             _buildActionButtons(player, activityModel),
           ],
@@ -82,46 +89,42 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  Widget _buildExerciseList(ActivityModel model) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "RECOMMENDED EXERCISES",
-            style: TextStyle(
-              color: Colors.blueAccent,
-              fontWeight: FontWeight.w900,
-              fontSize: 12,
-              letterSpacing: 1,
+  Widget _buildProgressIndicator() {
+    double progress = currentLap / totalLaps;
+    return Column(
+      children: [
+        Text("LAP $currentLap / $totalLaps", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        LinearProgressIndicator(value: progress, color: Colors.blueAccent, backgroundColor: Colors.white10),
+      ],
+    );
+  }
+
+  Widget _buildInstructionList(ActivityModel model) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: model.exerciseGuide.length,
+      itemBuilder: (context, index) {
+        final ex = model.exerciseGuide[index];
+        return Card(
+          color: Colors.white.withValues(alpha: 0.05),
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            leading: const Icon(Icons.check_circle_outline, color: Colors.blueAccent),
+            title: Text(
+              ex['name']!, 
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+            ),
+            subtitle: Text(
+              ex['tip']!, 
+              style: const TextStyle(color: Colors.white54, fontSize: 12)
             ),
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: model.recommendedExercises.map((ex) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.blueAccent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
-              ),
-              child: Text(
-                ex,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            )).toList(),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -131,7 +134,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       builder: (context, snapshot) {
         final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
         final powerUps = data["activePowerUps"] as Map<String, dynamic>? ?? {};
-        final expiry = powerUps["metabolic_recharge"] as Timestamp?;
+        final expiry = powerUps["energy_boost"] as Timestamp?;
         final bool isRecharging = expiry != null && expiry.toDate().isAfter(DateTime.now());
 
         return Container(
@@ -156,7 +159,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isRecharging ? "ENERGY BOOST ACTIVE" : "RECHARGE OFFLINE",
+                      isRecharging ? "ENERGY BOOST ACTIVE" : "BOOST INACTIVE",
                       style: TextStyle(
                         color: isRecharging ? Colors.blueAccent : Colors.orangeAccent,
                         fontWeight: FontWeight.w900,
@@ -167,8 +170,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     const SizedBox(height: 4),
                     Text(
                       isRecharging 
-                          ? "BOOST ACTIVE: 1.5x XP Multiplier + ${model.xpMultiplier}x Tier Scaling." 
-                          : "Complete session to activate the 1.5x Energy Boost bonus.",
+                          ? "BOOST ACTIVE: ${model.xpMultiplier}x XP Multiplier + ${model.raidDamageMultiplier}x Raid Bonus." 
+                          : "Complete session to activate the ${model.tier} Energy Boost bonus.",
                       style: const TextStyle(color: Colors.white70, fontSize: 11),
                     ),
                   ],
@@ -228,7 +231,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 );
                 setState(() {
                   isResting = false;
-                  if (currentLap < totalLaps) currentLap++;
                 });
               },
             )
@@ -255,11 +257,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
   Widget _buildActionButtons(PlayerModel player, ActivityModel model) {
     return Column(
       children: [
-        if (!isResting && currentLap <= totalLaps)
+        if (!isResting && currentLap < totalLaps)
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => setState(() => isResting = true),
+              onPressed: () => setState(() {
+                isResting = true;
+                currentLap++;
+              }),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
@@ -267,7 +272,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: const Text(
-                "START REST BREAK",
+                "NEXT SET",
                 style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
               ),
             ),
@@ -299,7 +304,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       // Clear previous expiry notification if re-upping the buff
       await _notifications.cancelNotification(101);
 
-      await _service.logWorkoutAndRecharge(
+      await _service.logWorkoutAndEnergyBoost(
         uid: player.uid,
         durationMinutes: model.durationMinutes, 
         tier: model.tier,
@@ -312,14 +317,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
       await _notifications.scheduleNotification(
         id: 101,
         title: "ENERGY BOOST EXPIRED",
-        body: "Your 1.5x XP multiplier has faded. Start a new session to reactivate.",
+        body: "Your ${model.tier} multiplier (${model.xpMultiplier}x XP / ${model.raidDamageMultiplier}x Damage) has faded. Start a new session to reactivate.",
         scheduledDate: DateTime.now().add(const Duration(minutes: 60)),
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("RECHARGE ACTIVATED. XP BOOST ACTIVE."),
+            content: Text("ENERGY BOOST ACTIVATED. XP GAINS INCREASED."),
             backgroundColor: Colors.blueAccent,
           ),
         );

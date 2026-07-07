@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../services/firebase_service.dart';
 
-class RechargeBadge extends StatelessWidget {
-  const RechargeBadge({super.key});
+class EnergyBoostBadge extends StatelessWidget {
+  const EnergyBoostBadge({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -20,10 +20,10 @@ class RechargeBadge extends StatelessWidget {
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
         final powerUps = data["activePowerUps"] as Map<String, dynamic>? ?? {};
-        final expiry = powerUps["metabolic_recharge"] as Timestamp?;
-        final bool isRecharging = expiry != null && expiry.toDate().isAfter(DateTime.now());
+        final expiry = powerUps["energy_boost"] as Timestamp?;
+        final bool isEnergyBoostActive = expiry != null && expiry.toDate().isAfter(DateTime.now());
 
-        if (!isRecharging) return const SizedBox.shrink();
+        if (!isEnergyBoostActive) return const SizedBox.shrink();
 
         return Container(
           margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
@@ -47,7 +47,7 @@ class RechargeBadge extends StatelessWidget {
               Icon(Icons.bolt_rounded, color: Colors.white, size: 14),
               SizedBox(width: 4),
               Text(
-                "RECHARGE",
+                "ENERGY BOOST",
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 10,

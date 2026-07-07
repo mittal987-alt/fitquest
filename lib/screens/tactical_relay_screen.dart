@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
-import '../controller/relay_controller.dart';
-import '../models/relay_model.dart';
+import '../controller/tactical_relay_controller.dart';
+import '../models/tactical_relay_model.dart';
 import '../services/firebase_service.dart';
 
-class RelayScreen extends StatefulWidget {
+class TacticalRelayScreen extends StatefulWidget {
   final String teamId;
   final String teamName;
 
-  const RelayScreen({
+  const TacticalRelayScreen({
     super.key,
     required this.teamId,
     required this.teamName,
   });
 
   @override
-  State<RelayScreen> createState() => _RelayScreenState();
+  State<TacticalRelayScreen> createState() => _TacticalRelayScreenState();
 }
 
-class _RelayScreenState extends State<RelayScreen> {
-  final RelayController _relayController = RelayController();
+class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
+  final TacticalRelayController _challengeController = TacticalRelayController();
   final FirebaseService _firebaseService = FirebaseService();
 
   @override
@@ -29,7 +29,7 @@ class _RelayScreenState extends State<RelayScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          "${widget.teamName.toUpperCase()} STEP RELAY",
+          "${widget.teamName.toUpperCase()} TACTICAL RELAY",
           style: const TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
@@ -40,26 +40,26 @@ class _RelayScreenState extends State<RelayScreen> {
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
-      body: StreamBuilder<RelayModel?>(
-        stream: _relayController.getTeamRelay(widget.teamId),
+      body: StreamBuilder<TacticalRelayModel?>(
+        stream: _challengeController.getTeamRelay(widget.teamId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
           }
 
-          final relay = snapshot.data;
+          final challenge = snapshot.data;
 
-          if (relay == null || !relay.isActive) {
-            return _buildNoActiveRelay();
+          if (challenge == null || !challenge.isActive) {
+            return _buildNoActiveChallenge();
           }
 
-          return _buildActiveRelay(relay);
+          return _buildActiveChallenge(challenge);
         },
       ),
     );
   }
 
-  Widget _buildNoActiveRelay() {
+  Widget _buildNoActiveChallenge() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -67,7 +67,7 @@ class _RelayScreenState extends State<RelayScreen> {
           const Icon(Icons.sync_alt_rounded, size: 80, color: Colors.black12),
           const SizedBox(height: 24),
           const Text(
-            "NO ACTIVE STEP RELAY",
+            "NO ACTIVE TACTICAL RELAY",
             style: TextStyle(
               fontWeight: FontWeight.w900,
               fontSize: 18,
@@ -79,14 +79,14 @@ class _RelayScreenState extends State<RelayScreen> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              "Start a relay to coordinate step goals with your team and earn massive XP bonuses.",
+              "Start a relay to coordinate step goals with your team and earn massive XP & Credit rewards.",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black45, fontSize: 13, height: 1.5),
             ),
           ),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: () => _showStartRelayDialog(),
+            onPressed: () => _showStartChallengeDialog(),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blueAccent,
               foregroundColor: Colors.white,
@@ -96,7 +96,7 @@ class _RelayScreenState extends State<RelayScreen> {
             ),
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text(
-              "START TEAM RELAY",
+              "START TACTICAL RELAY",
               style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
             ),
           ),
@@ -105,9 +105,9 @@ class _RelayScreenState extends State<RelayScreen> {
     );
   }
 
-  Widget _buildActiveRelay(RelayModel relay) {
+  Widget _buildActiveChallenge(TacticalRelayModel challenge) {
     final currentUid = _firebaseService.auth.currentUser!.uid;
-    final bool isMyTurn = relay.currentOperatorId == currentUid;
+    final bool isMyTurn = challenge.currentPlayerId == currentUid;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -137,12 +137,12 @@ class _RelayScreenState extends State<RelayScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "CURRENT PLAYER",
+                          "CURRENT OPERATOR",
                           style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          isMyTurn ? "YOU (ACTIVE)" : relay.currentOperatorName.toUpperCase(),
+                          isMyTurn ? "YOU (ACTIVE)" : challenge.currentPlayerName.toUpperCase(),
                           style: TextStyle(
                             color: isMyTurn ? Colors.blueAccent : Colors.black87,
                             fontSize: 20,
@@ -151,7 +151,7 @@ class _RelayScreenState extends State<RelayScreen> {
                         ),
                       ],
                     ),
-                    const Icon(Icons.sensors_rounded, color: Colors.blueAccent, size: 32),
+                    const Icon(Icons.fitness_center_rounded, color: Colors.blueAccent, size: 32),
                   ],
                 ),
                 const SizedBox(height: 32),
@@ -162,7 +162,7 @@ class _RelayScreenState extends State<RelayScreen> {
                       width: 200,
                       height: 200,
                       child: CircularProgressIndicator(
-                        value: relay.progress,
+                        value: challenge.progress,
                         strokeWidth: 12,
                         backgroundColor: Colors.black.withValues(alpha: 0.05),
                         color: Colors.blueAccent,
@@ -172,11 +172,11 @@ class _RelayScreenState extends State<RelayScreen> {
                     Column(
                       children: [
                         Text(
-                          "${relay.currentSteps}",
+                          "${challenge.currentSteps}",
                           style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: Colors.black87),
                         ),
                         Text(
-                          "/ ${relay.targetSteps}",
+                          "/ ${challenge.targetSteps}",
                           style: const TextStyle(fontSize: 16, color: Colors.black38, fontWeight: FontWeight.bold),
                         ),
                         const Text(
@@ -190,7 +190,7 @@ class _RelayScreenState extends State<RelayScreen> {
                 const SizedBox(height: 32),
                 if (isMyTurn) ...[
                   const Text(
-                    "You are the active player in the relay. Your steps are currently contributing to the team's progress.",
+                    "You are the active operator in the relay. Your steps are currently contributing to the team's progress.",
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.black54, fontSize: 13, height: 1.4),
                   ),
@@ -198,8 +198,8 @@ class _RelayScreenState extends State<RelayScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: relay.currentSteps >= relay.targetSteps
-                          ? () => _relayController.passRelay(widget.teamId)
+                      onPressed: challenge.currentSteps >= challenge.targetSteps
+                          ? () => _challengeController.passRelayToken(widget.teamId)
                           : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueAccent,
@@ -212,14 +212,14 @@ class _RelayScreenState extends State<RelayScreen> {
                       ),
                       icon: const Icon(Icons.send_rounded),
                       label: const Text(
-                        "PASS TO NEXT PLAYER",
+                        "PASS RELAY TOKEN",
                         style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
                       ),
                     ),
                   ),
                 ] else ...[
                   Text(
-                    "WAITING FOR ${relay.currentOperatorName.toUpperCase()} TO FINISH THEIR TURN.",
+                    "WAITING FOR ${challenge.currentPlayerName.toUpperCase()} TO FINISH THEIR TURN.",
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                   ),
@@ -229,83 +229,101 @@ class _RelayScreenState extends State<RelayScreen> {
           ),
           const SizedBox(height: 32),
           const Text(
-            "RELAY ORDER",
+            "RELAY SEQUENCE",
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1),
           ),
           const SizedBox(height: 16),
-          // In a real app, we'd fetch the user names for the sequence
-          ...relay.sequence.asMap().entries.map((entry) {
-            final index = entry.key;
-            final operatorId = entry.value;
-            final bool isPast = index < relay.sequence.indexOf(relay.currentOperatorId);
-            final bool isCurrent = operatorId == relay.currentOperatorId;
+          FutureBuilder<List<String>>(
+            future: _fetchSequenceNames(challenge.sequence),
+            builder: (context, nameSnapshot) {
+              final names = nameSnapshot.data ?? List.generate(challenge.sequence.length, (i) => "OPERATOR ${i + 1}");
+              
+              return Column(
+                children: challenge.sequence.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final playerId = entry.value;
+                  final bool isPast = index < challenge.sequence.indexOf(challenge.currentPlayerId);
+                  final bool isCurrent = playerId == challenge.currentPlayerId;
+                  final String displayName = names[index];
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isCurrent ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isCurrent ? Colors.blueAccent.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isPast ? Colors.greenAccent.withValues(alpha: 0.1) : (isCurrent ? Colors.blueAccent : Colors.black.withValues(alpha: 0.05)),
-                      shape: BoxShape.circle,
+                      color: isCurrent ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isCurrent ? Colors.blueAccent.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05),
+                      ),
                     ),
-                    child: Center(
-                      child: isPast
-                          ? const Icon(Icons.check, color: Colors.green, size: 16)
-                          : Text(
-                              "${index + 1}",
-                              style: TextStyle(
-                                color: isCurrent ? Colors.white : Colors.black38,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: isPast ? Colors.greenAccent.withValues(alpha: 0.1) : (isCurrent ? Colors.blueAccent : Colors.black.withValues(alpha: 0.05)),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: isPast
+                                ? const Icon(Icons.check, color: Colors.green, size: 16)
+                                : Text(
+                                    "${index + 1}",
+                                    style: TextStyle(
+                                      color: isCurrent ? Colors.white : Colors.black38,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          playerId == currentUid ? "YOU" : displayName.toUpperCase(),
+                          style: TextStyle(
+                            fontWeight: isCurrent ? FontWeight.w900 : FontWeight.bold,
+                            color: isCurrent ? Colors.black87 : Colors.black38,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (isCurrent)
+                          const Icon(Icons.bolt_rounded, color: Colors.amber, size: 16),
+                        if (isPast)
+                          const Text(
+                            "COMPLETE",
+                            style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                          ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    isMyTurn ? "YOU" : "TEAM MEMBER",
-                    style: TextStyle(
-                      fontWeight: isCurrent ? FontWeight.w900 : FontWeight.bold,
-                      color: isCurrent ? Colors.black87 : Colors.black38,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (isCurrent)
-                    const Icon(Icons.bolt_rounded, color: Colors.amber, size: 16),
-                  if (isPast)
-                    const Text(
-                      "COMPLETE",
-                      style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                    ),
-                ],
-              ),
-            );
-          }),
+                  );
+                }).toList(),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
-  void _showStartRelayDialog() {
+  Future<List<String>> _fetchSequenceNames(List<String> uids) async {
+    List<String> names = [];
+    for (String uid in uids) {
+      final player = await _firebaseService.getPlayer(uid);
+      names.add(player?.name ?? "OPERATOR");
+    }
+    return names;
+  }
+
+  void _showStartChallengeDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text("START TEAM RELAY", style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text("START TACTICAL RELAY", style: TextStyle(fontWeight: FontWeight.w900)),
         content: const Text(
-          "This will start a multi-stage relay. Each player must complete their step goal before passing the turn to the next team member.",
+          "This will start a multi-stage relay. Each operator must complete their step goal before passing the relay token to the next team member.",
           style: TextStyle(color: Colors.black54),
         ),
         actions: [
@@ -340,16 +358,16 @@ class _RelayScreenState extends State<RelayScreen> {
 
                 final firstPlayer = await _firebaseService.getPlayer(currentUid);
                 
-                await _relayController.startRelay(
+                await _challengeController.startRelay(
                   teamId: widget.teamId,
                   sequence: sequence,
-                  targetPerOperator: 5000,
-                  operatorName: firstPlayer?.name ?? "Explorer",
+                  targetPerPlayer: 5000,
+                  playerName: firstPlayer?.name ?? "Operator",
                 );
                 
                 scaffoldMessenger.showSnackBar(
                   const SnackBar(
-                    content: Text("TEAM RELAY STARTED"),
+                    content: Text("TACTICAL RELAY STARTED"),
                     backgroundColor: Colors.blueAccent,
                   ),
                 );

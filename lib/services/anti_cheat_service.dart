@@ -7,7 +7,7 @@ import '../models/team_request_model.dart';
 
 /// TRACKING ENGINE
 /// Tracks geographical positions, monitors speed, and prevents cheating in real-time.
-class TelemetryTrackingService {
+class MovementTrackingService {
   final FirebaseService _firebaseService = FirebaseService();
   final AntiCheatService _antiCheat = AntiCheatService();
 
@@ -20,7 +20,7 @@ class TelemetryTrackingService {
   String operationalTrust = "TRUSTED";
 
   /// INITIALIZE BACKGROUND TRACKING
-  void startTrackingMatrix(String uid) {
+  void startTracking(String uid) {
     const LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
       distanceFilter: 5, // Triggers stream update every 5 meters moved
@@ -28,7 +28,7 @@ class TelemetryTrackingService {
 
     _positionStreamSub = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
           (Position position) async {
-        await _processTelemetryMetrics(uid, position);
+        await _processMovementMetrics(uid, position);
       },
       onError: (error) {
         debugPrint("CRITICAL TRACKING ERROR: $error");
@@ -42,7 +42,7 @@ class TelemetryTrackingService {
   }
 
   /// CORE POSITION PROCESSOR AND ANTI-CHEAT FILTER
-  Future<void> _processTelemetryMetrics(String uid, Position currentPosition) async {
+  Future<void> _processMovementMetrics(String uid, Position currentPosition) async {
     final DateTime now = DateTime.now();
 
     // 1. Calculate speeds and distances if a previous position cache exists
@@ -97,7 +97,7 @@ class TelemetryTrackingService {
   }
 
   /// SEND JOIN REQUEST (RESTRICTED TO ONE ACTIVE REQUEST)
-  Future<bool> dispatchSquadJoinRequest(BuildContext context, TeamRequestModel request) async {
+  Future<bool> dispatchTeamJoinRequest(BuildContext context, TeamRequestModel request) async {
     try {
       // Search the database for existing pending requests for this player
       final activeRequestsQuery = await FirebaseFirestore.instance

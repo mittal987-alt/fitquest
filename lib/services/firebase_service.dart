@@ -26,7 +26,7 @@ class FirebaseService {
   // =========================
   String getRankTitle(int level) {
     if (level < 5) return "RECRUIT";
-    if (level < 15) return "OPERATOR";
+    if (level < 15) return "PLAYER";
     if (level < 30) return "VETERAN";
     if (level < 50) return "COMMANDER";
     return "APEX LEGEND";
@@ -61,8 +61,8 @@ class FirebaseService {
       endurance: 10,
       currentStamina: 100,
       maxStamina: 100,
-      rechargeRaidMultiplier: 1.0,
-      rechargeXpMultiplier: 1.0,
+      energyBoostRaidMultiplier: 1.0,
+      energyBoostXpMultiplier: 1.0,
     );
 
     await firestore.collection("players").doc(uid).set(player.toMap());
@@ -103,15 +103,15 @@ class FirebaseService {
       "fitnessGoal": fitnessGoal,
       "fitnessTier": plan.tier,
       "restInterval": plan.restIntervalSeconds,
-      "xpMultiplier": plan.xpMultiplier,
-      "rechargeRaidMultiplier": plan.raidDamageMultiplier,
+      "energyBoostXpMultiplier": plan.xpMultiplier,
+      "energyBoostRaidMultiplier": plan.raidDamageMultiplier,
       "lastUpdated": FieldValue.serverTimestamp(),
     });
     debugPrint("ML FITNESS PROFILE UPDATED: ${plan.tier} | Goal: $fitnessGoal");
   }
 
-  /// Logs the workout, applies XP bonus based on tier, and activates the recharge buff
-  Future<void> logWorkoutAndRecharge({
+  /// Logs the workout, applies XP bonus based on tier, and activates the energy boost buff
+  Future<void> logWorkoutAndEnergyBoost({
     required String uid,
     required int durationMinutes,
     required String tier,
@@ -130,14 +130,14 @@ class FirebaseService {
       final player = PlayerModel.fromMap(snap.data()!);
       String todayKey = DateTime.now().toIso8601String().split('T')[0];
 
-      // Update XP, Log Activity, and set the 60-minute Metabolic Recharge buff
+      // Update XP, Log Activity, and set the 60-minute Energy Boost buff
       final now = DateTime.now();
       transaction.update(playerRef, {
         "xp": FieldValue.increment(bonusXp),
-        "rechargeRaidMultiplier": raidMultiplier,
-        "rechargeXpMultiplier": xpMultiplier,
+        "energyBoostRaidMultiplier": raidMultiplier,
+        "energyBoostXpMultiplier": xpMultiplier,
         "lastActivityTimestamp": FieldValue.serverTimestamp(),
-        "activePowerUps.metabolic_recharge": Timestamp.fromDate(
+        "activePowerUps.energy_boost": Timestamp.fromDate(
             now.add(const Duration(minutes: 60))
         ),
         "dailyHistory.$todayKey.xpGained": FieldValue.increment(bonusXp),
@@ -149,7 +149,7 @@ class FirebaseService {
       });
     });
 
-    debugPrint("WORKOUT LOGGED: +$bonusXp XP (Mult: ${xpMultiplier}x). Drills: $exercises. Recharge Active.");
+    debugPrint("WORKOUT LOGGED: +$bonusXp XP (Mult: ${xpMultiplier}x). Drills: $exercises. Energy Boost Active.");
   }
   Future<void> ensurePlayerProfileExists(String uid, String email, String name) async {
     final playerRef = firestore.collection("players").doc(uid);
@@ -162,14 +162,14 @@ class FirebaseService {
     }
   }
 
-  /// Checks if the user is currently under the 60-minute Metabolic Recharge buff
-  Future<bool> isRechargeActive(String uid) async {
+  /// Checks if the user is currently under the 60-minute Energy Boost buff
+  Future<bool> isEnergyBoostActive(String uid) async {
     final snap = await firestore.collection("players").doc(uid).get();
     if (!snap.exists) return false;
 
     final data = snap.data() as Map<String, dynamic>;
     final powerUps = data["activePowerUps"] as Map<String, dynamic>? ?? {};
-    final expiry = powerUps["metabolic_recharge"] as Timestamp?;
+    final expiry = powerUps["energy_boost"] as Timestamp?;
 
     if (expiry == null) return false;
     return expiry.toDate().isAfter(DateTime.now());
@@ -309,11 +309,11 @@ class FirebaseService {
         }
       }
 
-      // Apply Metabolic Recharge if active
-      if (player.activePowerUps.containsKey("metabolic_recharge")) {
-        DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+      // Apply Energy Boost if active
+      if (player.activePowerUps.containsKey("energy_boost")) {
+        DateTime expiry = player.activePowerUps["energy_boost"]!;
         if (expiry.isAfter(DateTime.now())) {
-          finalXpToAdd = (finalXpToAdd * player.rechargeXpMultiplier).round();
+          finalXpToAdd = (finalXpToAdd * player.energyBoostXpMultiplier).round();
         }
       }
 
@@ -862,16 +862,16 @@ class FirebaseService {
       double gearMult = player.getModifier('raid_dmg_mult', allGear);
       double strongholdBonus = (teamSnap.data()?["strongholdActive"] == true) ? 1.5 : 1.0;
       
-      // BIOMETRIC RECHARGE BONUS
-      double rechargeMult = 1.0;
-      if (player.activePowerUps.containsKey("metabolic_recharge")) {
-        DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+      // ENERGY BOOST BONUS
+      double energyBoostMult = 1.0;
+      if (player.activePowerUps.containsKey("energy_boost")) {
+        DateTime expiry = player.activePowerUps["energy_boost"]!;
         if (expiry.isAfter(DateTime.now())) {
-          rechargeMult = player.rechargeRaidMultiplier;
+          energyBoostMult = player.energyBoostRaidMultiplier;
         }
       }
 
-      double totalDmg = baseDmg * gearMult * strongholdBonus * rechargeMult;
+      double totalDmg = baseDmg * gearMult * strongholdBonus * energyBoostMult;
 
       transaction.update(playerRef, {
         "currentStamina": player.currentStamina - staminaCost,
@@ -1005,10 +1005,10 @@ class FirebaseService {
       final snapshot = await transaction.get(docRef);
       if (!snapshot.exists) return;
 
-      int currentXp = snapshot.data()?["xp"] ?? 0;
+      int currentCurrency = snapshot.data()?["currency"] ?? 0;
       Map<String, dynamic> activePowerUps = Map<String, dynamic>.from(snapshot.data()?["activePowerUps"] ?? {});
 
-      if (currentXp >= cost) {
+      if (currentCurrency >= cost) {
         DateTime baseTime = DateTime.now();
         if (activePowerUps.containsKey(powerUpId)) {
           Timestamp currentExpiryTs = activePowerUps[powerUpId] as Timestamp;
@@ -1022,7 +1022,7 @@ class FirebaseService {
         activePowerUps[powerUpId] = Timestamp.fromDate(expiryDate);
 
         transaction.update(docRef, {
-          "xp": currentXp - cost,
+          "currency": currentCurrency - cost,
           "activePowerUps": activePowerUps,
         });
       }
@@ -1042,13 +1042,13 @@ class FirebaseService {
       final snap = await transaction.get(docRef);
       if (!snap.exists) return;
 
-      int currentXp = snap.data()?["xp"] ?? 0;
+      int currentCurrency = snap.data()?["currency"] ?? 0;
       List<String> owned = List<String>.from(snap.data()?["ownedGear"] ?? []);
 
-      if (currentXp >= gear.price && !owned.contains(gear.id)) {
+      if (currentCurrency >= gear.price && !owned.contains(gear.id)) {
         owned.add(gear.id);
         transaction.update(docRef, {
-          "xp": currentXp - gear.price,
+          "currency": currentCurrency - gear.price,
           "ownedGear": owned,
         });
       }
@@ -1192,8 +1192,15 @@ class FirebaseService {
     }
   }
 
+  Future<void> updateCurrency(String uid, int amount) async {
+    await firestore.collection("players").doc(uid).update({
+      "currency": FieldValue.increment(amount),
+    });
+    debugPrint("CURRENCY UPDATED FOR $uid: +$amount");
+  }
+
   // =========================
-  // TACTICAL PINGS & TELEMETRY
+  // MOVEMENT & STEPS
   // =========================
   Future<void> sendTacticalPing(String teamId, String sectorTileId, String message) async {
     await firestore.collection("teams").doc(teamId).collection("pings").add({
@@ -1208,7 +1215,7 @@ class FirebaseService {
     String hourKey = DateTime.now().hour.toString();
     final docRef = firestore.collection("players").doc(uid);
     await docRef.update({
-      "hourlyTelemetry.$hourKey": FieldValue.increment(steps),
+      "hourlySteps.$hourKey": FieldValue.increment(steps),
     });
   }
 

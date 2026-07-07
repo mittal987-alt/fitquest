@@ -69,7 +69,7 @@ class _MainNavigationState extends State<MainNavigation> {
           await firebaseService.ensurePlayerProfileExists(
             uid,
             firebaseService.auth.currentUser?.email ?? "unknown@fitquest.io",
-            "Operator ${uid.substring(0, 5)}",
+            "Player ${uid.substring(0, 5)}",
           );
           return;
         }

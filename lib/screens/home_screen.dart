@@ -11,10 +11,11 @@ import '../models/global_event_model.dart';
 import 'leaderboard_screen.dart';
 import 'map_screen.dart';
 import 'shop_screen.dart';
-import 'relay_screen.dart';
+import 'tactical_relay_screen.dart';
 import 'crafting_screen.dart';
+import '../models/tactical_relay_model.dart';
 import '../features/tactical/widgets/activity_heatmap.dart';
-import '../widgets/recharge_badge.dart';
+import '../widgets/energy_boost_badge.dart';
 import '../models/activity_model.dart';
 
 import 'package:provider/provider.dart';
@@ -42,13 +43,9 @@ class _HomeScreenState extends State<HomeScreen> {
     "08": 800, "09": 1200, "10": 600, "12": 1500, "13": 400, "17": 2000, "18": 1500,
   };
 
-  bool _anomalyScanning = false;
-  double _anomalyScanProgress = 0.0;
-  final double _anomalyDistance = 342.0; 
-
-  bool _isMyRelayShiftActive = true;
-  int _relayStepsRemaining = 3500;
-  String _activeRelayPartner = "Operator_Alpha";
+  bool _scanningNearbyItems = false;
+  double _itemScanProgress = 0.0;
+  final double _itemDistance = 342.0; 
 
   @override
   void initState() {
@@ -84,13 +81,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final player = await firebaseService.getPlayer(currentUid);
       
       if (mounted) {
-        // Determine Activity Model for extra Raid Multiplier if Recharge is Active
+        // Determine Activity Model for extra Raid Multiplier if Energy Boost is Active
         double raidMult = 1.0;
-        if (player != null && player.activePowerUps.containsKey("metabolic_recharge")) {
+        if (player != null && player.activePowerUps.containsKey("energy_boost")) {
           final double meters = (player.heightCm ?? 170.0) / 100;
           final double bmi = (player.weightKg ?? 70.0) / (meters * meters);
           final activityModel = ActivityModel.fromBmiAndGoal(bmi, player.fitnessGoal);
-          DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+          DateTime expiry = player.activePowerUps["energy_boost"]!;
           if (expiry.isAfter(DateTime.now())) {
             raidMult = activityModel.raidDamageMultiplier;
           }
@@ -99,19 +96,19 @@ class _HomeScreenState extends State<HomeScreen> {
         final double finalDamage = pulse.raidDamage * raidMult;
 
         setState(() {
-          // Update Anomaly Scanning
-          if (_anomalyScanning) {
-            _anomalyScanProgress += pulse.scanProgress;
-            if (_anomalyScanProgress >= 1.0) {
-              _anomalyScanProgress = 0.0;
-              _anomalyScanning = false;
-              _showLootNotification("Anomaly Decrypted: Found Rare Data Cache!");
+          // Update Item Scanning
+          if (_scanningNearbyItems) {
+            _itemScanProgress += pulse.scanProgress;
+            if (_itemScanProgress >= 1.0) {
+              _itemScanProgress = 0.0;
+              _scanningNearbyItems = false;
+              _showLootNotification("Item Found: Rare Supply Cache!");
             }
           }
 
           // Visual feedback for material discovery
           if (pulse.discoveredMaterial != null) {
-            _showLootNotification("SCANNED: Found ${pulse.discoveredMaterial}");
+            _showLootNotification("FOUND: ${pulse.discoveredMaterial}");
           }
         });
 
@@ -173,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black87),
         actions: const [
-          RechargeBadge(),
+          EnergyBoostBadge(),
         ],
       ),
       body: StreamBuilder<PlayerModel?>(
@@ -189,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final int liveXp = player?.xp ?? 0;
           final int streak = player?.streakCount ?? 0;
 
-          // AUGMENTATION CHECK
+          // POWER-UP CHECK
           bool hasExpBoost = player?.activePowerUps.containsKey("boost") ?? false;
           if (hasExpBoost) {
             DateTime? expiry = player?.activePowerUps["boost"];
@@ -198,15 +195,15 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           }
 
-          // BIO-INDEX CALCULATIONS
+          // FITNESS CALCULATIONS
           double calculatedCalories = liveSteps * 0.04;
           double calculatedDistance = liveSteps * 0.00075;
           double dailyGoalTarget = player?.dailyStepTarget.toDouble() ?? 10000;
           double goalProgress = (liveSteps / dailyGoalTarget).clamp(0.0, 1.0);
 
-          // Telemetry Health Score (Simplified BIO-INDEX)
+          // Movement Health Score
           int healthScore = (goalProgress * 100).toInt();
-          String bioStatus = pedometerService.getFitnessLevel(liveSteps);
+          String fitnessStatus = pedometerService.getFitnessLevel(liveSteps);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -301,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
 
-                // 2. OPERATOR STATUS
+                // 2. PLAYER STATUS
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -324,7 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "PLAYER STATUS: ACTIVE",
+                              "STATUS: ACTIVE",
                               style: TextStyle(color: Colors.cyan.shade700, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
                             ),
                             const SizedBox(height: 6),
@@ -410,20 +407,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // 4. SOLO FEATURE: "GHOST STRIDER" TELEMETRY TRIAL
+                // 4. SOLO FEATURE: "GHOST CHALLENGE"
                 _buildGhostStriderCard(player, liveSteps),
                 const SizedBox(height: 16),
 
-                // 5. SOLO FEATURE: "GRID ANOMALIES" RADAR & CRAFTING INVENTORY
-                _buildGridAnomalyRadar(),
+                // 5. SOLO FEATURE: "NEARBY ITEMS" RADAR
+                _buildNearbyItemsRadar(),
                 const SizedBox(height: 20),
 
-                // 6. TEAM FEATURE: "COLOSSUS GRID-BREAKER" CO-OP RAID
+                // 6. TEAM FEATURE: "TEAM BOSS CHALLENGE"
                 _buildColossusRaidDashboard(),
                 const SizedBox(height: 20),
 
-                // 7. TEAM FEATURE: "TELEMETRY RELAY" SEQUENCE CHALLENGE
-                _buildTelemetryRelayCard(),
+                // 7. TEAM FEATURE: "TACTICAL STEP RELAY"
+                _buildTeamTacticalRelayCard(player),
                 const SizedBox(height: 20),
 
                 // 8. DAILY STEP GOAL PROGRESS
@@ -725,10 +722,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text("FITNESS STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                const Text("MOVEMENT STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                                 const SizedBox(height: 4),
                                 Text(
-                                  bioStatus.toUpperCase(),
+                                  fitnessStatus.toUpperCase(),
                                   style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                                 ),
                               ],
@@ -740,9 +737,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildBioMetric("ACTIVITY", "OPTIMAL", Icons.favorite_rounded, Colors.redAccent),
+                          _buildBioMetric("STATUS", "OPTIMAL", Icons.favorite_rounded, Colors.redAccent),
                           _buildBioMetric("SYNC", "100%", Icons.sync_rounded, Colors.cyan),
-                          _buildBioMetric("TRUST", "${player?.trustScore ?? 100}%", Icons.shield_rounded, Colors.greenAccent),
+                          _buildBioMetric("TEAM SPIRIT", "${player?.trustScore ?? 100}%", Icons.shield_rounded, Colors.greenAccent),
                         ],
                       ),
                     ],
@@ -786,8 +783,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // UI COMPONENT: GHOST CHALLENGE DATA
   Widget _buildGhostStriderCard(PlayerModel? player, int liveSteps) {
-    final Map<String, int> baseline = (player?.hourlyTelemetry != null && player!.hourlyTelemetry.isNotEmpty) 
-        ? player.hourlyTelemetry 
+    final Map<String, int> baseline = (player?.hourlySteps != null && player!.hourlySteps.isNotEmpty) 
+        ? player.hourlySteps
         : _ghostBaselineMap;
 
     return Container(
@@ -906,7 +903,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // UI COMPONENT: NEARBY ITEMS RADAR
-  Widget _buildGridAnomalyRadar() {
+  Widget _buildNearbyItemsRadar() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -931,15 +928,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               IconButton(
-                icon: Icon(Icons.sync, size: 18, color: _anomalyScanning ? Colors.cyan : Colors.grey),
+                icon: Icon(Icons.sync, size: 18, color: _scanningNearbyItems ? Colors.cyan : Colors.grey),
                 onPressed: () {
                   setState(() {
-                    _anomalyScanning = true;
+                    _scanningNearbyItems = true;
                   });
                   Future.delayed(const Duration(seconds: 2), () {
                     if (mounted) {
                       setState(() {
-                        _anomalyScanning = false;
+                        _scanningNearbyItems = false;
                       });
                     }
                   });
@@ -949,19 +946,19 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            _anomalyScanning 
-              ? "SCANNING FOR ITEMS: ${(_anomalyScanProgress * 100).toStringAsFixed(1)}%"
+            _scanningNearbyItems 
+              ? "SCANNING FOR ITEMS: ${(_itemScanProgress * 100).toStringAsFixed(1)}%"
               : "Scanning for items within 500 meters.",
             style: TextStyle(
-              color: _anomalyScanning ? Colors.cyan : Colors.black54, 
+              color: _scanningNearbyItems ? Colors.cyan : Colors.black54, 
               fontSize: 11,
-              fontWeight: _anomalyScanning ? FontWeight.bold : FontWeight.normal
+              fontWeight: _scanningNearbyItems ? FontWeight.bold : FontWeight.normal
             ),
           ),
-          if (_anomalyScanning) ...[
+          if (_scanningNearbyItems) ...[
             const SizedBox(height: 8),
             LinearProgressIndicator(
-              value: _anomalyScanProgress,
+              value: _itemScanProgress,
               minHeight: 4,
               backgroundColor: Colors.cyanAccent.withValues(alpha: 0.1),
               color: Colors.cyan,
@@ -989,7 +986,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "Located ${_anomalyDistance.toStringAsFixed(0)}m away",
+                        "Located ${_itemDistance.toStringAsFixed(0)}m away",
                         style: const TextStyle(fontSize: 11, color: Colors.black54),
                       ),
                     ],
@@ -1013,8 +1010,8 @@ class _HomeScreenState extends State<HomeScreen> {
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("CRAFTING LIST:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
-              Text("Combine Items in Shop Tab", style: TextStyle(fontSize: 9, color: Colors.black26)),
+              Text("INVENTORY:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
+              Text("Craft in Shop Tab", style: TextStyle(fontSize: 9, color: Colors.black26)),
             ],
           ),
           const SizedBox(height: 8),
@@ -1067,11 +1064,11 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.gavel_rounded, color: Colors.orangeAccent),
+                  const Icon(Icons.fitness_center_rounded, color: Colors.orangeAccent),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      "TEAM BOSS FIGHT",
+                      "TEAM BOSS CHALLENGE",
                       style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                     ),
                   ),
@@ -1109,57 +1106,126 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTelemetryRelayCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("TEAM STEP CHALLENGE", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
-          const SizedBox(height: 12),
-          const Text("YOUR REMAINING STEPS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
-          const SizedBox(height: 8),
-          Row(
+  Widget _buildTeamTacticalRelayCard(PlayerModel? player) {
+    return StreamBuilder<TacticalRelayModel?>(
+      stream: player?.teamId != null 
+          ? StepSyncService().challengeController.getTeamRelay(player!.teamId!)
+          : const Stream.empty(),
+      builder: (context, snapshot) {
+        final challenge = snapshot.data;
+        final bool isActive = challenge?.isActive ?? false;
+        final bool isMyTurn = challenge?.currentPlayerId == firebaseService.auth.currentUser?.uid;
+
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isMyTurn ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.05)
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // FIXED: Expanded prevents Row overflow
-              Expanded(
-                child: Text(
-                  "$_relayStepsRemaining Steps",
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final String currentUid = firebaseService.auth.currentUser?.uid ?? "";
-                  firebaseService.getPlayer(currentUid).then((player) {
-                    if (player != null && player.teamId != null) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RelayScreen(
-                            teamId: player.teamId!,
-                            teamName: player.team,
-                          ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("TACTICAL STEP RELAY", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                  if (isActive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isMyTurn ? Colors.blueAccent.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        isActive ? (isMyTurn ? "YOUR TURN" : "IN PROGRESS") : "INACTIVE",
+                        style: TextStyle(
+                          fontSize: 10, 
+                          fontWeight: FontWeight.bold, 
+                          color: isMyTurn ? Colors.blueAccent : Colors.black38
                         ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("JOIN A TEAM TO ACCESS THIS CHALLENGE")),
-                      );
-                    }
-                  });
-                },
-                child: const Text("PASS STEPS"),
+                      ),
+                    ),
+                ],
               ),
+              const SizedBox(height: 12),
+              if (isActive) ...[
+                Text(
+                  isMyTurn ? "REMAINING STEPS" : "CURRENT OPERATOR",
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        isMyTurn ? "${challenge!.remainingSteps} Steps" : challenge!.currentPlayerName.toUpperCase(),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (player?.teamId != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TacticalRelayScreen(
+                                teamId: player!.teamId!,
+                                teamName: player.team,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isMyTurn ? Colors.blueAccent : Colors.black.withValues(alpha: 0.05),
+                        foregroundColor: isMyTurn ? Colors.white : Colors.black87,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text("VIEW RELAY"),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const Text("No active team relay. Coordinate with your team to begin.", 
+                  style: TextStyle(fontSize: 12, color: Colors.black45)
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      if (player?.teamId != null) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TacticalRelayScreen(
+                              teamId: player!.teamId!,
+                              teamName: player.team,
+                            ),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("JOIN A TEAM TO ACCESS THIS CHALLENGE")),
+                        );
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: const BorderSide(color: Colors.black12),
+                    ),
+                    child: const Text("OPEN RELAY COMM"),
+                  ),
+                ),
+              ],
             ],
           ),
-        ],
-      ),
+        );
+      }
     );
   }
   Widget _buildQuest({

@@ -10,7 +10,7 @@ import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
 import 'controller/raid_controller.dart';
-import 'controller/relay_controller.dart';
+import 'controller/tactical_relay_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +28,7 @@ void main() async {
         Provider<FirebaseService>(create: (_) => FirebaseService()),
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<NotificationService>.value(value: notificationService),
-        Provider<RelayController>(create: (_) => RelayController()),
+        Provider<TacticalRelayController>(create: (_) => TacticalRelayController()),
         ChangeNotifierProvider<RaidController>(create: (_) => RaidController()),
       ],
       child: const MyApp(),

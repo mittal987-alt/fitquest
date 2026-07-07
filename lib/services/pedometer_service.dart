@@ -70,7 +70,7 @@ class PedometerService {
   // Internal state caches
   int _lastKnownStepCount = 0;
   int _todayCumulativeSteps = 0;
-  final Map<int, int> _hourlyTelemetryBuffer = {};
+  final Map<int, int> _hourlyStepsBuffer = {};
   Timer? _hourlyAggregationTimer;
   Timer? _simulationTimer;
   StreamSubscription<StepCount>? _hardwareSubscription;
@@ -123,7 +123,7 @@ class PedometerService {
   /// Bootstraps tracking streams. Connects to device sensors or initializes 
   /// simulation routines in emulator scenarios.
   void startTracking({bool useSimulator = true, PlayerModel? playerContext}) {
-    _hourlyTelemetryBuffer.clear();
+    _hourlyStepsBuffer.clear();
     _startHourlyAggregationCycle();
 
     if (useSimulator) {
@@ -167,7 +167,7 @@ class PedometerService {
     _lastKnownStepCount = totalHardwareSteps;
   }
 
-  /// Sets up a system loop to parse accumulated telemetry at hour boundaries.
+  /// Sets up a system loop to parse accumulated steps at hour boundaries.
   void _startHourlyAggregationCycle() {
     _hourlyAggregationTimer?.cancel();
     
@@ -177,8 +177,8 @@ class PedometerService {
       final now = DateTime.now();
       final currentHour = now.hour;
 
-      if (_hourlyTelemetryBuffer.containsKey(currentHour)) {
-        final int hourDelta = _hourlyTelemetryBuffer[currentHour] ?? 0;
+      if (_hourlyStepsBuffer.containsKey(currentHour)) {
+        final int hourDelta = _hourlyStepsBuffer[currentHour] ?? 0;
         if (hourDelta > 0) {
           final segment = StepSegment(
             hour: currentHour,
@@ -187,7 +187,7 @@ class PedometerService {
           );
           _hourlySegmentController.add(segment);
           // Flush localized tracking segment upon emission
-          _hourlyTelemetryBuffer[currentHour] = 0;
+          _hourlyStepsBuffer[currentHour] = 0;
         }
       }
     });
@@ -205,14 +205,14 @@ class PedometerService {
     }
 
     final currentHour = DateTime.now().hour;
-    _hourlyTelemetryBuffer[currentHour] = (_hourlyTelemetryBuffer[currentHour] ?? 0) + stepsCount;
+    _hourlyStepsBuffer[currentHour] = (_hourlyStepsBuffer[currentHour] ?? 0) + stepsCount;
   }
 
   void _emitTacticalPulse(int steps, PlayerModel player) {
-    // Determine Biometric Multiplier
+    // Determine Energy Boost Multiplier
     double bioDamageMult = 1.0;
-    if (player.activePowerUps.containsKey("metabolic_recharge")) {
-      DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+    if (player.activePowerUps.containsKey("energy_boost")) {
+      DateTime expiry = player.activePowerUps["energy_boost"]!;
       if (expiry.isAfter(DateTime.now())) {
         // High-end multiplier for Elite users in Flow
         bioDamageMult = 1.5;
@@ -243,14 +243,14 @@ class PedometerService {
     ));
   }
 
-  /// Translates absolute, raw historical telemetry configurations to 24-hour baseline distributions.
-  Map<String, int> compileGhostBaseline(Map<String, int> rawHourlyTelemetry) {
+  /// Translates absolute, raw historical step configurations to 24-hour baseline distributions.
+  Map<String, int> compileGhostBaseline(Map<String, int> rawHourlySteps) {
     final Map<String, int> normalDistributionCurve = {};
     
     // Fill up 24 hours of ghost profiles to avoid UI breaking curves
     for (int i = 0; i < 24; i++) {
       final String hourKey = i.toString().padLeft(2, '0');
-      normalDistributionCurve[hourKey] = rawHourlyTelemetry[hourKey] ?? _generateSimulatedGhostHour(i);
+      normalDistributionCurve[hourKey] = rawHourlySteps[hourKey] ?? _generateSimulatedGhostHour(i);
     }
     
     return normalDistributionCurve;
@@ -306,6 +306,6 @@ class PedometerService {
   void reset() {
     _todayCumulativeSteps = 0;
     _lastKnownStepCount = 0;
-    _hourlyTelemetryBuffer.clear();
+    _hourlyStepsBuffer.clear();
   }
 }

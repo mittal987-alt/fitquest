@@ -813,19 +813,19 @@ class _MapScreenState extends State<MapScreen> {
     // FLOW STATE BONUS: 4.5 to 7.0 km/h is the sweet spot
     double flowMultiplier = (speedKmh >= 4.5 && speedKmh <= 7.0) ? 1.5 : 1.0;
     
-    // BIOMETRIC RECHARGE BONUS
-    double rechargeMultiplier = 1.0;
-    if (player.activePowerUps.containsKey("metabolic_recharge")) {
-      DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+    // ENERGY BOOST BONUS
+    double energyBoostMultiplier = 1.0;
+    if (player.activePowerUps.containsKey("energy_boost")) {
+      DateTime expiry = player.activePowerUps["energy_boost"]!;
       if (expiry.isAfter(DateTime.now())) {
-        rechargeMultiplier = 1.5;
+        energyBoostMultiplier = 1.5;
       }
     }
 
     double gearMultiplier = player.getModifier('xp_mult', allGear);
     double stepXpMultiplier = player.getModifier('step_xp_mult', allGear);
     int baseXP = 15;
-    int finalXP = (baseXP * flowMultiplier * rechargeMultiplier * gearMultiplier * stepXpMultiplier).toInt();
+    int finalXP = (baseXP * flowMultiplier * energyBoostMultiplier * gearMultiplier * stepXpMultiplier).toInt();
 
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: finalXP);
 

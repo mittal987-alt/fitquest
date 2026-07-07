@@ -1,19 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class RelayModel {
+class TacticalRelayModel {
   final String teamId;
-  final String currentOperatorId;
-  final String currentOperatorName;
+  final String currentPlayerId;
+  final String currentPlayerName;
   final int targetSteps;
   final int currentSteps;
   final bool isActive;
   final DateTime? startTime;
   final List<String> sequence; // List of UIDs in order
 
-  RelayModel({
+  TacticalRelayModel({
     required this.teamId,
-    required this.currentOperatorId,
-    required this.currentOperatorName,
+    required this.currentPlayerId,
+    required this.currentPlayerName,
     required this.targetSteps,
     required this.currentSteps,
     required this.isActive,
@@ -21,11 +21,11 @@ class RelayModel {
     this.sequence = const [],
   });
 
-  factory RelayModel.fromMap(Map<String, dynamic> map) {
-    return RelayModel(
+  factory TacticalRelayModel.fromMap(Map<String, dynamic> map) {
+    return TacticalRelayModel(
       teamId: map['teamId'] ?? '',
-      currentOperatorId: map['currentOperatorId'] ?? '',
-      currentOperatorName: map['currentOperatorName'] ?? 'Unknown',
+      currentPlayerId: map['currentPlayerId'] ?? map['currentOperatorId'] ?? '',
+      currentPlayerName: map['currentPlayerName'] ?? map['currentOperatorName'] ?? 'Unknown',
       targetSteps: map['targetSteps'] ?? 5000,
       currentSteps: map['currentSteps'] ?? 0,
       isActive: map['isActive'] ?? false,
@@ -37,8 +37,8 @@ class RelayModel {
   Map<String, dynamic> toMap() {
     return {
       'teamId': teamId,
-      'currentOperatorId': currentOperatorId,
-      'currentOperatorName': currentOperatorName,
+      'currentPlayerId': currentPlayerId,
+      'currentPlayerName': currentPlayerName,
       'targetSteps': targetSteps,
       'currentSteps': currentSteps,
       'isActive': isActive,

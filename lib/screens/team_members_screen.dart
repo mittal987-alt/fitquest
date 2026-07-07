@@ -190,8 +190,8 @@ class TeamMembersScreen extends StatelessWidget {
                                     ),
                                     const SizedBox(width: 6),
                                   ],
-                                  if (player.activePowerUps.containsKey('metabolic_recharge') &&
-                                      player.activePowerUps['metabolic_recharge']!.isAfter(DateTime.now()))
+                                  if (player.activePowerUps.containsKey('energy_boost') &&
+                                      player.activePowerUps['energy_boost']!.isAfter(DateTime.now()))
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
@@ -204,7 +204,7 @@ class TeamMembersScreen extends StatelessWidget {
                                           Icon(Icons.bolt, color: Colors.greenAccent, size: 10),
                                           SizedBox(width: 2),
                                           Text(
-                                            "RECHARGING",
+                                            "ENERGIZED",
                                             style: TextStyle(color: Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.w900),
                                           ),
                                         ],
@@ -329,10 +329,10 @@ class TeamMembersScreen extends StatelessWidget {
                                   }).toList(),
                                 ),
                               ],
-                              if (player.hourlyTelemetry.isNotEmpty) ...[
+                              if (player.hourlySteps.isNotEmpty) ...[
                                 const SizedBox(height: 12),
                                 const Text(
-                                  "HOURLY TELEMETRY (PERSONAL BESTS)",
+                                  "HOURLY STEP DATA (PERSONAL BESTS)",
                                   style: TextStyle(color: Colors.black38, fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                                 ),
                                 const SizedBox(height: 8),
@@ -346,7 +346,7 @@ class TeamMembersScreen extends StatelessWidget {
                                       borderData: FlBorderData(show: false),
                                       lineBarsData: [
                                         LineChartBarData(
-                                          spots: player.hourlyTelemetry.entries
+                                          spots: player.hourlySteps.entries
                                               .map((e) => FlSpot(double.tryParse(e.key) ?? 0, e.value.toDouble()))
                                               .toList()
                                             ..sort((a, b) => a.x.compareTo(b.x)),

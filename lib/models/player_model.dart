@@ -44,6 +44,7 @@ class PlayerModel {
   final int trustScore;
   final int level;
   final int xp;
+  final int currency;
   final String avatar;
   final DateTime? lastTeamAction;
   final int streakCount;
@@ -59,12 +60,12 @@ class PlayerModel {
 
   /// Hourly historical step curves representing personal best segments.
   /// Map structure: "HourString" (e.g., "14" or ISO Hour) -> Accumulated steps.
-  final Map<String, int> hourlyTelemetry;
+  final Map<String, int> hourlySteps;
 
   /// Daily logs for historical tracking. Key: "YYYY-MM-DD", Value: Map of stats
   final Map<String, dynamic> dailyHistory;
-  final double rechargeRaidMultiplier;
-  final double rechargeXpMultiplier;
+  final double energyBoostRaidMultiplier;
+  final double energyBoostXpMultiplier;
 
   // Physical Telemetry Nodes
   final double? heightCm;
@@ -148,6 +149,7 @@ class PlayerModel {
     required this.trustScore,
     required this.level,
     required this.xp,
+    this.currency = 0,
     required this.avatar,
     this.lastTeamAction,
     this.streakCount = 0,
@@ -158,10 +160,10 @@ class PlayerModel {
     this.ownedGear = const [],
     this.equippedGear = const {},
     this.inventory = const {},
-    this.hourlyTelemetry = const {},
+    this.hourlySteps = const {},
     this.dailyHistory = const {},
-    this.rechargeRaidMultiplier = 1.0,
-    this.rechargeXpMultiplier = 1.0,
+    this.energyBoostRaidMultiplier = 1.0,
+    this.energyBoostXpMultiplier = 1.0,
     this.heightCm,
     this.weightKg,
     this.dailyStepTarget = 10000,
@@ -190,6 +192,7 @@ class PlayerModel {
     int? trustScore,
     int? level,
     int? xp,
+    int? currency,
     String? avatar,
     DateTime? lastTeamAction,
     int? streakCount,
@@ -200,10 +203,10 @@ class PlayerModel {
     List<String>? ownedGear,
     Map<String, String>? equippedGear,
     Map<String, int>? inventory,
-    Map<String, int>? hourlyTelemetry,
+    Map<String, int>? hourlySteps,
     Map<String, dynamic>? dailyHistory,
-    double? rechargeRaidMultiplier,
-    double? rechargeXpMultiplier,
+    double? energyBoostRaidMultiplier,
+    double? energyBoostXpMultiplier,
     double? heightCm,
     double? weightKg,
     int? dailyStepTarget,
@@ -231,6 +234,7 @@ class PlayerModel {
       trustScore: trustScore ?? this.trustScore,
       level: level ?? this.level,
       xp: xp ?? this.xp,
+      currency: currency ?? this.currency,
       avatar: avatar ?? this.avatar,
       lastTeamAction: lastTeamAction ?? this.lastTeamAction,
       streakCount: streakCount ?? this.streakCount,
@@ -241,10 +245,10 @@ class PlayerModel {
       ownedGear: ownedGear ?? this.ownedGear,
       equippedGear: equippedGear ?? this.equippedGear,
       inventory: inventory ?? this.inventory,
-      hourlyTelemetry: hourlyTelemetry ?? this.hourlyTelemetry,
+      hourlySteps: hourlySteps ?? this.hourlySteps,
       dailyHistory: dailyHistory ?? this.dailyHistory,
-      rechargeRaidMultiplier: rechargeRaidMultiplier ?? this.rechargeRaidMultiplier,
-      rechargeXpMultiplier: rechargeXpMultiplier ?? this.rechargeXpMultiplier,
+      energyBoostRaidMultiplier: energyBoostRaidMultiplier ?? this.energyBoostRaidMultiplier,
+      energyBoostXpMultiplier: energyBoostXpMultiplier ?? this.energyBoostXpMultiplier,
       heightCm: heightCm ?? this.heightCm,
       weightKg: weightKg ?? this.weightKg,
       dailyStepTarget: dailyStepTarget ?? this.dailyStepTarget,
@@ -274,7 +278,7 @@ class PlayerModel {
 
     return PlayerModel(
       uid: map["uid"]?.toString() ?? "",
-      name: map["name"]?.toString() ?? "Explorer Node",
+      name: map["name"]?.toString() ?? "New Player",
       email: map["email"]?.toString() ?? "",
       team: map["team"]?.toString() ?? "No Team",
       teamId: map["teamId"]?.toString(),
@@ -286,6 +290,7 @@ class PlayerModel {
       trustScore: (map["trustScore"] as num?)?.toInt() ?? 100,
       level: (map["level"] as num?)?.toInt() ?? 1,
       xp: (map["xp"] as num?)?.toInt() ?? 0,
+      currency: (map["currency"] as num?)?.toInt() ?? 0,
       avatar: map["avatar"]?.toString() ?? "",
       lastTeamAction: map["lastTeamAction"] is Timestamp ? (map["lastTeamAction"] as Timestamp).toDate() : null,
       streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
@@ -296,10 +301,10 @@ class PlayerModel {
       ownedGear: map["ownedGear"] != null ? List<String>.from(map["ownedGear"]) : const [],
       equippedGear: Map<String, String>.from(map["equippedGear"] ?? {}),
       inventory: Map<String, int>.from(map['inventory'] ?? {}),
-      hourlyTelemetry: Map<String, int>.from(map['hourlyTelemetry'] ?? {}),
+      hourlySteps: Map<String, int>.from(map['hourlySteps'] ?? map['hourlyTelemetry'] ?? {}),
       dailyHistory: Map<String, dynamic>.from(map['dailyHistory'] ?? {}),
-      rechargeRaidMultiplier: (map["rechargeRaidMultiplier"] as num?)?.toDouble() ?? 1.0,
-      rechargeXpMultiplier: (map["rechargeXpMultiplier"] as num?)?.toDouble() ?? 1.0,
+      energyBoostRaidMultiplier: (map["energyBoostRaidMultiplier"] as num?)?.toDouble() ?? (map["rechargeRaidMultiplier"] as num?)?.toDouble() ?? 1.0,
+      energyBoostXpMultiplier: (map["energyBoostXpMultiplier"] as num?)?.toDouble() ?? (map["rechargeXpMultiplier"] as num?)?.toDouble() ?? 1.0,
       heightCm: (map["heightCm"] as num?)?.toDouble(),
       weightKg: (map["weightKg"] as num?)?.toDouble(),
       dailyStepTarget: (map["dailyStepTarget"] as num?)?.toInt() ?? 10000,
@@ -335,6 +340,7 @@ class PlayerModel {
       "level": level,
       "isInTeam": isInTeam,
       "xp": xp,
+      "currency": currency,
       "avatar": avatar,
       "lastTeamAction": lastTeamAction != null ? Timestamp.fromDate(lastTeamAction!) : null,
       "streakCount": streakCount,
@@ -345,10 +351,10 @@ class PlayerModel {
       "ownedGear": ownedGear,
       "equippedGear": equippedGear,
       "inventory": inventory,
-      "hourlyTelemetry": hourlyTelemetry,
+      "hourlySteps": hourlySteps,
       "dailyHistory": dailyHistory,
-      "rechargeRaidMultiplier": rechargeRaidMultiplier,
-      "rechargeXpMultiplier": rechargeXpMultiplier,
+      "energyBoostRaidMultiplier": energyBoostRaidMultiplier,
+      "energyBoostXpMultiplier": energyBoostXpMultiplier,
       "heightCm": heightCm,
       "weightKg": weightKg,
       "dailyStepTarget": dailyStepTarget,

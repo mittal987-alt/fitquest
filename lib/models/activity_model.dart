@@ -4,7 +4,7 @@ class ActivityModel {
   final int restIntervalSeconds;
   final double xpMultiplier;
   final double raidDamageMultiplier;
-  final List<String> recommendedExercises;
+  final List<Map<String, String>> exerciseGuide; // Now holds Name + Tip
 
   ActivityModel({
     required this.tier,
@@ -12,7 +12,7 @@ class ActivityModel {
     required this.restIntervalSeconds,
     required this.xpMultiplier,
     required this.raidDamageMultiplier,
-    required this.recommendedExercises,
+    required this.exerciseGuide,
   });
 
   factory ActivityModel.fromBmiAndGoal(double? bmi, String? goal) {
@@ -22,7 +22,11 @@ class ActivityModel {
     int rest = 60;
     double xpMult = 1.5;
     double raidMult = 1.3;
-    List<String> exercises = ["Pushups", "Squats", "Plank"];
+    List<Map<String, String>> guide = [
+      {"name": "Pushups", "tip": "Keep core tight, back straight."},
+      {"name": "Squats", "tip": "Weight on heels, chest up."},
+      {"name": "Plank", "tip": "Squeeze glutes, hold steady."}
+    ];
 
     // BMI Base Logic
     if (bmi != null) {
@@ -32,14 +36,22 @@ class ActivityModel {
         rest = 90;
         xpMult = 1.2;
         raidMult = 1.0;
-        exercises = ["Bodyweight Squats", "Wall Pushups", "Plank (Knees)"];
+        guide = [
+          {"name": "Bodyweight Squats", "tip": "Control the descent."},
+          {"name": "Wall Pushups", "tip": "Keep elbows tucked."},
+          {"name": "Plank (Knees)", "tip": "Don't let hips sag."}
+        ];
       } else if (bmi < 25.0) {
         tier = "ELITE";
         duration = 50;
         rest = 45;
         xpMult = 2.2;
         raidMult = 1.75;
-        exercises = ["Burpees", "Weighted Squats", "Pull-ups"];
+        guide = [
+          {"name": "Burpees", "tip": "Explosive movement."},
+          {"name": "Weighted Squats", "tip": "Drive through heels."},
+          {"name": "Pull-ups", "tip": "Full range of motion."}
+        ];
       }
     }
 
@@ -47,15 +59,24 @@ class ActivityModel {
     if (goal == "weight_loss") {
       duration = (duration * 1.2).toInt();
       xpMult += 0.2;
-      exercises.addAll(["Mountain Climbers", "Jumping Jacks"]);
+      guide.addAll([
+        {"name": "Mountain Climbers", "tip": "High intensity, quick feet."},
+        {"name": "Jumping Jacks", "tip": "Stay light on your toes."}
+      ]);
     } else if (goal == "muscle_gain") {
       rest = (rest * 1.5).toInt();
       raidMult += 0.25;
-      exercises.addAll(["Diamond Pushups", "Lunges"]);
+      guide.addAll([
+        {"name": "Diamond Pushups", "tip": "Focus on triceps."},
+        {"name": "Lunges", "tip": "Keep torso upright."}
+      ]);
     } else if (goal == "endurance") {
       duration = (duration * 1.5).toInt();
       rest = (rest * 0.8).toInt();
-      exercises.addAll(["High Knees", "Shadow Boxing"]);
+      guide.addAll([
+        {"name": "High Knees", "tip": "Pump your arms."},
+        {"name": "Shadow Boxing", "tip": "Focus on breathing."}
+      ]);
     }
 
     return ActivityModel(
@@ -64,7 +85,7 @@ class ActivityModel {
       restIntervalSeconds: rest,
       xpMultiplier: xpMult,
       raidDamageMultiplier: raidMult,
-      recommendedExercises: exercises.toSet().toList(), // Deduplicate
+      exerciseGuide: guide,
     );
   }
 
