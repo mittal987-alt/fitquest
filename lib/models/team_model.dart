@@ -9,6 +9,7 @@ class TeamModel {
   final int maxMembers;
   final int totalLand;
   final int totalSteps;
+  final double totalRaidDamage;
   final String leaderId;
   final String logo;
   final List<String> strongholdClusters;
@@ -22,6 +23,7 @@ class TeamModel {
     required this.maxMembers,
     required this.totalLand,
     required this.totalSteps,
+    this.totalRaidDamage = 0.0,
     required this.leaderId,
     required this.strongholdActive,
     required this.logo,
@@ -41,6 +43,7 @@ class TeamModel {
       maxMembers: map["maxMembers"] ?? 50,
       totalLand: map["totalLand"] ?? 0,
       totalSteps: map["totalSteps"] ?? 0,
+      totalRaidDamage: (map["totalRaidDamage"] ?? 0.0).toDouble(),
       strongholdActive: map['strongholdActive'] ?? false,
       leaderId: map["leaderId"] ?? "",
       logo: map["logo"] ?? "",
@@ -63,6 +66,7 @@ class TeamModel {
       "maxMembers": maxMembers,
       "totalLand": totalLand,
       "totalSteps": totalSteps,
+      "totalRaidDamage": totalRaidDamage,
       "leaderId": leaderId,
       "logo": logo,
       "strongholdActive": strongholdActive,

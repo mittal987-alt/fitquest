@@ -235,7 +235,7 @@ class _MapScreenState extends State<MapScreen> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text("Suspicious movement detected! Capture blocked."),
+                  content: Text("Moving too fast! Territory capture paused."),
                   backgroundColor: Colors.redAccent,
                 ),
               );
@@ -393,7 +393,7 @@ class _MapScreenState extends State<MapScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Anomaly Decrypted: ${anomaly.type} rewards acquired!"),
+          content: Text("Mystery Discovery Unlocked: ${anomaly.type} rewards acquired!"),
           backgroundColor: Colors.cyan,
         ),
       );
@@ -536,12 +536,12 @@ class _MapScreenState extends State<MapScreen> {
               const Icon(Icons.radar_rounded, size: 64, color: Colors.cyan),
               const SizedBox(height: 16),
               Text(
-                anomaly.type.toUpperCase(),
+                "MYSTERY ${anomaly.type.toUpperCase()}",
                 style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black87),
               ),
               const SizedBox(height: 8),
               const Text(
-                "Decrypt the signal trace for data fragments.",
+                "Keep moving to unlock these rewards.",
                 style: TextStyle(fontSize: 16, color: Colors.black54),
               ),
               const SizedBox(height: 24),
@@ -561,11 +561,11 @@ class _MapScreenState extends State<MapScreen> {
                     Navigator.pop(context);
                   },
                   icon: const Icon(Icons.sync),
-                  label: const Text("INITIALIZE SCAN", style: TextStyle(fontWeight: FontWeight.w900)),
+                  label: const Text("START UNLOCKING", style: TextStyle(fontWeight: FontWeight.w900)),
                 )
               else
                 Text(
-                  "Coordinates located ${dist.toStringAsFixed(0)}m away. Move within 50m to initialize scan.",
+                  "Located ${dist.toStringAsFixed(0)}m away. Move within 50m to start unlocking.",
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
                 ),
@@ -605,12 +605,12 @@ class _MapScreenState extends State<MapScreen> {
               const Icon(Icons.stars_rounded, size: 64, color: Colors.orange),
               const SizedBox(height: 16),
               const Text(
-                "TACTICAL BOUNTY",
+                "BOUNTY GOAL",
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black87),
               ),
               const SizedBox(height: 8),
               Text(
-                "Recover this objective for rewards.",
+                "Reach this goal for rewards.",
                 style: const TextStyle(fontSize: 16, color: Colors.black54),
               ),
               const SizedBox(height: 24),
@@ -870,7 +870,7 @@ class _MapScreenState extends State<MapScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 backgroundColor: Colors.blueGrey,
-                content: Text("🛡️ TARGET SECURED: Territory Shield is Active!"),
+                content: Text("🛡️ PROTECTED: Territory Shield is Active!"),
               ),
             );
           }
@@ -1026,7 +1026,7 @@ class _MapScreenState extends State<MapScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  tile.ownerType == "solo" ? "⚔️ Solo Domain" : "🛡️ Squad Domain",
+                  tile.ownerType == "solo" ? "⚔️ Player Territory" : "🛡️ Team Territory",
                   style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.black54, fontSize: 13),
                 ),
               ),
@@ -1034,7 +1034,7 @@ class _MapScreenState extends State<MapScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Fortification HP", style: TextStyle(fontSize: 16, color: Colors.black54, fontWeight: FontWeight.bold)),
+                  const Text("Defense Strength", style: TextStyle(fontSize: 16, color: Colors.black54, fontWeight: FontWeight.bold)),
                   Text("${tile.power}/100", style: const TextStyle(fontSize: 16, color: Colors.blueAccent, fontWeight: FontWeight.w900)),
                 ],
               ),
@@ -1210,7 +1210,20 @@ class _MapScreenState extends State<MapScreen> {
         color: territoryColor,
         strongholdTileIds: strongholdTiles,
         onTap: (tileId) {
-          final tile = tiles.firstWhere((t) => t.tileId == tileId);
+          final tile = tiles.firstWhere(
+            (t) => t.tileId == tileId,
+            orElse: () => HexTileModel(
+              tileId: tileId,
+              latitude: 0.0,
+              longitude: 0.0,
+              ownerType: "neutral",
+              ownerId: "",
+              ownerName: "Neutral Territory",
+              color: "grey",
+              power: 0,
+              capturedAt: DateTime.now().millisecondsSinceEpoch,
+            ),
+          );
           showTileDetails(tile);
         },
       ));
@@ -1267,7 +1280,7 @@ class _MapScreenState extends State<MapScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("DECRYPTING ANOMALY", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w900, fontSize: 12)),
+                        const Text("UNLOCKING MYSTERY", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w900, fontSize: 12)),
                         Text("${(anomalyScanProgress * 100).toStringAsFixed(1)}%", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
@@ -1278,7 +1291,7 @@ class _MapScreenState extends State<MapScreen> {
                       valueColor: const AlwaysStoppedAnimation(Colors.cyanAccent),
                     ),
                     const SizedBox(height: 8),
-                    const Text("Physical movement required to progress decryption array.", style: TextStyle(color: Colors.white54, fontSize: 10)),
+                    const Text("Physical movement required to unlock this reward.", style: TextStyle(color: Colors.white54, fontSize: 10)),
                   ],
                 ),
               ),
@@ -1308,7 +1321,7 @@ class _MapScreenState extends State<MapScreen> {
                     SizedBox(width: 14),
                     Expanded(
                       child: Text(
-                        "EXCESSIVE VELOCITY! Capture array disabled.",
+                        "MOVING TOO FAST! Territory capture paused.",
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
                       ),
                     ),

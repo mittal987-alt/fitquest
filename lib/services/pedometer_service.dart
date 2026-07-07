@@ -209,8 +209,18 @@ class PedometerService {
   }
 
   void _emitTacticalPulse(int steps, PlayerModel player) {
+    // Determine Biometric Multiplier
+    double bioDamageMult = 1.0;
+    if (player.activePowerUps.containsKey("metabolic_recharge")) {
+      DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+      if (expiry.isAfter(DateTime.now())) {
+        // High-end multiplier for Elite users in Flow
+        bioDamageMult = 1.5;
+      }
+    }
+
     // RPG Logic: Strength increases Raid Damage
-    double damage = steps * (player.effectiveStrength / 10.0);
+    double damage = steps * (player.effectiveStrength / 10.0) * bioDamageMult;
     
     // RPG Logic: Agility increases Scanning Velocity
     double scan = steps * (player.effectiveAgility / 5000.0);

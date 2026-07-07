@@ -279,7 +279,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  isLogin ? "INITIALIZE OPERATOR SESSION" : "REGISTER SYSTEM PROFILE",
+                  isLogin ? "START PLAYER SESSION" : "CREATE PLAYER PROFILE",
                   style: const TextStyle(color: Colors.black45, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 32),
@@ -289,7 +289,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: nameController,
                     style: const TextStyle(color: Colors.black87),
                     decoration: InputDecoration(
-                      labelText: "Operator Name",
+                      labelText: "Player Name",
                       labelStyle: const TextStyle(color: Colors.black54),
                       prefixIcon: const Icon(Icons.person_outline_rounded, color: Colors.black38),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -305,7 +305,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: const TextStyle(color: Colors.black87),
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    labelText: "Secure Email Address",
+                    labelText: "Email Address",
                     labelStyle: const TextStyle(color: Colors.black54),
                     prefixIcon: const Icon(Icons.email_outlined, color: Colors.black38),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -320,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: const TextStyle(color: Colors.black87),
                   obscureText: true,
                   decoration: InputDecoration(
-                    labelText: "Access Token Password",
+                    labelText: "Password",
                     labelStyle: const TextStyle(color: Colors.black54),
                     prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.black38),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -343,14 +343,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: loading ? null : handleAuth,
                     child: loading
                         ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                        : Text(isLogin ? "EXECUTE LOGIN" : "INITIALIZE SIGN UP", style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+                        : Text(isLogin ? "SIGN IN" : "SIGN UP", style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
                   ),
                 ),
                 const SizedBox(height: 24),
                 const Row(
                   children: [
                     Expanded(child: Divider(color: Colors.black12)),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("FEDERATED NODES", style: TextStyle(color: Colors.black26, fontSize: 10, fontWeight: FontWeight.w900))),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("SOCIAL SIGN IN", style: TextStyle(color: Colors.black26, fontSize: 10, fontWeight: FontWeight.w900))),
                     Expanded(child: Divider(color: Colors.black12)),
                   ],
                 ),
@@ -398,8 +398,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           UserCredential userCredential = await authService.signInAnonymously();
                           await firebaseService.createPlayer(
                             uid: userCredential.user!.uid,
-                            name: "Guest Operator",
-                            email: "Anonymous Node",
+                            name: "Guest Player",
+                            email: "Anonymous Player",
                           );
                           if (mounted) {
                             Navigator.pushReplacement(
@@ -424,7 +424,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextButton(
                   onPressed: () => setState(() => isLogin = !isLogin),
                   child: Text(
-                    isLogin ? "REQUEST NEW LINK ACCOUNT" : "SWAP TO SYSTEM SIGN IN",
+                    isLogin ? "CREATE AN ACCOUNT" : "ALREADY HAVE AN ACCOUNT?",
                     style: const TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                   ),
                 ),

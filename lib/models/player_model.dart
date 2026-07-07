@@ -47,6 +47,7 @@ class PlayerModel {
   final String avatar;
   final DateTime? lastTeamAction;
   final int streakCount;
+  final int totalRaidDamage;
   final DateTime? lastActiveDate;
   final List<String> claimedQuests;
   final Map<String, DateTime> activePowerUps;
@@ -60,6 +61,11 @@ class PlayerModel {
   /// Map structure: "HourString" (e.g., "14" or ISO Hour) -> Accumulated steps.
   final Map<String, int> hourlyTelemetry;
 
+  /// Daily logs for historical tracking. Key: "YYYY-MM-DD", Value: Map of stats
+  final Map<String, dynamic> dailyHistory;
+  final double rechargeRaidMultiplier;
+  final double rechargeXpMultiplier;
+
   // Physical Telemetry Nodes
   final double? heightCm;
   final double? weightKg;
@@ -69,11 +75,18 @@ class PlayerModel {
 
   // New RPG Attributes & Resource Pools
   final String? characterClass; // scout, tank, medic
+  final String? fitnessGoal; // weight_loss, muscle_gain, endurance, maintenance
   final int strength;
   final int agility;
   final int endurance;
   final int currentStamina;
   final int maxStamina;
+
+  double? get bmi {
+    if (heightCm == null || weightKg == null || heightCm! <= 0) return null;
+    double heightM = heightCm! / 100;
+    return weightKg! / (heightM * heightM);
+  }
 
   int get effectiveStrength {
     int base = strength;
@@ -138,6 +151,7 @@ class PlayerModel {
     required this.avatar,
     this.lastTeamAction,
     this.streakCount = 0,
+    this.totalRaidDamage = 0,
     this.lastActiveDate,
     this.claimedQuests = const [],
     this.activePowerUps = const {},
@@ -145,6 +159,9 @@ class PlayerModel {
     this.equippedGear = const {},
     this.inventory = const {},
     this.hourlyTelemetry = const {},
+    this.dailyHistory = const {},
+    this.rechargeRaidMultiplier = 1.0,
+    this.rechargeXpMultiplier = 1.0,
     this.heightCm,
     this.weightKg,
     this.dailyStepTarget = 10000,
@@ -156,6 +173,7 @@ class PlayerModel {
     this.endurance = 10,
     this.currentStamina = 100,
     this.maxStamina = 100,
+    this.fitnessGoal,
   });
 
   PlayerModel copyWith({
@@ -175,6 +193,7 @@ class PlayerModel {
     String? avatar,
     DateTime? lastTeamAction,
     int? streakCount,
+    int? totalRaidDamage,
     DateTime? lastActiveDate,
     List<String>? claimedQuests,
     Map<String, DateTime>? activePowerUps,
@@ -182,12 +201,16 @@ class PlayerModel {
     Map<String, String>? equippedGear,
     Map<String, int>? inventory,
     Map<String, int>? hourlyTelemetry,
+    Map<String, dynamic>? dailyHistory,
+    double? rechargeRaidMultiplier,
+    double? rechargeXpMultiplier,
     double? heightCm,
     double? weightKg,
     int? dailyStepTarget,
     int? dailyExerciseTargetMinutes,
     DateTime? lastSyncTime,
     String? characterClass,
+    String? fitnessGoal,
     int? strength,
     int? agility,
     int? endurance,
@@ -211,6 +234,7 @@ class PlayerModel {
       avatar: avatar ?? this.avatar,
       lastTeamAction: lastTeamAction ?? this.lastTeamAction,
       streakCount: streakCount ?? this.streakCount,
+      totalRaidDamage: totalRaidDamage ?? this.totalRaidDamage,
       lastActiveDate: lastActiveDate ?? this.lastActiveDate,
       claimedQuests: claimedQuests ?? this.claimedQuests,
       activePowerUps: activePowerUps ?? this.activePowerUps,
@@ -218,12 +242,16 @@ class PlayerModel {
       equippedGear: equippedGear ?? this.equippedGear,
       inventory: inventory ?? this.inventory,
       hourlyTelemetry: hourlyTelemetry ?? this.hourlyTelemetry,
+      dailyHistory: dailyHistory ?? this.dailyHistory,
+      rechargeRaidMultiplier: rechargeRaidMultiplier ?? this.rechargeRaidMultiplier,
+      rechargeXpMultiplier: rechargeXpMultiplier ?? this.rechargeXpMultiplier,
       heightCm: heightCm ?? this.heightCm,
       weightKg: weightKg ?? this.weightKg,
       dailyStepTarget: dailyStepTarget ?? this.dailyStepTarget,
       dailyExerciseTargetMinutes: dailyExerciseTargetMinutes ?? this.dailyExerciseTargetMinutes,
       lastSyncTime: lastSyncTime ?? this.lastSyncTime,
       characterClass: characterClass ?? this.characterClass,
+      fitnessGoal: fitnessGoal ?? this.fitnessGoal,
       strength: strength ?? this.strength,
       agility: agility ?? this.agility,
       endurance: endurance ?? this.endurance,
@@ -261,6 +289,7 @@ class PlayerModel {
       avatar: map["avatar"]?.toString() ?? "",
       lastTeamAction: map["lastTeamAction"] is Timestamp ? (map["lastTeamAction"] as Timestamp).toDate() : null,
       streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
+      totalRaidDamage: (map["totalRaidDamage"] as num?)?.toInt() ?? 0,
       lastActiveDate: map["lastActiveDate"] is Timestamp ? (map["lastActiveDate"] as Timestamp).toDate() : null,
       claimedQuests: map["claimedQuests"] != null ? List<String>.from(map["claimedQuests"]) : const [],
       activePowerUps: powerUps,
@@ -268,12 +297,16 @@ class PlayerModel {
       equippedGear: Map<String, String>.from(map["equippedGear"] ?? {}),
       inventory: Map<String, int>.from(map['inventory'] ?? {}),
       hourlyTelemetry: Map<String, int>.from(map['hourlyTelemetry'] ?? {}),
+      dailyHistory: Map<String, dynamic>.from(map['dailyHistory'] ?? {}),
+      rechargeRaidMultiplier: (map["rechargeRaidMultiplier"] as num?)?.toDouble() ?? 1.0,
+      rechargeXpMultiplier: (map["rechargeXpMultiplier"] as num?)?.toDouble() ?? 1.0,
       heightCm: (map["heightCm"] as num?)?.toDouble(),
       weightKg: (map["weightKg"] as num?)?.toDouble(),
       dailyStepTarget: (map["dailyStepTarget"] as num?)?.toInt() ?? 10000,
       dailyExerciseTargetMinutes: (map["dailyExerciseTargetMinutes"] as num?)?.toInt() ?? 30,
       lastSyncTime: map["lastSyncTime"] is Timestamp ? (map["lastSyncTime"] as Timestamp).toDate() : (map["lastSyncTime"] is String ? DateTime.parse(map["lastSyncTime"]) : null),
       characterClass: map["characterClass"]?.toString(),
+      fitnessGoal: map["fitnessGoal"]?.toString(),
       strength: (map["strength"] as num?)?.toInt() ?? 10,
       agility: (map["agility"] as num?)?.toInt() ?? 10,
       endurance: (map["endurance"] as num?)?.toInt() ?? 10,
@@ -305,6 +338,7 @@ class PlayerModel {
       "avatar": avatar,
       "lastTeamAction": lastTeamAction != null ? Timestamp.fromDate(lastTeamAction!) : null,
       "streakCount": streakCount,
+      "totalRaidDamage": totalRaidDamage,
       "lastActiveDate": lastActiveDate != null ? Timestamp.fromDate(lastActiveDate!) : null,
       "claimedQuests": claimedQuests,
       "activePowerUps": powerUps,
@@ -312,12 +346,16 @@ class PlayerModel {
       "equippedGear": equippedGear,
       "inventory": inventory,
       "hourlyTelemetry": hourlyTelemetry,
+      "dailyHistory": dailyHistory,
+      "rechargeRaidMultiplier": rechargeRaidMultiplier,
+      "rechargeXpMultiplier": rechargeXpMultiplier,
       "heightCm": heightCm,
       "weightKg": weightKg,
       "dailyStepTarget": dailyStepTarget,
       "dailyExerciseTargetMinutes": dailyExerciseTargetMinutes,
       "lastSyncTime": lastSyncTime != null ? Timestamp.fromDate(lastSyncTime!) : null,
       "characterClass": characterClass,
+      "fitnessGoal": fitnessGoal,
       "strength": strength,
       "agility": agility,
       "endurance": endurance,

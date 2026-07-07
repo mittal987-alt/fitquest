@@ -17,7 +17,7 @@ class ArmoryScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          "TACTICAL ARMORY",
+          "EQUIPMENT ROOM",
           style: TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
@@ -66,7 +66,7 @@ class ArmoryScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "RESERVE CREDITS",
+                            "XP BALANCE",
                             style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                           ),
                           const SizedBox(height: 6),

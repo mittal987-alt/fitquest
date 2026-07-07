@@ -29,7 +29,7 @@ class _RelayScreenState extends State<RelayScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          "${widget.teamName.toUpperCase()} RELAY",
+          "${widget.teamName.toUpperCase()} STEP RELAY",
           style: const TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
@@ -67,7 +67,7 @@ class _RelayScreenState extends State<RelayScreen> {
           const Icon(Icons.sync_alt_rounded, size: 80, color: Colors.black12),
           const SizedBox(height: 24),
           const Text(
-            "NO ACTIVE TELEMETRY RELAY",
+            "NO ACTIVE STEP RELAY",
             style: TextStyle(
               fontWeight: FontWeight.w900,
               fontSize: 18,
@@ -79,7 +79,7 @@ class _RelayScreenState extends State<RelayScreen> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              "Start a relay sequence to coordinate step goals across your squad and earn massive team XP bonuses.",
+              "Start a relay to coordinate step goals with your team and earn massive XP bonuses.",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black45, fontSize: 13, height: 1.5),
             ),
@@ -96,7 +96,7 @@ class _RelayScreenState extends State<RelayScreen> {
             ),
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text(
-              "INITIALIZE RELAY SEQUENCE",
+              "START TEAM RELAY",
               style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
             ),
           ),
@@ -137,7 +137,7 @@ class _RelayScreenState extends State<RelayScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "CURRENT OPERATOR",
+                          "CURRENT PLAYER",
                           style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                         ),
                         const SizedBox(height: 6),
@@ -190,7 +190,7 @@ class _RelayScreenState extends State<RelayScreen> {
                 const SizedBox(height: 32),
                 if (isMyTurn) ...[
                   const Text(
-                    "You are the active link in the relay. Your steps are currently powering the team's progress.",
+                    "You are the active player in the relay. Your steps are currently contributing to the team's progress.",
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.black54, fontSize: 13, height: 1.4),
                   ),
@@ -212,14 +212,14 @@ class _RelayScreenState extends State<RelayScreen> {
                       ),
                       icon: const Icon(Icons.send_rounded),
                       label: const Text(
-                        "PASS RELAY TOKEN",
+                        "PASS TO NEXT PLAYER",
                         style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
                       ),
                     ),
                   ),
                 ] else ...[
                   Text(
-                    "WAITING FOR ${relay.currentOperatorName.toUpperCase()} TO COMPLETE THEIR SHIFT.",
+                    "WAITING FOR ${relay.currentOperatorName.toUpperCase()} TO FINISH THEIR TURN.",
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                   ),
@@ -229,7 +229,7 @@ class _RelayScreenState extends State<RelayScreen> {
           ),
           const SizedBox(height: 32),
           const Text(
-            "RELAY SEQUENCE",
+            "RELAY ORDER",
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1),
           ),
           const SizedBox(height: 16),
@@ -274,7 +274,7 @@ class _RelayScreenState extends State<RelayScreen> {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    operatorId == currentUid ? "YOU" : "OPERATOR ${index + 1}",
+                    isMyTurn ? "YOU" : "TEAM MEMBER",
                     style: TextStyle(
                       fontWeight: isCurrent ? FontWeight.w900 : FontWeight.bold,
                       color: isCurrent ? Colors.black87 : Colors.black38,
@@ -283,6 +283,11 @@ class _RelayScreenState extends State<RelayScreen> {
                   const Spacer(),
                   if (isCurrent)
                     const Icon(Icons.bolt_rounded, color: Colors.amber, size: 16),
+                  if (isPast)
+                    const Text(
+                      "COMPLETE",
+                      style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                    ),
                 ],
               ),
             );
@@ -293,31 +298,71 @@ class _RelayScreenState extends State<RelayScreen> {
   }
 
   void _showStartRelayDialog() {
-    // Simplified: Just take the first few members or something
-    // Real implementation would allow selecting sequence
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("START TEAM RELAY"),
-        content: const Text("This will initialize a 3-stage relay. Each stage requires 5000 steps. Confirm?"),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text("START TEAM RELAY", style: TextStyle(fontWeight: FontWeight.w900)),
+        content: const Text(
+          "This will start a multi-stage relay. Each player must complete their step goal before passing the turn to the next team member.",
+          style: TextStyle(color: Colors.black54),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
           TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             onPressed: () async {
-              // Get team members... for now just use current user
-              final currentUid = _firebaseService.auth.currentUser!.uid;
-              final player = await _firebaseService.getPlayer(currentUid);
-              
-              await _relayController.startRelay(
-                teamId: widget.teamId,
-                sequence: [currentUid, "placeholder_1", "placeholder_2"],
-                targetPerOperator: 5000,
-                operatorName: player?.name ?? "Explorer",
-              );
-              if (!mounted) return;
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
+
+              try {
+                // Fetch all team members to build the sequence
+                final membersSnapshot = await _firebaseService.firestore
+                    .collection("players")
+                    .where("teamId", isEqualTo: widget.teamId)
+                    .get();
+
+                if (membersSnapshot.docs.isEmpty) return;
+
+                final List<String> sequence = membersSnapshot.docs.map((doc) => doc.id).toList();
+                // Ensure current user is first in sequence for testing/starting
+                final currentUid = _firebaseService.auth.currentUser!.uid;
+                sequence.remove(currentUid);
+                sequence.insert(0, currentUid);
+
+                final firstPlayer = await _firebaseService.getPlayer(currentUid);
+                
+                await _relayController.startRelay(
+                  teamId: widget.teamId,
+                  sequence: sequence,
+                  targetPerOperator: 5000,
+                  operatorName: firstPlayer?.name ?? "Explorer",
+                );
+                
+                scaffoldMessenger.showSnackBar(
+                  const SnackBar(
+                    content: Text("TEAM RELAY STARTED"),
+                    backgroundColor: Colors.blueAccent,
+                  ),
+                );
+              } catch (e) {
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Text("ERROR STARTING RELAY: $e"),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
             },
-            child: const Text("START"),
+            child: const Text("START", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

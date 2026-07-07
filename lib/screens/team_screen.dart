@@ -7,6 +7,11 @@ import '../widgets/team_card.dart';
 import 'team_request_screen.dart';
 import '../models/player_model.dart';
 import 'team_members_screen.dart';
+import 'relay_screen.dart';
+
+import 'package:provider/provider.dart';
+import '../controller/raid_controller.dart';
+import '../widgets/tactical_ping_feed.dart';
 
 class TeamScreen extends StatefulWidget {
   const TeamScreen({super.key});
@@ -17,6 +22,83 @@ class TeamScreen extends StatefulWidget {
 
 class _TeamScreenState extends State<TeamScreen> {
   final FirebaseService firebaseService = FirebaseService();
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeRaidSync();
+  }
+
+  void _initializeRaidSync() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final player = await firebaseService.getPlayer(user.uid);
+      if (player != null && player.teamId != null && mounted) {
+        context.read<RaidController>().initTeamRaid(player.teamId!);
+      }
+    }
+  }
+
+  void _showVictoryDialog(BuildContext context, String teamName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 28),
+            SizedBox(width: 12),
+            Text("BOSS DEFEATED", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "The boss has been defeated by ${teamName.toUpperCase()}!",
+              style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "REWARDS EARNED:",
+              style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
+            ),
+            const SizedBox(height: 8),
+            _rewardItem(Icons.bolt_rounded, "500 XP", Colors.blueAccent),
+            _rewardItem(Icons.token_rounded, "10 TOKENS", Colors.orangeAccent),
+            _rewardItem(Icons.inventory_2_rounded, "ITEM CHEST x1", Colors.purpleAccent),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("CLAIM REWARDS", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rewardItem(IconData icon, String label, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +117,7 @@ class _TeamScreenState extends State<TeamScreen> {
             backgroundColor: Colors.white,
             elevation: 0,
             title: const Text(
-              "SQUAD CHANNELS",
+              "TEAMS",
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.5,
@@ -53,7 +135,7 @@ class _TeamScreenState extends State<TeamScreen> {
             elevation: 2,
             onPressed: () => showCreateTeamDialog(currentPlayer),
             icon: const Icon(Icons.add_moderator_rounded, color: Colors.white),
-            label: const Text("FOUND NEW SQUAD", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.white)),
+            label: const Text("CREATE NEW TEAM", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.white)),
           ),
           body: StreamBuilder<List<TeamModel>>(
             stream: firebaseService.getTeams(),
@@ -103,7 +185,7 @@ class _TeamScreenState extends State<TeamScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "CURRENT OPERATIONAL UNIT",
+                            "CURRENT TEAM",
                             style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                           ),
                           const SizedBox(height: 8),
@@ -122,7 +204,7 @@ class _TeamScreenState extends State<TeamScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  currentTeam.strongholdActive ? "STRONGHOLD ACTIVE (1.5x RAID DMG)" : "STRONGHOLD INACTIVE",
+                                  currentTeam.strongholdActive ? "TEAM BUFF ACTIVE (1.5x BOSS DMG)" : "TEAM BUFF INACTIVE",
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
@@ -133,19 +215,42 @@ class _TeamScreenState extends State<TeamScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                TeamStat(title: "Areas", value: currentTeam.totalLand.toString()),
+                                TeamStat(title: "Steps", value: currentTeam.totalSteps.toString()),
+                                TeamStat(title: "Boss Dmg", value: currentTeam.totalRaidDamage.toInt().toString()),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
                             const Text(
-                              "RAID BOSS HP",
+                              "BOSS HEALTH",
                               style: TextStyle(color: Colors.black45, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1),
                             ),
                             const SizedBox(height: 6),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: currentTeam.raidBossHp / 100000.0,
-                                backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                                color: Colors.redAccent,
-                                minHeight: 8,
-                              ),
+                            Consumer<RaidController>(
+                              builder: (context, raidController, child) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: LinearProgressIndicator(
+                                        value: raidController.bossHpPercentage,
+                                        backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                                        color: Colors.redAccent,
+                                        minHeight: 8,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "${raidController.bossCurrentHp.toInt()} / ${raidController.bossMaxHp.toInt()} HP",
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton.icon(
@@ -158,96 +263,183 @@ class _TeamScreenState extends State<TeamScreen> {
                               ),
                               onPressed: () async {
                                 final scaffoldMessenger = ScaffoldMessenger.of(context);
-                                bool success = await firebaseService.executeTeamRaidAttack(currentUid, currentTeam.id);
+                                  // BIOMETRIC RECHARGE BONUS
+                                  double rechargeMult = 1.0;
+                                  if (currentPlayer?.activePowerUps.containsKey("metabolic_recharge") == true) {
+                                    DateTime expiry = currentPlayer!.activePowerUps["metabolic_recharge"]!;
+                                    if (expiry.isAfter(DateTime.now())) {
+                                      rechargeMult = currentPlayer.rechargeRaidMultiplier;
+                                    }
+                                  }
+
+                                  double totalDmg = ((currentPlayer?.effectiveStrength ?? 10) + (currentPlayer?.effectiveAgility ?? 10)) * 1.0 * (currentTeam.strongholdActive ? 1.5 : 1.0) * rechargeMult;
+
+                                  bool success = await firebaseService.executeTeamRaidAttack(currentUid, currentTeam.id);
                                 if (!success) {
                                   scaffoldMessenger.showSnackBar(
                                     const SnackBar(
-                                      content: Text("RECHARGE PROTOCOL: INSUFFICIENT STAMINA OR COOLDOWN ACTIVE"),
+                                      content: Text("INSUFFICIENT STAMINA OR ON COOLDOWN"),
                                       backgroundColor: Colors.redAccent,
                                     ),
                                   );
                                 } else {
                                   scaffoldMessenger.showSnackBar(
                                     const SnackBar(
-                                      content: Text("RAID KINETIC STRIKE CONFIRMED"),
+                                      content: Text("BOSS ATTACK SUCCESSFUL"),
                                       backgroundColor: Colors.greenAccent,
                                     ),
                                   );
+                                  
+                                  // TRIGGER TACTICAL PING FOR DAMAGE
+                                  await firebaseService.sendTacticalPing(
+                                    currentTeam.id, 
+                                    "FRONT_LINE", 
+                                    "${currentPlayer?.name.toUpperCase()} ATTACKED THE BOSS"
+                                  );
+
+                                  if (context.mounted && currentTeam.raidBossHp - totalDmg <= 0) {
+                                    _showVictoryDialog(context, currentTeam.name);
+                                  }
                                 }
                               },
                               icon: const Icon(Icons.bolt_rounded, size: 18),
-                              label: const Text("EXECUTE RAID ATTACK", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                              label: const Text("ATTACK BOSS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                             ),
-                            const SizedBox(height: 12),
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                                foregroundColor: Colors.redAccent,
+                                backgroundColor: Colors.blueAccent,
+                                foregroundColor: Colors.white,
                                 elevation: 0,
-                                side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                               ),
-                              onPressed: () async {
-                                if (currentPlayer?.lastTeamAction != null) {
-                                  final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);
-                                  if (diff.inHours < 24) {
-                                    final hoursLeft = 24 - diff.inHours;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text("COOLDOWN INJECTED: WAIT $hoursLeft HOURS TO TRANSIT"),
-                                        backgroundColor: Colors.orangeAccent,
-                                      ),
-                                    );
-                                    return;
-                                  }
-                                }
-
-                                bool confirm = await showDialog(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    backgroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                    title: const Text("TERMINATE LINK", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 18)),
-                                    content: Text("Sever connection vectors with ${currentTeam.name.toUpperCase()}?", style: const TextStyle(color: Colors.black54)),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context, false),
-                                        child: const Text("ABORT", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context, true),
-                                        child: const Text("SEVER LINK", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                                      ),
-                                    ],
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => RelayScreen(
+                                      teamId: currentTeam.id,
+                                      teamName: currentTeam.name,
+                                    ),
                                   ),
-                                ) ?? false;
-
-                                if (confirm) {
-                                  await firebaseService.leaveTeam(uid: currentUid, teamId: currentTeam.id);
-                                }
+                                );
                               },
-                              icon: const Icon(Icons.link_off_rounded, size: 16),
-                              label: const Text("SEVER SQUAD CONNECTION", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                              icon: const Icon(Icons.sync_alt_rounded, size: 18),
+                              label: const Text("TEAM CHALLENGE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                             ),
+                            const SizedBox(height: 12),
+                            const TacticalPingFeed(),
+                            const SizedBox(height: 12),
+                            if (currentUid == currentTeam.leaderId) ...[
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black.withValues(alpha: 0.1),
+                                  foregroundColor: Colors.black87,
+                                  elevation: 0,
+                                  side: BorderSide(color: Colors.black.withValues(alpha: 0.1)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                ),
+                                onPressed: () async {
+                                  bool confirm = await showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      backgroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                      title: const Text("DISBAND TEAM", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 18)),
+                                      content: const Text("Permanently dissolve this team? This action is irreversible."),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text("DISBAND", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ),
+                                  ) ?? false;
+
+                                  if (confirm) {
+                                    await firebaseService.deleteTeam(currentTeam.id);
+                                  }
+                                },
+                                icon: const Icon(Icons.delete_forever_rounded, size: 16),
+                                label: const Text("DISBAND TEAM", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                              ),
+                            ] else ...[
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                                  foregroundColor: Colors.redAccent,
+                                  elevation: 0,
+                                  side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                ),
+                                onPressed: () async {
+                                  if (currentPlayer?.lastTeamAction != null) {
+                                    final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);
+                                    if (diff.inHours < 24) {
+                                      final hoursLeft = 24 - diff.inHours;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text("PLEASE WAIT $hoursLeft HOURS TO LEAVE"),
+                                          backgroundColor: Colors.orangeAccent,
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                  }
+
+                                  bool confirm = await showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      backgroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                      title: const Text("LEAVE TEAM", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 18)),
+                                      content: Text("Leave ${currentTeam.name.toUpperCase()}?", style: const TextStyle(color: Colors.black54)),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text("LEAVE", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ),
+                                  ) ?? false;
+
+                                  if (confirm) {
+                                    await firebaseService.leaveTeam(uid: currentUid, teamId: currentTeam.id);
+                                  }
+                                },
+                                icon: const Icon(Icons.link_off_rounded, size: 16),
+                                label: const Text("LEAVE TEAM", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                              ),
+                            ],
                           ],
                         ],
                       ),
                     ),
                     const SizedBox(height: 24),
                     const Text(
-                      "AVAILABLE COHORT SECTORS",
+                      "AVAILABLE TEAMS",
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1),
                     ),
                     const SizedBox(height: 12),
                     ...teams.map((team) {
                       final isLeader = currentUid == team.leaderId;
+                      final isCurrentTeam = currentPlayer?.teamId == team.id;
 
                       return Column(
                         children: [
                           TeamCard(
                             team: team,
-                            joined: selectedTeam == team.name,
+                            joined: isCurrentTeam,
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -268,7 +460,7 @@ class _TeamScreenState extends State<TeamScreen> {
                                   final hoursLeft = 24 - diff.inHours;
                                   scaffoldMessenger.showSnackBar(
                                     SnackBar(
-                                      content: Text("ACTION LOCKOUT: TIME CONTEXT RESTRAINED BY $hoursLeft HOURS"),
+                                      content: Text("WAIT $hoursLeft HOURS BEFORE JOINING A NEW TEAM"),
                                       backgroundColor: Colors.orangeAccent,
                                     ),
                                   );
@@ -280,7 +472,7 @@ class _TeamScreenState extends State<TeamScreen> {
                                 scaffoldMessenger.showSnackBar(
                                   const SnackBar(
                                     backgroundColor: Colors.redAccent,
-                                    content: Text("CRITICAL OVERFLOW: TARGET SECTOR CAPACITY EXCEEDED"),
+                                    content: Text("TEAM IS FULL"),
                                   ),
                                 );
                                 return;
@@ -290,7 +482,7 @@ class _TeamScreenState extends State<TeamScreen> {
                               TeamRequestModel request = TeamRequestModel(
                                 requestId: DateTime.now().millisecondsSinceEpoch.toString(),
                                 playerId: user.uid,
-                                playerName: user.email ?? "Anonymous Node",
+                                playerName: user.email ?? "Anonymous Player",
                                 teamId: team.id,
                                 teamName: team.name,
                                 status: "pending",
@@ -301,7 +493,7 @@ class _TeamScreenState extends State<TeamScreen> {
                               scaffoldMessenger.showSnackBar(
                                 SnackBar(
                                   backgroundColor: Colors.greenAccent.withValues(alpha: 0.2),
-                                  content: Text("HANDSHAKE BROADCAST DISPATCHED TO ${team.name.toUpperCase()}", style: const TextStyle(color: Colors.greenAccent)),
+                                  content: Text("JOIN REQUEST SENT TO ${team.name.toUpperCase()}", style: const TextStyle(color: Colors.greenAccent)),
                                 ),
                               );
                             },
@@ -325,7 +517,7 @@ class _TeamScreenState extends State<TeamScreen> {
                                     );
                                   },
                                   icon: const Icon(Icons.satellite_alt_rounded, size: 16),
-                                  label: const Text("DECRYPT HANDSHAKE REQUESTS", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                  label: const Text("VIEW JOIN REQUESTS", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                                 ),
                               ),
                             ),
@@ -353,20 +545,20 @@ class _TeamScreenState extends State<TeamScreen> {
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Text(
-            "INITIALIZE NEW SQUAD NODE",
+            "CREATE NEW TEAM",
             style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Assign alpha identifier string for the squad", style: TextStyle(color: Colors.black54, fontSize: 13)),
+              const Text("Assign a name for your team", style: TextStyle(color: Colors.black54, fontSize: 13)),
               const SizedBox(height: 16),
               TextField(
                 controller: controller,
                 style: const TextStyle(color: Colors.black87),
                 decoration: InputDecoration(
-                  hintText: "SQUAD_NAME",
+                  hintText: "TEAM NAME",
                   hintStyle: const TextStyle(color: Colors.black26),
                   filled: true,
                   fillColor: const Color(0xFFF5F7FA),
@@ -381,7 +573,7 @@ class _TeamScreenState extends State<TeamScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("ABORT", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
+              child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -398,7 +590,7 @@ class _TeamScreenState extends State<TeamScreen> {
                     final hoursLeft = 24 - diff.inHours;
                     scaffoldMessenger.showSnackBar(
                       SnackBar(
-                        content: Text("COOLDOWN ACTIVE: INITIALIZATION HALTED FOR $hoursLeft HOURS"),
+                        content: Text("PLEASE WAIT $hoursLeft HOURS BEFORE CREATING A TEAM"),
                         backgroundColor: Colors.orangeAccent,
                       ),
                     );
@@ -427,20 +619,20 @@ class _TeamScreenState extends State<TeamScreen> {
                   }
                   scaffoldMessenger.showSnackBar(
                     SnackBar(
-                      content: Text("SQUAD COMPILING COMPLETED: ${team.name.toUpperCase()} RECRUITING NOW"),
+                      content: Text("TEAM ${team.name.toUpperCase()} CREATED"),
                       backgroundColor: Colors.greenAccent.withValues(alpha: 0.8),
                     ),
                   );
                 } else {
                   scaffoldMessenger.showSnackBar(
                     const SnackBar(
-                      content: Text("EMPTY PARAMETER: SPECIFY SQUAD IDENTIFIER"),
+                      content: Text("PLEASE SPECIFY A TEAM NAME"),
                       backgroundColor: Colors.redAccent,
                     ),
                   );
                 }
               },
-              child: const Text("INSTANTIATE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              child: const Text("CREATE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
             ),
           ],
         );

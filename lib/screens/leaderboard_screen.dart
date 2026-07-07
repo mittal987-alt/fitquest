@@ -154,13 +154,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.orangeAccent));
         if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.black45)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Operators Formed", style: TextStyle(color: Colors.black26)));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Players Found", style: TextStyle(color: Colors.black26)));
 
         final players = snapshot.data!;
         return Column(
           children: [
             _buildTopCard(
-              title: "TOP GLOBAL OPERATOR",
+              title: "TOP GLOBAL PLAYER",
               name: players[0].name,
               value: "${players[0].totalSteps} Steps Logged",
               icon: Icons.emoji_events_rounded,
@@ -186,13 +186,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
         if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.black45)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Alliance Nodes", style: TextStyle(color: Colors.white24)));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Team Members Found", style: TextStyle(color: Colors.white24)));
 
         final players = snapshot.data!;
         return Column(
           children: [
             _buildTopCard(
-              title: "TOP SQUAD NODE",
+              title: "TOP TEAM MEMBER",
               name: players[0].name,
               value: "${players[0].totalSteps} Steps Logged",
               icon: Icons.bolt_rounded,
@@ -218,7 +218,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
         if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.black45)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Tactical Teams Built", style: TextStyle(color: Colors.black26)));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Teams Found", style: TextStyle(color: Colors.black26)));
 
         final teams = snapshot.data!;
         return Column(
@@ -226,7 +226,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             _buildTopCard(
               title: "APEX GLOBAL TEAM",
               name: teams[0].name,
-              value: "${teams[0].totalSteps} Unified Steps",
+              value: "${teams[0].totalSteps} Total Steps",
               icon: Icons.groups_rounded,
               neonColor: Colors.cyanAccent,
             ),
@@ -280,7 +280,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 4.0),
                         child: Text(
-                          "👥 ${team.members} units  •  🌍 ${team.totalLand} hex\n⚡ Efficiency: ${avgEfficiency.toStringAsFixed(0)} steps/mbr",
+                          "👥 ${team.members} members  •  🌍 ${team.totalLand} areas\n⚡ Efficiency: ${avgEfficiency.toStringAsFixed(0)} steps/member",
                           style: const TextStyle(color: Colors.black54, fontSize: 11, height: 1.4),
                         ),
                       ),

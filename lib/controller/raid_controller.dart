@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../config/gameplay_rules.dart';
 
 /// Represents the localized status of a player inside the active co-op raid.
@@ -31,10 +32,13 @@ class RaidParticipant {
 }
 
 /// Dynamic state manager for handling sequential and cooperative step raids.
-/// Connects the UI layers reactively to simulated database feeds.
+/// Connects the UI layers reactively to Firestore real-time streams.
 class RaidController extends ChangeNotifier {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   // --- STATE PROPERTIES ---
   String? _activeRaidId;
+  String? _teamId;
   String _bossName = "GLITCH_COLOSSUS_V4";
   double _bossMaxHp = GameplayRules.colossusMaxHp;
   double _bossCurrentHp = GameplayRules.colossusMaxHp;
@@ -42,25 +46,111 @@ class RaidController extends ChangeNotifier {
   DateTime? _raidExpiryTime;
 
   final Map<String, RaidParticipant> _participants = {};
+  final List<Map<String, dynamic>> _tacticalPings = [];
   Timer? _regenTimer;
+
+  StreamSubscription? _teamSubscription;
+  StreamSubscription? _eventSubscription;
+  StreamSubscription? _pingSubscription;
 
   // --- GETTERS ---
   String? get activeRaidId => _activeRaidId;
+  String? get teamId => _teamId;
   String get bossName => _bossName;
   double get bossMaxHp => _bossMaxHp;
   double get bossCurrentHp => _bossCurrentHp;
   bool get isSystemHackActive => _isSystemHackActive;
   DateTime? get raidExpiryTime => _raidExpiryTime;
   List<RaidParticipant> get participants => _participants.values.toList();
+  List<Map<String, dynamic>> get tacticalPings => List.unmodifiable(_tacticalPings);
 
   double get bossHpPercentage => (_bossCurrentHp / _bossMaxHp).clamp(0.0, 1.0);
-  bool get isRaidActive => _activeRaidId != null && _bossCurrentHp > 0 && !isExpired;
+  bool get isRaidActive => (_activeRaidId != null || _teamId != null) && _bossCurrentHp > 0 && !isExpired;
 
   bool get isExpired {
     if (_raidExpiryTime == null) return false;
     return DateTime.now().isAfter(_raidExpiryTime!);
   }
 
+  /// Initializes the controller for a specific team, binding Firestore listeners.
+  void initTeamRaid(String teamId) {
+    if (_teamId == teamId) return;
+    _teamId = teamId;
+    _activeRaidId = "raid_$teamId"; // Simplified ID mapping
+
+    _teamSubscription?.cancel();
+    _eventSubscription?.cancel();
+    _pingSubscription?.cancel();
+
+    // 1. Listen to Team Document for Boss HP and Expiry
+    _teamSubscription = _firestore.collection("teams").doc(teamId).snapshots().listen((snap) {
+      if (snap.exists) {
+        final data = snap.data()!;
+        _bossCurrentHp = (data["raidBossHp"] ?? _bossMaxHp).toDouble();
+        final Timestamp? expiry = data["raidExpiry"] as Timestamp?;
+        _raidExpiryTime = expiry?.toDate();
+        
+        debugPrint("RAID SYNC [TEAM]: Boss HP @ $_bossCurrentHp");
+        notifyListeners();
+      }
+    });
+
+    // 2. Listen to Events sub-collection for real-time broadcasts
+    _eventSubscription = _firestore
+        .collection("teams")
+        .doc(teamId)
+        .collection("events")
+        .where("timestamp", isGreaterThan: Timestamp.now())
+        .orderBy("timestamp", descending: true)
+        .limit(10)
+        .snapshots()
+        .listen((snap) {
+      for (var change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          _handleRaidEvent(change.doc.data() as Map<String, dynamic>);
+        }
+      }
+    });
+
+    // 3. Listen to Tactical Pings
+    _pingSubscription = _firestore
+        .collection("teams")
+        .doc(teamId)
+        .collection("pings")
+        .orderBy("timestamp", descending: true)
+        .limit(5)
+        .snapshots()
+        .listen((snap) {
+      _tacticalPings.clear();
+      for (var doc in snap.docs) {
+        _tacticalPings.add(doc.data());
+      }
+      notifyListeners();
+    });
+
+    notifyListeners();
+  }
+
+  void _handleRaidEvent(Map<String, dynamic> data) {
+    final type = data["type"];
+    if (type == "BOSS_HP_SYNC") {
+      final double syncedHp = (data["hp"] ?? _bossCurrentHp).toDouble();
+      // Only update if discrepancy is significant to avoid jitter
+      if ((syncedHp - _bossCurrentHp).abs() > 1.0) {
+        _bossCurrentHp = syncedHp;
+        notifyListeners();
+      }
+    } else if (type == "RAID_DAMAGE") {
+      final String playerName = data["playerName"] ?? "Unknown";
+      final double damage = (data["damage"] ?? 0.0).toDouble();
+      debugPrint("RAID ALERT: $playerName dealt $damage damage!");
+      // Local HP prediction could happen here before document sync
+    } else if (type == "RAID_COMPLETED") {
+      _bossCurrentHp = 0;
+      _handleRaidSuccess();
+      notifyListeners();
+    }
+  }
 
   /// Initiates a new Colossus Raid instance across the cooperative operator cell.
   void startNewRaid({
@@ -87,6 +177,22 @@ class RaidController extends ChangeNotifier {
     // Set up recurring hourly health regeneration simulation (scaled to 1 minute for local preview testing)
     _regenTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _applyBossRegeneration();
+    });
+
+    // 3. Listen to Tactical Pings
+    _pingSubscription = _firestore
+        .collection("teams")
+        .doc(teamId)
+        .collection("pings")
+        .orderBy("timestamp", descending: true)
+        .limit(5)
+        .snapshots()
+        .listen((snap) {
+      _tacticalPings.clear();
+      for (var doc in snap.docs) {
+        _tacticalPings.add(doc.data());
+      }
+      notifyListeners();
     });
 
     notifyListeners();
@@ -159,6 +265,9 @@ class RaidController extends ChangeNotifier {
   @override
   void dispose() {
     _regenTimer?.cancel();
+    _teamSubscription?.cancel();
+    _eventSubscription?.cancel();
+    _pingSubscription?.cancel();
     super.dispose();
   }
 }

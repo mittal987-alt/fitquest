@@ -17,7 +17,7 @@ class CraftingScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          "MATERIEL SYNTHESIZER",
+          "CRAFTING STATION",
           style: TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
@@ -63,7 +63,7 @@ class CraftingScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "RAW MATERIALS CACHE",
+                      "MATERIALS INVENTORY",
                       style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                     ),
                     const SizedBox(height: 16),
@@ -97,7 +97,7 @@ class CraftingScreen extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Text(
-                  "SYNTHESIS BLUEPRINTS",
+                  "CRAFTING BLUEPRINTS",
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1),
                 ),
               ),
@@ -188,7 +188,7 @@ class CraftingScreen extends StatelessWidget {
                     );
                     if (success) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("SYNTHESIS SUCCESSFUL: ${recipe.resultName}")),
+                        SnackBar(content: Text("CRAFTING SUCCESSFUL: ${recipe.resultName}")),
                       );
                     }
                   } : null,
@@ -199,7 +199,7 @@ class CraftingScreen extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
-                  child: const Text("SYNTHESIZE", style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text("CRAFT", style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

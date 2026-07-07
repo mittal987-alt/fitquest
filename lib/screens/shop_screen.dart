@@ -17,7 +17,7 @@ class ShopScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          "XP ARMORY SHOP",
+          "POWER-UP SHOP",
           style: TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
@@ -37,7 +37,7 @@ class ShopScreen extends StatelessWidget {
           if (!snapshot.hasData || snapshot.data == null) {
             return const Center(
               child: Text(
-                "ARMORY CACHE OFFLINE",
+                "SHOP CURRENTLY UNAVAILABLE",
                 style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
               ),
             );
@@ -74,7 +74,7 @@ class ShopScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "AVAILABLE RESERVES",
+                          "CURRENT BALANCE",
                           style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                         ),
                         const SizedBox(height: 6),
@@ -204,7 +204,7 @@ class ShopScreen extends StatelessWidget {
                                   if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text("DEPLOYED: ${item.name.toUpperCase()} ACCESSED"),
+                                      content: Text("ACTIVATED: ${item.name.toUpperCase()}"),
                                       backgroundColor: itemThemeColor.withValues(alpha: 0.9),
                                       behavior: SnackBarBehavior.floating,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -214,7 +214,7 @@ class ShopScreen extends StatelessWidget {
                                   if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text("ACQUISITION FAULT: $e"),
+                                      content: Text("PURCHASE ERROR: $e"),
                                       backgroundColor: Colors.redAccent,
                                       behavior: SnackBarBehavior.floating,
                                     ),

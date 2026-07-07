@@ -61,8 +61,18 @@ class _MainNavigationState extends State<MainNavigation> {
     final uid = firebaseService.auth.currentUser?.uid;
 
     if (uid != null) {
-      _playerSubscription = firebaseService.getPlayerStream(uid).listen((player) {
-        if (!mounted || player == null) return;
+      _playerSubscription = firebaseService.getPlayerStream(uid).listen((player) async {
+        if (!mounted) return;
+
+        if (player == null) {
+          debugPrint("PROFILE MISSING: Attempting auto-initialization for $uid");
+          await firebaseService.ensurePlayerProfileExists(
+            uid,
+            firebaseService.auth.currentUser?.email ?? "unknown@fitquest.io",
+            "Operator ${uid.substring(0, 5)}",
+          );
+          return;
+        }
 
         final notificationService = Provider.of<NotificationService>(context, listen: false);
         stepSyncService.updateConfig(player);

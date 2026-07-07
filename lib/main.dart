@@ -6,47 +6,30 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/firebase_service.dart';
 import 'services/notification_service.dart';
+import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
+import 'controller/raid_controller.dart';
+import 'controller/relay_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  try {
-    // Force your new bucket parameters directly into the options layer
-    final firebaseOptions = DefaultFirebaseOptions.currentPlatform;
-
-    await Firebase.initializeApp(
-      options: FirebaseOptions(
-        apiKey: firebaseOptions.apiKey,
-        appId: firebaseOptions.appId,
-        messagingSenderId: firebaseOptions.messagingSenderId,
-        projectId: firebaseOptions.projectId,
-        authDomain: firebaseOptions.authDomain,
-        databaseURL: firebaseOptions.databaseURL,
-        //  Hardcoding the correct bucket explicitly to bypass caching bugs
-        storageBucket: "territory-game-462f9.firebasestorage.app",
-        measurementId: firebaseOptions.measurementId,
-      ),
-    );
-    debugPrint("✅ Firebase Initialized with explicit storage bucket");
-  } catch (e) {
-    debugPrint("❌ Firebase Init Error: $e");
-  }
+  
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   final notificationService = NotificationService();
-  try {
-    await notificationService.initialize();
-    debugPrint("✅ Notifications Initialized");
-  } catch (e) {
-    debugPrint("❌ Notification Error: $e");
-  }
-
+  await notificationService.initialize();
+  
   runApp(
     MultiProvider(
       providers: [
         Provider<FirebaseService>(create: (_) => FirebaseService()),
+        Provider<AuthService>(create: (_) => AuthService()),
         Provider<NotificationService>.value(value: notificationService),
+        Provider<RelayController>(create: (_) => RelayController()),
+        ChangeNotifierProvider<RaidController>(create: (_) => RaidController()),
       ],
       child: const MyApp(),
     ),

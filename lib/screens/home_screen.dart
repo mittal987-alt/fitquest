@@ -14,6 +14,11 @@ import 'shop_screen.dart';
 import 'relay_screen.dart';
 import 'crafting_screen.dart';
 import '../features/tactical/widgets/activity_heatmap.dart';
+import '../widgets/recharge_badge.dart';
+import '../models/activity_model.dart';
+
+import 'package:provider/provider.dart';
+import '../controller/raid_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -41,10 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
   double _anomalyScanProgress = 0.0;
   final double _anomalyDistance = 342.0; 
 
-  double _colossusHp = 72400.0;
-  final double _colossusMaxHp = 100000.0;
-  bool _systemHackActive = true;
-
   bool _isMyRelayShiftActive = true;
   int _relayStepsRemaining = 3500;
   String _activeRelayPartner = "Operator_Alpha";
@@ -65,6 +66,10 @@ class _HomeScreenState extends State<HomeScreen> {
         if (player != null) {
           pedometerService.startTracking(playerContext: player);
           _subscribeToTacticalPulse();
+          
+          if (player.teamId != null && mounted) {
+            context.read<RaidController>().initTeamRaid(player.teamId!);
+          }
         }
       });
 
@@ -79,10 +84,21 @@ class _HomeScreenState extends State<HomeScreen> {
       final player = await firebaseService.getPlayer(currentUid);
       
       if (mounted) {
+        // Determine Activity Model for extra Raid Multiplier if Recharge is Active
+        double raidMult = 1.0;
+        if (player != null && player.activePowerUps.containsKey("metabolic_recharge")) {
+          final double meters = (player.heightCm ?? 170.0) / 100;
+          final double bmi = (player.weightKg ?? 70.0) / (meters * meters);
+          final activityModel = ActivityModel.fromBmiAndGoal(bmi, player.fitnessGoal);
+          DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+          if (expiry.isAfter(DateTime.now())) {
+            raidMult = activityModel.raidDamageMultiplier;
+          }
+        }
+
+        final double finalDamage = pulse.raidDamage * raidMult;
+
         setState(() {
-          // Update Local Visual Raid HP (for immediate feedback)
-          _colossusHp = (_colossusHp - pulse.raidDamage).clamp(0.0, _colossusMaxHp);
-          
           // Update Anomaly Scanning
           if (_anomalyScanning) {
             _anomalyScanProgress += pulse.scanProgress;
@@ -103,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (player != null) {
           // Contribute damage to shared team raid if in a team
           if (player.teamId != null) {
-            await firebaseService.contributeRaidDamage(player.teamId!, pulse.raidDamage);
+            await firebaseService.contributeRaidDamage(player.teamId!, finalDamage);
           }
 
           // Persist discovered materials to Firebase inventory
@@ -149,13 +165,16 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: const Text(
-          "FITQUEST HQ",
+          "FITQUEST HOME",
           style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 18, color: Colors.black87),
         ),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black87),
+        actions: const [
+          RechargeBadge(),
+        ],
       ),
       body: StreamBuilder<PlayerModel?>(
         stream: _playerStream,
@@ -226,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
-                                "ACTIVE GLOBAL OPERATION",
+                                "ACTIVE GLOBAL EVENT",
                                 style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
                               ),
                               Container(
@@ -305,14 +324,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "OPERATOR STATUS: ACTIVE",
+                              "PLAYER STATUS: ACTIVE",
                               style: TextStyle(color: Colors.cyan.shade700, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
                             ),
                             const SizedBox(height: 6),
                             Row(
                               children: [
                                 Text(
-                                  player?.name.toUpperCase() ?? "EXPLORER NODE",
+                                  player?.name.toUpperCase() ?? "NEW PLAYER",
                                   style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
                                 ),
                                 if (hasExpBoost) ...[
@@ -367,7 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Icon(Icons.sync_rounded, size: 13, color: Colors.black38),
                         const SizedBox(width: 6),
                         Text(
-                          "TELEMETRY UPDATED: ${_getRelativeSyncTime(stepSyncService.lastSyncTime!).toUpperCase()}",
+                          "DATA SYNCED: ${_getRelativeSyncTime(stepSyncService.lastSyncTime!).toUpperCase()}",
                           style: const TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                         ),
                       ],
@@ -383,10 +402,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.25,
                   children: [
-                    _buildModernStatCard(title: "DAILY STRIDES", value: "$liveSteps", icon: Icons.directions_walk_rounded, color: Colors.cyanAccent),
-                    _buildModernStatCard(title: "ENERGY KCAL", value: calculatedCalories.toStringAsFixed(0), icon: Icons.local_fire_department_rounded, color: Colors.orangeAccent),
-                    _buildModernStatCard(title: "DISTANCE MAP", value: "${calculatedDistance.toStringAsFixed(2)} KM", icon: Icons.alt_route_rounded, color: Colors.greenAccent),
-                    _buildModernStatCard(title: "STAMINA AP", value: "${player?.currentStamina ?? 0}", icon: Icons.bolt_rounded, color: Colors.amberAccent),
+                    _buildModernStatCard(title: "DAILY STEPS", value: "$liveSteps", icon: Icons.directions_walk_rounded, color: Colors.cyanAccent),
+                    _buildModernStatCard(title: "CALORIES", value: calculatedCalories.toStringAsFixed(0), icon: Icons.local_fire_department_rounded, color: Colors.orangeAccent),
+                    _buildModernStatCard(title: "DISTANCE", value: "${calculatedDistance.toStringAsFixed(2)} KM", icon: Icons.alt_route_rounded, color: Colors.greenAccent),
+                    _buildModernStatCard(title: "STAMINA", value: "${player?.currentStamina ?? 0}", icon: Icons.bolt_rounded, color: Colors.amberAccent),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -407,7 +426,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildTelemetryRelayCard(),
                 const SizedBox(height: 20),
 
-                // 8. DAILY SECTOR GOAL PROGRESS
+                // 8. DAILY STEP GOAL PROGRESS
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -428,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text("DAILY SECTOR GOAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54, letterSpacing: 0.5)),
+                          const Text("DAILY STEP GOAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54, letterSpacing: 0.5)),
                           Text("${(goalProgress * 100).toStringAsFixed(0)}%", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.cyan.shade700, fontSize: 13)),
                         ],
                       ),
@@ -444,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        "$liveSteps / ${dailyGoalTarget.toStringAsFixed(0)} STRIDES COMPLETED",
+                        "$liveSteps / ${dailyGoalTarget.toStringAsFixed(0)} STEPS COMPLETED",
                         style: const TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.2),
                       ),
                     ],
@@ -453,14 +472,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 24),
 
                 if (player != null && player.activePowerUps.entries.any((e) => e.value.isAfter(DateTime.now()))) ...[
-                  const Text("ACTIVE AUGMENTATIONS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                  const Text("ACTIVE POWER-UPS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 80,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: player.activePowerUps.entries.where((e) => e.value.isAfter(DateTime.now())).map((entry) {
-                        final powerUp = shopItems.firstWhere((s) => s.id == entry.key);
+                        final powerUp = shopItems.firstWhere(
+                          (s) => s.id == entry.key,
+                          orElse: () => PowerUp(
+                            id: entry.key,
+                            name: "Unknown Buff",
+                            description: "",
+                            cost: 0,
+                            icon: Icons.auto_awesome,
+                            color: Colors.grey,
+                            duration: Duration.zero,
+                          ),
+                        );
                         final remaining = entry.value.difference(DateTime.now());
                         final minutes = remaining.inMinutes;
                         final seconds = remaining.inSeconds % 60;
@@ -508,13 +538,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                const Text("TACTICAL DAILY QUESTS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                const Text("DAILY QUESTS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
                 const SizedBox(height: 12),
                 if (player != null) ...[
                   _buildQuest(
                     player: player, 
                     id: "morning_walker", 
-                    title: "Morning Scout Routine", 
+                    title: "Morning Walk", 
                     target: 2000, 
                     current: player.dailySteps.toDouble(), 
                     reward: 100, 
@@ -525,7 +555,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildQuest(
                     player: player, 
                     id: "territory_scout", 
-                    title: "Grid Perimeter Expansion", 
+                    title: "Explore New Areas", 
                     target: 3, 
                     current: player.totalLand.toDouble(), 
                     reward: 250, 
@@ -536,7 +566,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildQuest(
                     player: player, 
                     id: "xp_hunter", 
-                    title: "Core Processor Linkup", 
+                    title: "Daily Activity Goal", 
                     target: 500, 
                     current: player.xp.toDouble(), 
                     reward: 500, 
@@ -576,7 +606,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen())),
                         icon: const Icon(Icons.shopping_bag_rounded, color: Colors.purpleAccent),
-                        label: const Text("ARMORY", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+                        label: const Text("SHOP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                       ),
                     ),
                   ],
@@ -595,12 +625,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
                     icon: const Icon(Icons.leaderboard_rounded, color: Colors.orangeAccent),
-                    label: const Text("GLOBAL STANDINGS NODE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+                    label: const Text("GLOBAL LEADERBOARD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                   ),
                 ),
                 const SizedBox(height: 24),
 
-                const Text("HISTORICAL CACHE LOGS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                const Text("RECENT REWARDS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -618,15 +648,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   child: Column(
                     children: [
-                      _buildRewardItem(icon: Icons.flash_on_rounded, title: "Grid Conquest Matrix", subtitle: "Dispatched 100 XP allocation via tile vectors", color: Colors.amber.shade700),
+                      _buildRewardItem(icon: Icons.flash_on_rounded, title: "Quest Reward", subtitle: "You earned 100 XP", color: Colors.amber.shade700),
                       const Divider(height: 20, thickness: 1, color: Colors.black12),
-                      _buildRewardItem(icon: Icons.shield_rounded, title: "Node Defense Baseline", subtitle: "Secured 20 XP firewall perimeter rewards", color: Colors.teal),
+                      _buildRewardItem(icon: Icons.shield_rounded, title: "Daily Bonus", subtitle: "You earned 20 XP for activity", color: Colors.teal),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
 
-                const Text("LIFETIME OPERATIONAL DATA", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                const Text("LIFETIME STATS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -638,11 +668,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildLifetimeStat("TOTAL STRIDES", "${player?.totalSteps ?? 0}"),
+                      _buildLifetimeStat("TOTAL STEPS", "${player?.totalSteps ?? 0}"),
                       Container(width: 1, height: 30, color: Colors.black12),
-                      _buildLifetimeStat("SECTORS HELD", "${player?.totalLand ?? 0}"),
+                      _buildLifetimeStat("AREAS VISITED", "${player?.totalLand ?? 0}"),
                       Container(width: 1, height: 30, color: Colors.black12),
-                      _buildLifetimeStat("CORE TRUST", "${player?.trustScore ?? 0}%"),
+                      _buildLifetimeStat("TEAM TRUST", "${player?.trustScore ?? 0}%"),
                     ],
                   ),
                 ),
@@ -695,7 +725,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text("BIO-INDEX CORE STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                const Text("FITNESS STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                                 const SizedBox(height: 4),
                                 Text(
                                   bioStatus.toUpperCase(),
@@ -710,9 +740,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildBioMetric("PULSE", "OPTIMAL", Icons.favorite_rounded, Colors.redAccent),
+                          _buildBioMetric("ACTIVITY", "OPTIMAL", Icons.favorite_rounded, Colors.redAccent),
                           _buildBioMetric("SYNC", "100%", Icons.sync_rounded, Colors.cyan),
-                          _buildBioMetric("INTEGRITY", "${player?.trustScore ?? 100}%", Icons.shield_rounded, Colors.greenAccent),
+                          _buildBioMetric("TRUST", "${player?.trustScore ?? 100}%", Icons.shield_rounded, Colors.greenAccent),
                         ],
                       ),
                     ],
@@ -754,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // UI COMPONENT: GHOST STRIDER DATA STREAM VISUALS
+  // UI COMPONENT: GHOST CHALLENGE DATA
   Widget _buildGhostStriderCard(PlayerModel? player, int liveSteps) {
     final Map<String, int> baseline = (player?.hourlyTelemetry != null && player!.hourlyTelemetry.isNotEmpty) 
         ? player.hourlyTelemetry 
@@ -789,7 +819,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Icon(Icons.directions_run_rounded, color: _isGhostStriderActive ? Colors.deepPurpleAccent : Colors.grey),
                   const SizedBox(width: 8),
                   const Text(
-                    "GHOST STRIDER TRIAL",
+                    "GHOST CHALLENGE",
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
                   ),
                 ],
@@ -807,7 +837,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            "Synthesize steps against your historical telemetry curve.",
+            "Compare your steps with your past performance.",
             style: TextStyle(color: Colors.black45, fontSize: 11),
           ),
           if (_isGhostStriderActive) ...[
@@ -826,7 +856,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "YOUR CURRENT STRIDES: $liveSteps",
+                          "YOUR CURRENT STEPS: $liveSteps",
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black87),
                         ),
                         Text(
@@ -851,8 +881,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Text(
                           status.isAhead 
-                              ? "🔥 ${status.stepsAhead} STEPS AHEAD OF GHOST" 
-                              : "⚠️ ${status.stepsAhead} STEPS BEHIND GHOST",
+                              ? "🔥 ${status.stepsAhead} STEPS AHEAD" 
+                              : "⚠️ ${status.stepsAhead} STEPS BEHIND",
                           style: TextStyle(
                             fontSize: 10, 
                             fontWeight: FontWeight.bold, 
@@ -860,7 +890,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         Text(
-                          "VELOCITY: ${status.velocityIndex.toStringAsFixed(2)}x",
+                          "SPEED: ${status.velocityIndex.toStringAsFixed(2)}x",
                           style: const TextStyle(fontSize: 9, color: Colors.black38, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -875,7 +905,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // UI COMPONENT: GRID RADAR FOR ANOMALIES
+  // UI COMPONENT: NEARBY ITEMS RADAR
   Widget _buildGridAnomalyRadar() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -895,7 +925,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Icon(Icons.radar_rounded, color: Colors.cyanAccent),
                   const SizedBox(width: 8),
                   const Text(
-                    "GRID ANOMALIES RADAR",
+                    "NEARBY ITEMS RADAR",
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
                   ),
                 ],
@@ -920,8 +950,8 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 6),
           Text(
             _anomalyScanning 
-              ? "DECRYPTING ANOMALY: ${(_anomalyScanProgress * 100).toStringAsFixed(1)}%"
-              : "Scanning physical coordinate vectors within radius r <= 500m.",
+              ? "SCANNING FOR ITEMS: ${(_anomalyScanProgress * 100).toStringAsFixed(1)}%"
+              : "Scanning for items within 500 meters.",
             style: TextStyle(
               color: _anomalyScanning ? Colors.cyan : Colors.black54, 
               fontSize: 11,
@@ -954,12 +984,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "ACTIVE NODE DETECTED",
+                        "ITEM DETECTED",
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.cyan),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "Coordinates located \${_anomalyDistance.toStringAsFixed(0)}m away on perimeter segment",
+                        "Located ${_anomalyDistance.toStringAsFixed(0)}m away",
                         style: const TextStyle(fontSize: 11, color: Colors.black54),
                       ),
                     ],
@@ -974,7 +1004,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   ),
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapScreen())),
-                  child: const Text("RADAR", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                  child: const Text("MAP", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                 )
               ],
             ),
@@ -983,16 +1013,16 @@ class _HomeScreenState extends State<HomeScreen> {
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("CRAFTING BACKLOG:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
-              Text("Combine Elements in Upgrades Tab", style: TextStyle(fontSize: 9, color: Colors.black26)),
+              Text("CRAFTING LIST:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
+              Text("Combine Items in Shop Tab", style: TextStyle(fontSize: 9, color: Colors.black26)),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              _buildRawElementChip("Raw Silicon", 4, Colors.amber),
+              _buildRawElementChip("Materials", 4, Colors.amber),
               const SizedBox(width: 8),
-              _buildRawElementChip("Dark Energy Core", 1, Colors.deepPurple),
+              _buildRawElementChip("Power Cores", 1, Colors.deepPurple),
             ],
           )
         ],
@@ -1020,50 +1050,62 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // UI COMPONENT: CO-OP RAID HEALTH TRACKER
+  // UI COMPONENT: TEAM BOSS FIGHT
   Widget _buildColossusRaidDashboard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Consumer<RaidController>(
+      builder: (context, raidController, child) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.gavel_rounded, color: Colors.orangeAccent),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  "COLOSSUS GRID-BREAKER RAID",
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                ),
+              Row(
+                children: [
+                  const Icon(Icons.gavel_rounded, color: Colors.orangeAccent),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      "TEAM BOSS FIGHT",
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                    ),
+                  ),
+                  if (raidController.isRaidActive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text("ACTIVE", style: TextStyle(color: Colors.redAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                "Every step taken by your team deals damage to the boss.",
+                style: TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "BOSS HEALTH: ${raidController.bossCurrentHp.toStringAsFixed(0)} HP",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: raidController.bossHpPercentage,
+                backgroundColor: Colors.black.withValues(alpha: 0.05),
+                color: Colors.orangeAccent,
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          const Text(
-            "Every step taken by the Operator Cell inflicts structural damage to defenses targeting a collectively aggregated pool of 100,000 HP.",
-            style: TextStyle(color: Colors.black54, fontSize: 12),
-          ),
-          const SizedBox(height: 16),
-          // FIXED: Interpolation and layout constraints
-          Text(
-            "GLITCH COLOSSUS INTEGRITY: ${_colossusHp.toStringAsFixed(0)} HP",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: _colossusHp / _colossusMaxHp,
-            backgroundColor: Colors.black.withValues(alpha: 0.05),
-            color: Colors.orangeAccent,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1078,16 +1120,16 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("TELEMETRY RELAY SHIFT", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+          const Text("TEAM STEP CHALLENGE", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
           const SizedBox(height: 12),
-          const Text("YOUR REMAINING TARGET", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
+          const Text("YOUR REMAINING STEPS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
           const SizedBox(height: 8),
           Row(
             children: [
               // FIXED: Expanded prevents Row overflow
               Expanded(
                 child: Text(
-                  "$_relayStepsRemaining Strides",
+                  "$_relayStepsRemaining Steps",
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                 ),
               ),
@@ -1107,12 +1149,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("JOIN A SQUAD TO ACCESS RELAY CHANNELS")),
+                        const SnackBar(content: Text("JOIN A TEAM TO ACCESS THIS CHALLENGE")),
                       );
                     }
                   });
                 },
-                child: const Text("PASS TOKEN"),
+                child: const Text("PASS STEPS"),
               ),
             ],
           ),
@@ -1228,7 +1270,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("REWARD SECURED: +$reward XP DEPLOYED!"),
+                      content: Text("REWARD CLAIMED: +$reward XP EARNED!"),
                       backgroundColor: color,
                     ),
                   );

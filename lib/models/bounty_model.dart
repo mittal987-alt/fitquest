@@ -8,6 +8,7 @@ class BountyModel {
   final DateTime expiresAt;
   final int xpReward;
   final String? itemReward; // Gear ID or Power-up ID
+  final String title;
 
   BountyModel({
     required this.id,
@@ -17,6 +18,7 @@ class BountyModel {
     required this.expiresAt,
     required this.xpReward,
     this.itemReward,
+    this.title = "ANOMALY CORE",
   });
 
   factory BountyModel.fromMap(Map<String, dynamic> map) {
@@ -28,6 +30,7 @@ class BountyModel {
       expiresAt: (map['expiresAt'] as Timestamp).toDate(),
       xpReward: map['xpReward'] ?? 0,
       itemReward: map['itemReward'],
+      title: map['title'] ?? 'ANOMALY CORE',
     );
   }
 
@@ -40,6 +43,7 @@ class BountyModel {
       'expiresAt': Timestamp.fromDate(expiresAt),
       'xpReward': xpReward,
       'itemReward': itemReward,
+      'title': title,
     };
   }
 }

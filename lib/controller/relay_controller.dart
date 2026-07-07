@@ -82,9 +82,22 @@ class RelayController {
         'currentSteps': 0,
         'startTime': FieldValue.serverTimestamp(),
       });
+
+      // Notify the squad
+      await _firebaseService.sendTacticalPing(
+        teamId,
+        "RELAY_CHANNEL",
+        "RELAY TOKEN PASSED TO ${nextName.toUpperCase()}"
+      );
     } else {
       // Relay finished
       await docRef.update({'isActive': false});
+      
+      await _firebaseService.sendTacticalPing(
+        teamId,
+        "RELAY_CHANNEL",
+        "RELAY SEQUENCE COMPLETE - MASSIVE TEAM XP GRANTED"
+      );
     }
   }
 }

@@ -55,6 +55,14 @@ class FirebaseService {
       level: 1,
       xp: 0,
       avatar: "",
+      fitnessGoal: "maintenance",
+      strength: 10,
+      agility: 10,
+      endurance: 10,
+      currentStamina: 100,
+      maxStamina: 100,
+      rechargeRaidMultiplier: 1.0,
+      rechargeXpMultiplier: 1.0,
     );
 
     await firestore.collection("players").doc(uid).set(player.toMap());
@@ -76,42 +84,82 @@ class FirebaseService {
   // FITNESS & ACTIVITY LOGIC
   // =========================
 
-  /// Initializes or updates the player's personal fitness plan based on weight
-  Future<void> updateUserFitnessPlan(String uid, double currentWeight) async {
-    final plan = ActivityModel.fromWeight(currentWeight);
+  /// Updates the player's personal fitness profile using the ML-driven adaptive engine
+  Future<void> updateFitnessProfile({
+    required String uid,
+    required double heightCm,
+    required double weightKg,
+    required String fitnessGoal,
+  }) async {
+    double heightM = heightCm / 100;
+    double bmi = weightKg / (heightM * heightM);
+
+    // Invoke ML Recommendation Engine (Heuristic)
+    final plan = ActivityModel.fromBmiAndGoal(bmi, fitnessGoal);
 
     await firestore.collection("players").doc(uid).update({
+      "heightCm": heightCm,
+      "weightKg": weightKg,
+      "fitnessGoal": fitnessGoal,
       "fitnessTier": plan.tier,
       "restInterval": plan.restIntervalSeconds,
       "xpMultiplier": plan.xpMultiplier,
+      "rechargeRaidMultiplier": plan.raidDamageMultiplier,
       "lastUpdated": FieldValue.serverTimestamp(),
     });
-    debugPrint("FITNESS PLAN UPDATED: ${plan.tier}");
+    debugPrint("ML FITNESS PROFILE UPDATED: ${plan.tier} | Goal: $fitnessGoal");
   }
 
   /// Logs the workout, applies XP bonus based on tier, and activates the recharge buff
-  Future<void> logWorkoutAndRecharge(String uid, int durationMinutes, String tier) async {
+  Future<void> logWorkoutAndRecharge({
+    required String uid,
+    required int durationMinutes,
+    required String tier,
+    required double xpMultiplier,
+    required double raidMultiplier,
+    required List<String> exercises,
+  }) async {
     final playerRef = firestore.collection("players").doc(uid);
 
-    // Determine multiplier based on Tier logic
-    double multiplier = (tier == "ELITE") ? 2.0 : (tier == "ACTIVE" ? 1.5 : 1.0);
-    int bonusXp = (durationMinutes * 10 * multiplier).toInt(); // 10 XP per minute base
+    int bonusXp = (durationMinutes * 10 * xpMultiplier).toInt(); // 10 XP per minute base scaled by tier multiplier
 
     await firestore.runTransaction((transaction) async {
       final snap = await transaction.get(playerRef);
       if (!snap.exists) return;
 
+      final player = PlayerModel.fromMap(snap.data()!);
+      String todayKey = DateTime.now().toIso8601String().split('T')[0];
+
       // Update XP, Log Activity, and set the 60-minute Metabolic Recharge buff
+      final now = DateTime.now();
       transaction.update(playerRef, {
         "xp": FieldValue.increment(bonusXp),
+        "rechargeRaidMultiplier": raidMultiplier,
+        "rechargeXpMultiplier": xpMultiplier,
         "lastActivityTimestamp": FieldValue.serverTimestamp(),
         "activePowerUps.metabolic_recharge": Timestamp.fromDate(
-            DateTime.now().add(const Duration(minutes: 60))
+            now.add(const Duration(minutes: 60))
         ),
+        "dailyHistory.$todayKey.xpGained": FieldValue.increment(bonusXp),
+        "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion([
+          "WORKOUT: $tier ($durationMinutes min)",
+          if (player.bmi != null) "BMI AT SESSION: ${player.bmi!.toStringAsFixed(1)}",
+          "DRILLS COMPLETED: ${exercises.join(', ')}"
+        ]),
       });
     });
 
-    debugPrint("WORKOUT LOGGED: +$bonusXp XP. Metabolic Recharge Active.");
+    debugPrint("WORKOUT LOGGED: +$bonusXp XP (Mult: ${xpMultiplier}x). Drills: $exercises. Recharge Active.");
+  }
+  Future<void> ensurePlayerProfileExists(String uid, String email, String name) async {
+    final playerRef = firestore.collection("players").doc(uid);
+    final snapshot = await playerRef.get();
+
+    if (!snapshot.exists) {
+      // This creates the default document structure if it's missing
+      await createPlayer(uid: uid, name: name, email: email);
+      debugPrint("NEW PLAYER PROFILE CREATED FOR: $uid");
+    }
   }
 
   /// Checks if the user is currently under the 60-minute Metabolic Recharge buff
@@ -176,6 +224,7 @@ class FirebaseService {
       await docRef.update({
         "totalSteps": FieldValue.increment(finalSteps),
         "dailySteps": FieldValue.increment(finalSteps),
+        "dailyHistory.${DateTime.now().toIso8601String().split('T')[0]}.steps": FieldValue.increment(finalSteps),
       });
       debugPrint("STEPS UPDATED => +$finalSteps (Mult: $stepMult)");
     } catch (e) {
@@ -264,19 +313,38 @@ class FirebaseService {
       if (player.activePowerUps.containsKey("metabolic_recharge")) {
         DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
         if (expiry.isAfter(DateTime.now())) {
-          // Tier-based multiplier is pre-applied in activity_screen completion, 
-          // or we can apply it globally here if preferred. 
-          // For now, consistent with ActivityModel.
-          finalXpToAdd = (finalXpToAdd * 1.5).round();
+          finalXpToAdd = (finalXpToAdd * player.rechargeXpMultiplier).round();
         }
+      }
+
+      // BROADCAST XP GAIN FOR TEAM
+      if (player.isInTeam && player.teamId != null) {
+        transaction.set(
+          firestore.collection("teams").doc(player.teamId).collection("events").doc(),
+          {
+            "type": "XP_CONTRIBUTION",
+            "playerName": player.name,
+            "amount": finalXpToAdd,
+            "timestamp": FieldValue.serverTimestamp(),
+          }
+        );
       }
 
       int newXp = currentXp + finalXpToAdd;
       int newLevel = (newXp ~/ 1000) + 1;
 
-      Map<String, dynamic> updates = {"xp": newXp};
+      // Update daily history XP tracking
+      String todayKey = DateTime.now().toIso8601String().split('T')[0];
+      
+      Map<String, dynamic> updates = {
+        "xp": newXp,
+        "dailyHistory.$todayKey.xpGained": FieldValue.increment(finalXpToAdd),
+      };
+      
       if (newLevel > currentLevel) {
         updates["level"] = newLevel;
+        // Optionally log level up in achievements for that day
+        updates["dailyHistory.$todayKey.achievements"] = FieldValue.arrayUnion(["LEVEL UP: $newLevel"]);
       }
 
       transaction.update(docRef, updates);
@@ -312,10 +380,20 @@ class FirebaseService {
       final difference = today.difference(lastDate).inDays;
 
       if (difference >= 1) {
+        // Archive yesterday's data into dailyHistory
+        String yesterdayKey = lastDate.toIso8601String().split('T')[0];
+        Map<String, dynamic> historyNode = {
+          "steps": data["dailySteps"] ?? 0,
+          "xpGained": 0, // In a real app, we'd track this throughout the day
+          "achievements": [], // Logic for daily achievement badges
+          "timestamp": Timestamp.fromDate(lastDate),
+        };
+
         Map<String, dynamic> updates = {
           "lastActiveDate": Timestamp.fromDate(today),
           "claimedQuests": [],
           "dailySteps": 0,
+          "dailyHistory.$yesterdayKey": historyNode,
         };
 
         if (difference == 1) {
@@ -349,13 +427,18 @@ class FirebaseService {
         int newXp = currentXp + rewardXp;
         int newLevel = (newXp ~/ 1000) + 1;
 
+        String todayKey = DateTime.now().toIso8601String().split('T')[0];
+
         Map<String, dynamic> updates = {
           "claimedQuests": claimed,
           "xp": newXp,
+          "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion(["QUEST COMPLETED: $questId"]),
+          "dailyHistory.$todayKey.xpGained": FieldValue.increment(rewardXp),
         };
 
         if (newLevel > currentLevel) {
           updates["level"] = newLevel;
+          updates["dailyHistory.$todayKey.achievements"] = FieldValue.arrayUnion(["LEVEL UP: $newLevel"]);
         }
 
         transaction.update(docRef, updates);
@@ -475,6 +558,31 @@ class FirebaseService {
     return firestore.collection("teams").snapshots().map((snapshot) {
       return snapshot.docs.map((doc) => TeamModel.fromMap(doc.data())).toList();
     });
+  }
+
+  Future<void> deleteTeam(String teamId) async {
+    // 1. Reset all members
+    var members = await firestore.collection("players").where("teamId", isEqualTo: teamId).get();
+    var batch = firestore.batch();
+    for (var doc in members.docs) {
+      batch.update(doc.reference, {
+        "team": "No Team",
+        "teamId": null,
+        "isInTeam": false,
+        "lastTeamAction": FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 2. Delete team requests
+    var requests = await firestore.collection("team_requests").where("teamId", isEqualTo: teamId).get();
+    for (var doc in requests.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // 3. Delete team document
+    batch.delete(firestore.collection("teams").doc(teamId));
+
+    await batch.commit();
   }
 
   Future<void> createTeam(TeamModel team) async {
@@ -617,12 +725,14 @@ class FirebaseService {
     required String uid,
     required double heightCm,
     required double weightKg,
+    required String fitnessGoal,
     required int stepTarget,
     required int exerciseTarget,
   }) async {
     double meters = heightCm / 100;
     double bmi = weightKg / (meters * meters);
 
+    // RPG Stats Scaling based on BMI
     int strength = 10;
     int agility = 10;
     int endurance = 10;
@@ -638,9 +748,15 @@ class FirebaseService {
       strength = 20; agility = 6; endurance = 11; maxStamina = 140;
     }
 
+    // Sync with ML Adaptive Engine
+    await updateFitnessProfile(
+      uid: uid,
+      heightCm: heightCm,
+      weightKg: weightKg,
+      fitnessGoal: fitnessGoal,
+    );
+
     await firestore.collection("players").doc(uid).update({
-      "heightCm": heightCm,
-      "weightKg": weightKg,
       "dailyStepTarget": stepTarget,
       "dailyExerciseTargetMinutes": exerciseTarget,
       "strength": strength,
@@ -745,16 +861,60 @@ class FirebaseService {
       double baseDmg = (player.effectiveStrength + player.effectiveAgility).toDouble();
       double gearMult = player.getModifier('raid_dmg_mult', allGear);
       double strongholdBonus = (teamSnap.data()?["strongholdActive"] == true) ? 1.5 : 1.0;
-      double totalDmg = baseDmg * gearMult * strongholdBonus;
+      
+      // BIOMETRIC RECHARGE BONUS
+      double rechargeMult = 1.0;
+      if (player.activePowerUps.containsKey("metabolic_recharge")) {
+        DateTime expiry = player.activePowerUps["metabolic_recharge"]!;
+        if (expiry.isAfter(DateTime.now())) {
+          rechargeMult = player.rechargeRaidMultiplier;
+        }
+      }
+
+      double totalDmg = baseDmg * gearMult * strongholdBonus * rechargeMult;
 
       transaction.update(playerRef, {
         "currentStamina": player.currentStamina - staminaCost,
         "lastRaidAttack": FieldValue.serverTimestamp(),
         "lastTeamAction": FieldValue.serverTimestamp(),
+        "totalRaidDamage": FieldValue.increment(totalDmg.toInt()),
       });
 
       double currentBossHp = (teamSnap.data()?["raidBossHp"] ?? 100000.0).toDouble();
-      transaction.update(teamRef, {"raidBossHp": (currentBossHp - totalDmg).clamp(0.0, 1000000.0)});
+      double newBossHp = (currentBossHp - totalDmg).clamp(0.0, 1000000.0);
+      
+      transaction.update(teamRef, {
+        "raidBossHp": newBossHp,
+        "totalRaidDamage": FieldValue.increment(totalDmg),
+      });
+
+      // Log Damage Contribution for FCM Trigger
+      transaction.set(
+        firestore.collection("teams").doc(teamId).collection("events").doc(),
+        {
+          "type": "RAID_DAMAGE",
+          "playerName": player.name,
+          "damage": totalDmg,
+          "timestamp": FieldValue.serverTimestamp(),
+        }
+      );
+
+      // RAID DEFEATED LOGIC
+      if (newBossHp <= 0) {
+        transaction.set(
+          firestore.collection("teams").doc(teamId).collection("events").doc("raid_victory"),
+          {
+            "type": "RAID_COMPLETED",
+            "victor": player.name,
+            "timestamp": FieldValue.serverTimestamp(),
+          }
+        );
+        // Distribute Team Rewards (Placeholder for scalable distribution)
+        transaction.update(teamRef, {
+          "raidActive": false,
+          "lastVictory": FieldValue.serverTimestamp(),
+        });
+      }
 
       return true;
     });
@@ -767,9 +927,29 @@ class FirebaseService {
       if (!snapshot.exists) return;
 
       double currentHp = (snapshot.data()?["raidBossHp"] ?? 100000.0).toDouble();
+      double newHp = (currentHp - damage).clamp(0.0, 1000000.0);
       transaction.update(teamRef, {
-        "raidBossHp": (currentHp - damage).clamp(0.0, 1000000.0),
+        "raidBossHp": newHp,
       });
+
+      // Periodic HP Sync log for broadcast
+      if (newHp % 500 < damage || newHp <= 0) {
+         transaction.set(
+          firestore.collection("teams").doc(teamId).collection("events").doc(newHp <= 0 ? "raid_victory" : "hp_sync"),
+          {
+            "type": newHp <= 0 ? "RAID_COMPLETED" : "BOSS_HP_SYNC",
+            "hp": newHp,
+            "timestamp": FieldValue.serverTimestamp(),
+          }
+        );
+      }
+
+      if (newHp <= 0) {
+        transaction.update(teamRef, {
+          "raidActive": false,
+          "lastVictory": FieldValue.serverTimestamp(),
+        });
+      }
     });
   }
 
@@ -927,9 +1107,12 @@ class FirebaseService {
       final pSnap = await transaction.get(playerRef);
       if (!pSnap.exists) return;
 
+      String todayKey = DateTime.now().toIso8601String().split('T')[0];
       transaction.delete(bountyRef);
       transaction.update(playerRef, {
         "xp": FieldValue.increment(bounty.xpReward),
+        "dailyHistory.$todayKey.xpGained": FieldValue.increment(bounty.xpReward),
+        "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion(["BOUNTY CLAIMED: ${bounty.title}"]),
       });
 
       if (bounty.itemReward != null) {
@@ -973,6 +1156,7 @@ class FirebaseService {
       final pSnap = await transaction.get(playerRef);
       if (!pSnap.exists) return;
 
+      String todayKey = DateTime.now().toIso8601String().split('T')[0];
       transaction.delete(anomalyRef);
 
       Map<String, int> inventory = Map<String, int>.from(pSnap.data()?["inventory"] ?? {});
@@ -987,6 +1171,8 @@ class FirebaseService {
       transaction.update(playerRef, {
         "xp": FieldValue.increment(xpToAdd),
         "inventory": inventory,
+        "dailyHistory.$todayKey.xpGained": FieldValue.increment(xpToAdd),
+        "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion(["ANOMALY SECURED: ${anomaly.type}"]),
       });
     });
   }

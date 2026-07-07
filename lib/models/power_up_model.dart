@@ -48,4 +48,13 @@ final List<PowerUp> shopItems = [
     color: Colors.purple,
     duration: const Duration(hours: 1),
   ),
+  PowerUp(
+    id: "metabolic_recharge",
+    name: "Metabolic Recharge",
+    description: "1.5x XP and Raid Damage after a tactical session.",
+    cost: 0,
+    icon: Icons.offline_bolt,
+    color: Colors.orange,
+    duration: const Duration(minutes: 60),
+  ),
 ];

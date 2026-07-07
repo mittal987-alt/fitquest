@@ -48,8 +48,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   Widget _buildContent(PlayerModel player) {
-    // Generate tier model based on user weight for biometric scaling
-    final activityModel = ActivityModel.fromWeight(player.weightKg ?? 80.0);
+    // Generate tier model based on user BMI and Fitness Goal for biometric scaling
+    // This uses the heuristic 'ML' model to adjust session intensity
+    final activityModel = ActivityModel.fromBmiAndGoal(player.bmi, player.fitnessGoal);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
@@ -57,7 +58,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          "TACTICAL SESSION: ${activityModel.tier}",
+          "FITNESS SESSION: ${activityModel.tier}",
           style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 16),
         ),
         centerTitle: true,
@@ -71,10 +72,55 @@ class _ActivityScreenState extends State<ActivityScreen> {
             _buildLapCounter(),
             const SizedBox(height: 32),
             _buildTimerSection(activityModel),
+            const SizedBox(height: 24),
+            _buildExerciseList(activityModel),
             const SizedBox(height: 48),
             _buildActionButtons(player, activityModel),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildExerciseList(ActivityModel model) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "RECOMMENDED EXERCISES",
+            style: TextStyle(
+              color: Colors.blueAccent,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: model.recommendedExercises.map((ex) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.blueAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                ex,
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            )).toList(),
+          ),
+        ],
       ),
     );
   }
@@ -110,9 +156,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isRecharging ? "METABOLIC RECHARGE ACTIVE" : "RECHARGE SYSTEM OFFLINE",
+                      isRecharging ? "ENERGY BOOST ACTIVE" : "RECHARGE OFFLINE",
                       style: TextStyle(
-                        color: isRecharging ? Colors.blueAccent : Colors.white38,
+                        color: isRecharging ? Colors.blueAccent : Colors.orangeAccent,
                         fontWeight: FontWeight.w900,
                         fontSize: 12,
                         letterSpacing: 0.5,
@@ -121,8 +167,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     const SizedBox(height: 4),
                     Text(
                       isRecharging 
-                          ? "${model.xpMultiplier}x Multiplier applied to all telemetry." 
-                          : "Complete this session to trigger bonus XP.",
+                          ? "BOOST ACTIVE: 1.5x XP Multiplier + ${model.xpMultiplier}x Tier Scaling." 
+                          : "Complete session to activate the 1.5x Energy Boost bonus.",
                       style: const TextStyle(color: Colors.white70, fontSize: 11),
                     ),
                   ],
@@ -163,7 +209,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       child: Column(
         children: [
           Text(
-            isResting ? "REST PROTOCOL" : "ACTIVE ENGAGEMENT",
+            isResting ? "REST BREAK" : "ACTIVE EXERCISE",
             style: TextStyle(
               color: isResting ? Colors.amberAccent : Colors.greenAccent,
               fontWeight: FontWeight.w900,
@@ -177,8 +223,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
               initialSeconds: model.restIntervalSeconds,
               onTimerFinished: () {
                 _notifications.showLocalNotification(
-                  title: "REST PROTOCOL COMPLETE",
-                  body: "Engage next lap immediately. Stay in Flow.",
+                  title: "REST BREAK COMPLETE",
+                  body: "Start next set immediately. Stay focused.",
                 );
                 setState(() {
                   isResting = false;
@@ -192,7 +238,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 64),
                 const SizedBox(height: 16),
                 Text(
-                  "${model.durationMinutes ~/ totalLaps} MIN PER LAP",
+                  "${model.durationMinutes ~/ totalLaps} MIN PER SET",
                   style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
                 ),
                 Text(
@@ -221,7 +267,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: const Text(
-                "INITIATE REST INTERVAL",
+                "START REST BREAK",
                 style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
               ),
             ),
@@ -239,7 +285,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               ),
             ),
             child: const Text(
-              "FINALIZE SESSION",
+              "COMPLETE SESSION",
               style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w900, letterSpacing: 1),
             ),
           ),
@@ -250,24 +296,30 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   Future<void> _completeSession(PlayerModel player, ActivityModel model) async {
     try {
+      // Clear previous expiry notification if re-upping the buff
+      await _notifications.cancelNotification(101);
+
       await _service.logWorkoutAndRecharge(
-        player.uid,
-        model.durationMinutes, 
-        model.tier
+        uid: player.uid,
+        durationMinutes: model.durationMinutes, 
+        tier: model.tier,
+        xpMultiplier: model.xpMultiplier,
+        raidMultiplier: model.raidDamageMultiplier,
+        exercises: const ["Fitness Training"],
       );
 
-      // Schedule notification for buff expiry (60 mins)
+      // Schedule notification for boost expiry (60 mins)
       await _notifications.scheduleNotification(
         id: 101,
-        title: "METABOLIC RECHARGE EXPIRED",
-        body: "Your 1.5x XP multiplier has faded. Initiate new session to stabilize.",
+        title: "ENERGY BOOST EXPIRED",
+        body: "Your 1.5x XP multiplier has faded. Start a new session to reactivate.",
         scheduledDate: DateTime.now().add(const Duration(minutes: 60)),
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("RECHARGE SEQUENCE ACTIVATED. XP MULTIPLIER ONLINE."),
+            content: Text("RECHARGE ACTIVATED. XP BOOST ACTIVE."),
             backgroundColor: Colors.blueAccent,
           ),
         );

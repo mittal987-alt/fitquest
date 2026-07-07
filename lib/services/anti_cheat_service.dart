@@ -5,9 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
 import '../models/team_request_model.dart';
 
-/// TELEMETRY AGGREGATOR ENGINE
-/// Tracks geographical positions, monitors pacing, and blocks network
-/// spoofing attempts in real-time.
+/// TRACKING ENGINE
+/// Tracks geographical positions, monitors speed, and prevents cheating in real-time.
 class TelemetryTrackingService {
   final FirebaseService _firebaseService = FirebaseService();
   final AntiCheatService _antiCheat = AntiCheatService();
@@ -20,7 +19,7 @@ class TelemetryTrackingService {
   String currentStatus = "🧍 STANDING";
   String operationalTrust = "TRUSTED";
 
-  /// INITIALIZE BACKGROUND MONITORING MATRIX
+  /// INITIALIZE BACKGROUND TRACKING
   void startTrackingMatrix(String uid) {
     const LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -32,17 +31,17 @@ class TelemetryTrackingService {
         await _processTelemetryMetrics(uid, position);
       },
       onError: (error) {
-        debugPrint("CRITICAL TELEMETRY STREAM FAULT: $error");
+        debugPrint("CRITICAL TRACKING ERROR: $error");
       },
     );
   }
 
-  /// STOP BACKGROUND DISPATCHERS
+  /// STOP BACKGROUND TRACKING
   void disposeTracking() {
     _positionStreamSub?.cancel();
   }
 
-  /// CORE POSITION PROCESSOR AND ANOMALY DETECTION FILTER
+  /// CORE POSITION PROCESSOR AND ANTI-CHEAT FILTER
   Future<void> _processTelemetryMetrics(String uid, Position currentPosition) async {
     final DateTime now = DateTime.now();
 
@@ -83,54 +82,54 @@ class TelemetryTrackingService {
       // We no longer accrue steps based on GPS speed to avoid double-counting and inaccuracy.
     }
 
-    // 3. Cache position data state for next tracking node validation loop
+    // 3. Cache position data state for next tracking loop
     _lastPosition = currentPosition;
     _lastTimestamp = now;
   }
 
-  /// PUSH SECURITY RE-EVALUATION STATUS TO CLOUD DATA NODE
+  /// SYNC INFRACTION STATUS TO DATABASE
   Future<void> _syncInfractionToCloud(String uid) async {
     await FirebaseFirestore.instance.collection("players").doc(uid).update({
       "trustScore": _antiCheat.trustScore,
       "warnings": _antiCheat.warnings,
-      "xp": FieldValue.increment(-50), // Standard dynamic system subtraction penalty
+      "xp": FieldValue.increment(-50), // Standard system penalty
     });
   }
 
-  /// DISPATCH COHORT HANDSHAKE (RESTRICTED TO ONE ACTIVE REQUEST RULE)
+  /// SEND JOIN REQUEST (RESTRICTED TO ONE ACTIVE REQUEST)
   Future<bool> dispatchSquadJoinRequest(BuildContext context, TeamRequestModel request) async {
     try {
-      // Search the collection database for existing pending flags under this operator UID
+      // Search the database for existing pending requests for this player
       final activeRequestsQuery = await FirebaseFirestore.instance
           .collection("requests")
           .where("playerId", isEqualTo: request.playerId)
           .where("status", isEqualTo: "pending")
           .get();
 
-      // Enforce Rule: If any documents are generated, deny transaction execution
+      // Enforce Rule: If any exist, deny request
       if (activeRequestsQuery.docs.isNotEmpty) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               backgroundColor: Colors.orangeAccent,
-              content: Text("TRANSACTION HALTED: CANCEL EXISTING ACTIVE PENDING REQUEST FIRST"),
+              content: Text("REQUEST HALTED: CANCEL EXISTING PENDING REQUEST FIRST"),
             ),
           );
         }
         return false;
       }
 
-      // No active blocks found; dispatch network telemetry data safely
+      // No active blocks found; send join request
       await _firebaseService.sendJoinRequest(request);
       return true;
     } catch (e) {
-      debugPrint("SQUAD JOIN PIPELINE ERROR: $e");
+      debugPrint("TEAM JOIN ERROR: $e");
       return false;
     }
   }
 }
 
-/// ANTI-CHEAT TELEMETRY SECURITY ENGINE
+/// ANTI-CHEAT SECURITY ENGINE
 class AntiCheatService {
   int warnings = 0;
   int trustScore = 100;
@@ -145,7 +144,7 @@ class AntiCheatService {
   String getMovementStatus(double speedKmH) {
     if (speedKmH < 0.1) return "🧍 STANDING";
     if (speedKmH >= 0.1 && speedKmH < 15.0) return "🚶 WALKING";
-    return "🚗 VEHICLE VECTOR";
+    return "🚗 VEHICLE SPEED";
   }
 
   bool isTeleportJump(double distanceMeters, double timeSeconds) {
@@ -181,7 +180,7 @@ class AntiCheatService {
     if (trustScore >= 90) return "TRUSTED";
     if (trustScore >= 70) return "NORMAL";
     if (trustScore >= 40) return "SUSPICIOUS";
-    return "CHEATER / FLAGGED";
+    return "FLAGGED";
   }
 
   bool canCapture({
