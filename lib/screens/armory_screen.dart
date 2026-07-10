@@ -11,6 +11,23 @@ class ArmoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
 
+    // FIX: was `firebaseService.auth.currentUser!.uid` — a force-unwrap that
+    // throws immediately if this screen is ever reached with no signed-in
+    // user (e.g. mid sign-out navigation). Guarded the same way
+    // leaderboard_screen.dart already does, instead of letting it crash.
+    final uid = firebaseService.auth.currentUser?.uid;
+    if (uid == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5F7FA),
+        body: Center(
+          child: Text(
+            "NOT LOGGED IN",
+            style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -29,7 +46,7 @@ class ArmoryScreen extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: StreamBuilder<PlayerModel?>(
-        stream: firebaseService.getPlayerStream(firebaseService.auth.currentUser!.uid),
+        stream: firebaseService.getPlayerStream(uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
@@ -263,6 +280,9 @@ class _GearListItem extends StatelessWidget {
     );
   }
 
+  // FIX: was `Icons. construction_rounded` — a stray space after the dot.
+  // Dart tolerates whitespace around member access so this still compiled,
+  // but it's a clear typo left over from editing; cleaned up.
   IconData _getIcon(String iconName) {
     switch (iconName) {
       case 'boot_icon': return Icons.directions_walk_rounded;
@@ -272,7 +292,7 @@ class _GearListItem extends StatelessWidget {
       case 'vest_icon': return Icons.accessibility_new_rounded;
       case 'sleeve_icon': return Icons.sports_handball_rounded;
       case 'mask_icon': return Icons.air_rounded;
-      default: return Icons. construction_rounded;
+      default: return Icons.construction_rounded;
     }
   }
 }

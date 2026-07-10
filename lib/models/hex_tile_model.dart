@@ -76,7 +76,12 @@ class HexTileModel {
       ownerId: map["ownerId"] ?? "",
       ownerName: map["ownerName"] ?? "Unknown",
       color: map["color"] ?? "grey",
-      power: map["power"] ?? 0,
+      // FIX: was `map["power"] ?? 0`, which assumes Firestore always hands
+      // back an int. If this field is ever written as a double (e.g. via a
+      // numeric FieldValue.increment on a field that started as 0.0), this
+      // throws "type 'double' is not a subtype of type 'int'" at read time.
+      // Using the (num?)?.toInt() pattern used elsewhere in the app instead.
+      power: (map["power"] as num?)?.toInt() ?? 0,
       capturedAt: capturedTime,
     );
   }

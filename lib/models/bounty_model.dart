@@ -27,7 +27,12 @@ class BountyModel {
       tileId: map['tileId'] ?? '',
       latitude: (map['latitude'] ?? 0.0).toDouble(),
       longitude: (map['longitude'] ?? 0.0).toDouble(),
-      expiresAt: (map['expiresAt'] as Timestamp).toDate(),
+      // FIX: was `(map['expiresAt'] as Timestamp).toDate()` — an unsafe cast
+      // that throws if the field is missing/null, which would break the
+      // whole getActiveBounties() stream for every bounty, not just this one.
+      expiresAt: map['expiresAt'] is Timestamp
+          ? (map['expiresAt'] as Timestamp).toDate()
+          : DateTime.now().add(const Duration(hours: 1)),
       xpReward: map['xpReward'] ?? 0,
       itemReward: map['itemReward'],
       title: map['title'] ?? 'ANOMALY CORE',

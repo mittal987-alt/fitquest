@@ -22,12 +22,26 @@ class _ActivityScreenState extends State<ActivityScreen> {
   int currentLap = 1;
   final int totalLaps = 3;
 
+  // NEW FEATURE: per-set exercise checklist. Tapping an exercise card marks
+  // it done; the set resets when the player moves on to the next set.
+  final Set<int> _completedExerciseIndices = {};
+
   @override
   void initState() {
     super.initState();
     if (widget.player != null) {
       _activityModel = ActivityModel.fromBmiAndGoal(widget.player?.bmi, widget.player?.fitnessGoal);
     }
+  }
+
+  void _toggleExerciseComplete(int index) {
+    setState(() {
+      if (_completedExerciseIndices.contains(index)) {
+        _completedExerciseIndices.remove(index);
+      } else {
+        _completedExerciseIndices.add(index);
+      }
+    });
   }
 
   @override
@@ -95,36 +109,78 @@ class _ActivityScreenState extends State<ActivityScreen> {
       children: [
         Text("LAP $currentLap / $totalLaps", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
+        // NOTE: this was previously built but never placed in the widget
+        // tree at all — wired it in here instead of leaving it as dead code.
+        _buildLapCounter(),
+        const SizedBox(height: 12),
         LinearProgressIndicator(value: progress, color: Colors.blueAccent, backgroundColor: Colors.white10),
       ],
     );
   }
 
+  // NEW FEATURE: tappable exercise checklist with a live completion count.
   Widget _buildInstructionList(ActivityModel model) {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: model.exerciseGuide.length,
-      itemBuilder: (context, index) {
-        final ex = model.exerciseGuide[index];
-        return Card(
-          color: Colors.white.withValues(alpha: 0.05),
-          margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            leading: const Icon(Icons.check_circle_outline, color: Colors.blueAccent),
-            title: Text(
-              ex['name']!, 
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+    final int completedCount = _completedExerciseIndices.length;
+    final int totalCount = model.exerciseGuide.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "EXERCISE CHECKLIST",
+              style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1),
             ),
-            subtitle: Text(
-              ex['tip']!, 
-              style: const TextStyle(color: Colors.white54, fontSize: 12)
+            Text(
+              "$completedCount / $totalCount DONE",
+              style: TextStyle(
+                color: completedCount == totalCount ? Colors.greenAccent : Colors.white54,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+        const SizedBox(height: 12),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: model.exerciseGuide.length,
+          itemBuilder: (context, index) {
+            final ex = model.exerciseGuide[index];
+            final bool isDone = _completedExerciseIndices.contains(index);
+
+            return Card(
+              color: isDone ? Colors.greenAccent.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.05),
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: ListTile(
+                onTap: () => _toggleExerciseComplete(index),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                leading: Icon(
+                  isDone ? Icons.check_circle_rounded : Icons.check_circle_outline,
+                  color: isDone ? Colors.greenAccent : Colors.blueAccent,
+                ),
+                title: Text(
+                  ex['name']!,
+                  style: TextStyle(
+                    color: isDone ? Colors.white38 : Colors.white,
+                    fontWeight: FontWeight.bold,
+                    decoration: isDone ? TextDecoration.lineThrough : TextDecoration.none,
+                  ),
+                ),
+                subtitle: Text(
+                  ex['tip']!,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -169,8 +225,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isRecharging 
-                          ? "BOOST ACTIVE: ${model.xpMultiplier}x XP Multiplier + ${model.raidDamageMultiplier}x Raid Bonus." 
+                      isRecharging
+                          ? "BOOST ACTIVE: ${model.xpMultiplier}x XP Multiplier + ${model.raidDamageMultiplier}x Raid Bonus."
                           : "Complete session to activate the ${model.tier} Energy Boost bonus.",
                       style: const TextStyle(color: Colors.white70, fontSize: 11),
                     ),
@@ -195,8 +251,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
           height: 4,
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            color: isDone 
-                ? Colors.greenAccent 
+            color: isDone
+                ? Colors.greenAccent
                 : (isCurrent ? Colors.blueAccent : Colors.white10),
             borderRadius: BorderRadius.circular(2),
           ),
@@ -222,17 +278,35 @@ class _ActivityScreenState extends State<ActivityScreen> {
           ),
           const SizedBox(height: 24),
           if (isResting)
-            RestTimer(
-              initialSeconds: model.restIntervalSeconds,
-              onTimerFinished: () {
-                _notifications.showLocalNotification(
-                  title: "REST BREAK COMPLETE",
-                  body: "Start next set immediately. Stay focused.",
-                );
-                setState(() {
-                  isResting = false;
-                });
-              },
+            Column(
+              children: [
+                RestTimer(
+                  initialSeconds: model.restIntervalSeconds,
+                  onTimerFinished: () {
+                    _notifications.showLocalNotification(
+                      title: "REST BREAK COMPLETE",
+                      body: "Start next set immediately. Stay focused.",
+                    );
+                    setState(() {
+                      isResting = false;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                // NEW FEATURE: lets the player end the rest break early
+                // instead of being forced to wait out the full timer.
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      isResting = false;
+                    });
+                  },
+                  child: const Text(
+                    "SKIP REST →",
+                    style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1, fontSize: 12),
+                  ),
+                ),
+              ],
             )
           else
             Column(
@@ -264,6 +338,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               onPressed: () => setState(() {
                 isResting = true;
                 currentLap++;
+                _completedExerciseIndices.clear();
               }),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
@@ -306,7 +381,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
       await _service.logWorkoutAndEnergyBoost(
         uid: player.uid,
-        durationMinutes: model.durationMinutes, 
+        durationMinutes: model.durationMinutes,
         tier: model.tier,
         xpMultiplier: model.xpMultiplier,
         raidMultiplier: model.raidDamageMultiplier,

@@ -23,8 +23,8 @@ class ActivePowerUp {
   factory ActivePowerUp.fromMap(Map<String, dynamic> map) {
     return ActivePowerUp(
       powerUpId: map['powerUpId'] ?? '',
-      expiryTime: map['expiryTime'] is Timestamp 
-          ? (map['expiryTime'] as Timestamp).toDate() 
+      expiryTime: map['expiryTime'] is Timestamp
+          ? (map['expiryTime'] as Timestamp).toDate()
           : DateTime.now(),
     );
   }
@@ -113,25 +113,25 @@ class PlayerModel {
   double getModifier(String key, List<GearModel> allGear) {
     double total = 1.0;
     double flatBonus = 0.0;
-    
+
     equippedGear.forEach((slot, gearId) {
       try {
         final gear = allGear.firstWhere((g) => g.id == gearId);
         if (gear.modifiers.containsKey(key)) {
           final val = gear.modifiers[key]!;
-          if (val > 2.0 || val < 0.5) { 
-             if (key == 'strength' || key == 'agility' || key == 'endurance') {
-               flatBonus += val;
-             } else {
-               total *= val;
-             }
+          if (val > 2.0 || val < 0.5) {
+            if (key == 'strength' || key == 'agility' || key == 'endurance') {
+              flatBonus += val;
+            } else {
+              total *= val;
+            }
           } else {
             total *= val;
           }
         }
       } catch (_) {}
     });
-    
+
     if (key == 'strength' || key == 'agility' || key == 'endurance') {
       return flatBonus;
     }
@@ -159,6 +159,7 @@ class PlayerModel {
     this.streakCount = 0,
     this.totalRaidDamage = 0,
     this.ghostRaidDamage = 0,
+    this.totalLand = 0,
     this.lastActiveDate,
     this.claimedQuests = const [],
     this.activePowerUps = const {},
@@ -184,6 +185,14 @@ class PlayerModel {
     this.fitnessGoal,
   });
 
+  // FIX: totalLand is used throughout home_screen.dart (player.totalLand /
+  // "AREAS VISITED" stat, the "territory_scout" quest) and passed in by
+  // firebase_service.dart's createPlayer(). The field itself was missing from
+  // this model entirely, which would fail to compile ("No named parameter
+  // 'totalLand'" / "getter 'totalLand' isn't defined"). Declared here and
+  // wired into the constructor, copyWith, fromMap, and toMap below.
+  final int totalLand;
+
   PlayerModel copyWith({
     String? uid,
     bool? isInTeam,
@@ -205,6 +214,7 @@ class PlayerModel {
     int? streakCount,
     int? totalRaidDamage,
     int? ghostRaidDamage,
+    int? totalLand,
     DateTime? lastActiveDate,
     List<String>? claimedQuests,
     Map<String, DateTime>? activePowerUps,
@@ -250,6 +260,7 @@ class PlayerModel {
       streakCount: streakCount ?? this.streakCount,
       totalRaidDamage: totalRaidDamage ?? this.totalRaidDamage,
       ghostRaidDamage: ghostRaidDamage ?? this.ghostRaidDamage,
+      totalLand: totalLand ?? this.totalLand,
       lastActiveDate: lastActiveDate ?? this.lastActiveDate,
       claimedQuests: claimedQuests ?? this.claimedQuests,
       activePowerUps: activePowerUps ?? this.activePowerUps,
@@ -309,6 +320,7 @@ class PlayerModel {
       streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
       totalRaidDamage: (map["totalRaidDamage"] as num?)?.toInt() ?? 0,
       ghostRaidDamage: (map["ghostRaidDamage"] as num?)?.toInt() ?? 0,
+      totalLand: (map["totalLand"] as num?)?.toInt() ?? 0,
       lastActiveDate: map["lastActiveDate"] is Timestamp ? (map["lastActiveDate"] as Timestamp).toDate() : null,
       claimedQuests: map["claimedQuests"] != null ? List<String>.from(map["claimedQuests"]) : const [],
       activePowerUps: powerUps,
@@ -362,6 +374,7 @@ class PlayerModel {
       "streakCount": streakCount,
       "totalRaidDamage": totalRaidDamage,
       "ghostRaidDamage": ghostRaidDamage,
+      "totalLand": totalLand,
       "lastActiveDate": lastActiveDate != null ? Timestamp.fromDate(lastActiveDate!) : null,
       "claimedQuests": claimedQuests,
       "activePowerUps": powerUps,

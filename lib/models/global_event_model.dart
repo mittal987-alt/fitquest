@@ -30,7 +30,13 @@ class GlobalEventModel {
       description: map['description'] ?? 'NO DATA AVAILABLE',
       targetSteps: map['targetSteps'] ?? 1000000,
       currentSteps: map['currentSteps'] ?? 0,
-      endDate: (map['endDate'] as Timestamp).toDate(),
+      // FIX: was `(map['endDate'] as Timestamp).toDate()` — throws if the
+      // document is ever created/queried without an endDate set, which would
+      // surface as a silent stream error (the ACTIVE GLOBAL EVENT card would
+      // just vanish with no clue why). Falls back to 24h from now instead.
+      endDate: map['endDate'] is Timestamp
+          ? (map['endDate'] as Timestamp).toDate()
+          : DateTime.now().add(const Duration(hours: 24)),
       rewardType: map['rewardType'] ?? 'XP',
       rewardValue: map['rewardValue'] ?? 0,
       isActive: map['isActive'] ?? true,

@@ -57,6 +57,7 @@ class FirebaseService {
       totalRaidDamage: 0,
       ghostRaidDamage: 0,
       lastHardwareStepCount: -1,
+      totalLand: 0,
       trustScore: 100,
       level: 1,
       xp: 0,
@@ -70,6 +71,7 @@ class FirebaseService {
       energyBoostRaidMultiplier: 1.0,
       energyBoostXpMultiplier: 1.0,
     );
+
     await firestore.collection("players").doc(uid).set(player.toMap());
   }
 
@@ -274,6 +276,23 @@ class FirebaseService {
   }
 
   // =========================
+  // UPDATE LAND
+  // =========================
+  Future<void> updateLand({
+    required String uid,
+    required int totalLand,
+  }) async {
+    try {
+      await firestore.collection("players").doc(uid).update({
+        "totalLand": totalLand,
+      });
+      debugPrint("LAND UPDATED => $totalLand");
+    } catch (e) {
+      debugPrint("LAND UPDATE ERROR => $e");
+    }
+  }
+
+  // =========================
   // UPDATE TRUST SCORE
   // =========================
   Future<void> updateTrustScore({
@@ -327,13 +346,13 @@ class FirebaseService {
       // BROADCAST XP GAIN FOR TEAM
       if (player.isInTeam && player.teamId != null) {
         transaction.set(
-          firestore.collection("teams").doc(player.teamId).collection("events").doc(),
-          {
-            "type": "XP_CONTRIBUTION",
-            "playerName": player.name,
-            "amount": finalXpToAdd,
-            "timestamp": FieldValue.serverTimestamp(),
-          }
+            firestore.collection("teams").doc(player.teamId).collection("events").doc(),
+            {
+              "type": "XP_CONTRIBUTION",
+              "playerName": player.name,
+              "amount": finalXpToAdd,
+              "timestamp": FieldValue.serverTimestamp(),
+            }
         );
       }
 
@@ -626,12 +645,14 @@ class FirebaseService {
     });
   }
 
+  // FIX: previously read team.members then wrote (count - 1) in two separate
+  // steps. If two members left at the same moment they could read the same
+  // stale count and one decrement would be lost. FieldValue.increment(-1) is
+  // atomic at the database level, so this can no longer drift.
   Future<void> leaveTeam({
     required String uid,
     required String teamId,
   }) async {
-    DocumentSnapshot teamDoc = await firestore.collection("teams").doc(teamId).get();
-
     await firestore.collection("players").doc(uid).update({
       "team": "No Team",
       "teamId": null,
@@ -639,14 +660,13 @@ class FirebaseService {
       "lastTeamAction": FieldValue.serverTimestamp(),
     });
 
-    int currentMembers = teamDoc["members"] ?? 0;
-    if (currentMembers > 0) {
-      await firestore.collection("teams").doc(teamId).update({
-        "members": currentMembers - 1,
-      });
-    }
+    await firestore.collection("teams").doc(teamId).update({
+      "members": FieldValue.increment(-1),
+    });
   }
 
+  // FIX: same atomic-increment fix as leaveTeam, plus safe field access
+  // (teamDoc["members"] throws if the field is missing; .data()?[...] does not).
   Future<void> kickPlayer({
     required String playerId,
     required String teamId,
@@ -658,13 +678,9 @@ class FirebaseService {
       "lastTeamAction": FieldValue.serverTimestamp(),
     });
 
-    DocumentSnapshot teamDoc = await firestore.collection("teams").doc(teamId).get();
-    int currentMembers = teamDoc["members"] ?? 0;
-    if (currentMembers > 0) {
-      await firestore.collection("teams").doc(teamId).update({
-        "members": currentMembers - 1,
-      });
-    }
+    await firestore.collection("teams").doc(teamId).update({
+      "members": FieldValue.increment(-1),
+    });
   }
 
   // =========================
@@ -685,6 +701,7 @@ class FirebaseService {
     });
   }
 
+  // FIX: atomic increment instead of read-then-write on "members".
   Future<void> acceptRequest({
     required String requestId,
     required String playerId,
@@ -702,10 +719,8 @@ class FirebaseService {
       "status": "accepted",
     });
 
-    DocumentSnapshot teamDoc = await firestore.collection("teams").doc(teamId).get();
-    int currentMembers = teamDoc["members"] ?? 0;
     await firestore.collection("teams").doc(teamId).update({
-      "members": currentMembers + 1,
+      "members": FieldValue.increment(1),
     });
   }
 
@@ -908,13 +923,13 @@ class FirebaseService {
 
       // Log Damage Contribution for FCM Trigger
       transaction.set(
-        firestore.collection("teams").doc(teamId).collection("events").doc(),
-        {
-          "type": "RAID_DAMAGE",
-          "playerName": player.name,
-          "damage": totalDmg,
-          "timestamp": FieldValue.serverTimestamp(),
-        }
+          firestore.collection("teams").doc(teamId).collection("events").doc(),
+          {
+            "type": "RAID_DAMAGE",
+            "playerName": player.name,
+            "damage": totalDmg,
+            "timestamp": FieldValue.serverTimestamp(),
+          }
       );
 
       bool isDefeated = false;
@@ -935,12 +950,12 @@ class FirebaseService {
         });
 
         transaction.set(
-          firestore.collection("teams").doc(teamId).collection("events").doc("raid_victory"),
-          {
-            "type": "RAID_COMPLETED",
-            "victor": player.name,
-            "timestamp": FieldValue.serverTimestamp(),
-          }
+            firestore.collection("teams").doc(teamId).collection("events").doc("raid_victory"),
+            {
+              "type": "RAID_COMPLETED",
+              "victor": player.name,
+              "timestamp": FieldValue.serverTimestamp(),
+            }
         );
         // Distribute Team Rewards (Placeholder for scalable distribution)
         transaction.update(teamRef, {
@@ -960,9 +975,9 @@ class FirebaseService {
 
     if (result["success"] == true && result["defeated"] == true) {
       await distributeRaidRewards(
-        teamId: teamId,
-        totalDamage: result["totalDamage"] as double,
-        bossName: result["bossName"] as String
+          teamId: teamId,
+          totalDamage: result["totalDamage"] as double,
+          bossName: result["bossName"] as String
       );
     }
 
@@ -987,13 +1002,13 @@ class FirebaseService {
 
       // Periodic HP Sync log for broadcast
       if (newHp % 500 < damage || newHp <= 0) {
-         transaction.set(
-          firestore.collection("teams").doc(teamId).collection("events").doc(newHp <= 0 ? "raid_victory" : "hp_sync"),
-          {
-            "type": newHp <= 0 ? "RAID_COMPLETED" : "BOSS_HP_SYNC",
-            "hp": newHp,
-            "timestamp": FieldValue.serverTimestamp(),
-          }
+        transaction.set(
+            firestore.collection("teams").doc(teamId).collection("events").doc(newHp <= 0 ? "raid_victory" : "hp_sync"),
+            {
+              "type": newHp <= 0 ? "RAID_COMPLETED" : "BOSS_HP_SYNC",
+              "hp": newHp,
+              "timestamp": FieldValue.serverTimestamp(),
+            }
         );
       }
 
@@ -1025,9 +1040,9 @@ class FirebaseService {
 
     if (result["defeated"] == true) {
       await distributeRaidRewards(
-        teamId: teamId,
-        totalDamage: result["totalDamage"] as double,
-        bossName: result["bossName"] as String
+          teamId: teamId,
+          totalDamage: result["totalDamage"] as double,
+          bossName: result["bossName"] as String
       );
     }
   }
@@ -1221,6 +1236,15 @@ class FirebaseService {
       equipped[gear.slot.toString().split('.').last] = gear.id;
 
       transaction.update(docRef, {"equippedGear": equipped});
+    });
+  }
+
+  Future<void> updateTeamLand({
+    required String teamId,
+    required int totalLand,
+  }) async {
+    await firestore.collection("teams").doc(teamId).update({
+      "totalLand": totalLand,
     });
   }
 

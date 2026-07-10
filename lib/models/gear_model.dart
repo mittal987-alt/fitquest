@@ -25,7 +25,7 @@ class GearModel {
       name: map['name'] ?? '',
       description: map['description'] ?? '',
       slot: GearSlot.values.firstWhere(
-        (e) => e.toString() == 'GearSlot.${map['slot']}',
+            (e) => e.toString() == 'GearSlot.${map['slot']}',
         orElse: () => GearSlot.footwear,
       ),
       modifiers: Map<String, double>.from(map['modifiers'] ?? {}),

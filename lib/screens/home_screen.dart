@@ -10,6 +10,7 @@ import '../models/player_model.dart';
 import '../models/power_up_model.dart';
 import '../models/global_event_model.dart';
 import 'leaderboard_screen.dart';
+import 'map_screen.dart';
 import 'shop_screen.dart';
 import 'tactical_relay_screen.dart';
 import 'crafting_screen.dart';
@@ -44,6 +45,10 @@ class _HomeScreenState extends State<HomeScreen> {
     "08": 800, "09": 1200, "10": 600, "12": 1500, "13": 400, "17": 2000, "18": 1500,
   };
 
+  bool _scanningNearbyItems = false;
+  double _itemScanProgress = 0.0;
+  final double _itemDistance = 342.0;
+
   @override
   void initState() {
     super.initState();
@@ -54,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (currentUid.isNotEmpty) {
       firebaseService.checkAndResetDailyStats(currentUid);
-      
+
       // Start tracking with player context for RPG modifiers
       firebaseService.getPlayer(currentUid).then((player) {
         if (player != null) {
@@ -63,11 +68,11 @@ class _HomeScreenState extends State<HomeScreen> {
             initialSteps: player.dailySteps,
           );
           _subscribeToTacticalPulse();
-          
+
           if (player.teamId != null && mounted) {
             context.read<RaidController>().initTeamRaid(player.teamId!);
           }
-          
+
           // Initialize toggle state from player profile
           setState(() {
             _isGhostStriderActive = player.isGhostStriderEnabled;
@@ -84,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _pulseSubscription = pedometerService.tacticalPulseStream.listen((pulse) async {
       final String currentUid = firebaseService.auth.currentUser?.uid ?? "";
       final player = await firebaseService.getPlayer(currentUid);
-      
+
       if (mounted) {
         final double finalDamage = pulse.raidDamage; // PedometerService already applied bioDamageMult
 
@@ -95,6 +100,16 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         setState(() {
+          // Update Item Scanning
+          if (_scanningNearbyItems) {
+            _itemScanProgress += pulse.scanProgress;
+            if (_itemScanProgress >= 1.0) {
+              _itemScanProgress = 0.0;
+              _scanningNearbyItems = false;
+              _showLootNotification("Item Found: Rare Supply Cache!");
+            }
+          }
+
           // Visual feedback for material discovery
           if (pulse.discoveredMaterial != null) {
             _showLootNotification("FOUND: ${pulse.discoveredMaterial}");
@@ -109,23 +124,22 @@ class _HomeScreenState extends State<HomeScreen> {
             // Update local RaidController state immediately for reactive UI
             // Note: pulse.raidDamage already includes strength and energy multipliers
             raidController.registerPlayerSteps(
-              player.uid, 
-              pulse.steps, 
+              player.uid,
+              pulse.steps,
               damageOverride: pulse.raidDamage,
               isAheadOfGhost: pulse.isAheadOfGhost,
             );
-            
+
             // Sync to Firestore
             await firebaseService.contributeRaidDamage(player.teamId!, pulse.raidDamage);
 
             // Sync total raid damage contribution for rewards
             await firebaseService.firestore.collection("players").doc(player.uid).update({
               "totalRaidDamage": FieldValue.increment(pulse.raidDamage.toInt()),
-              if (pulse.isAheadOfGhost) "ghostRaidDamage": FieldValue.increment(pulse.raidDamage.toInt()),
             });
           }
 
-          // Update Daily Stats (Steps, Calories, Distance) via StepSyncService 
+          // Update Daily Stats (Steps, Calories, Distance) via StepSyncService
           // Note: Pulse-based updates here are for high-frequency gameplay impact.
           // StepSyncService handles the authoritative hardware delta sync.
 
@@ -186,301 +200,149 @@ class _HomeScreenState extends State<HomeScreen> {
           StreamBuilder<PlayerModel?>(
             stream: _playerStream,
             builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
-          }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
+              }
 
-          final player = snapshot.data;
-          
-          // Sync local toggle with player state to prevent "auto-off" UI resets
-          if (player != null && _isGhostStriderActive != player.isGhostStriderEnabled) {
-             _isGhostStriderActive = player.isGhostStriderEnabled;
-          }
+              final player = snapshot.data;
 
-          final int liveSteps = player?.dailySteps ?? 0;
-          final int liveCalories = player?.dailyCalories ?? 0;
-          final double liveDistance = player?.dailyDistance ?? 0.0;
-          final int streak = player?.streakCount ?? 0;
+              // Sync local toggle with player state to prevent "auto-off" UI resets
+              if (player != null && _isGhostStriderActive != player.isGhostStriderEnabled) {
+                _isGhostStriderActive = player.isGhostStriderEnabled;
+              }
 
-          // POWER-UP CHECK
-          bool hasExpBoost = player?.activePowerUps.containsKey("boost") ?? false;
-          if (hasExpBoost) {
-            DateTime? expiry = player?.activePowerUps["boost"];
-            if (expiry != null && expiry.isBefore(DateTime.now())) {
-              hasExpBoost = false;
-            }
-          }
+              final int liveSteps = player?.dailySteps ?? 0;
+              final int liveCalories = player?.dailyCalories ?? 0;
+              final double liveDistance = player?.dailyDistance ?? 0.0;
+              final int streak = player?.streakCount ?? 0;
 
-          // FITNESS CALCULATIONS
-          double dailyGoalTarget = player?.dailyStepTarget.toDouble() ?? 10000;
-          double goalProgress = (liveSteps / dailyGoalTarget).clamp(0.0, 1.0);
+              // POWER-UP CHECK
+              bool hasExpBoost = player?.activePowerUps.containsKey("boost") ?? false;
+              if (hasExpBoost) {
+                DateTime? expiry = player?.activePowerUps["boost"];
+                if (expiry != null && expiry.isBefore(DateTime.now())) {
+                  hasExpBoost = false;
+                }
+              }
 
-          // Movement Health Score
-          int healthScore = (goalProgress * 100).toInt();
-          String fitnessStatus = pedometerService.getFitnessLevel(liveSteps);
+              // FITNESS CALCULATIONS
+              double dailyGoalTarget = player?.dailyStepTarget.toDouble() ?? 10000;
+              double goalProgress = (liveSteps / dailyGoalTarget).clamp(0.0, 1.0);
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. PLAYER STATUS
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      )
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "STATUS: ACTIVE",
-                              style: TextStyle(color: Colors.cyan.shade700, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Text(
-                                  player?.name.toUpperCase() ?? "NEW PLAYER",
-                                  style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
-                                ),
-                                if (hasExpBoost) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.purple.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
-                                    ),
-                                    child: const Text("XP 2X", style: TextStyle(color: Colors.purple, fontSize: 8, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            Text(
-                              firebaseService.getRankTitle(player?.level ?? 1),
-                              style: TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.orangeAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Text("🔥 ", style: TextStyle(fontSize: 16)),
-                            Text(
-                              "$streak DAYS",
-                              style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
+              // Movement Health Score
+              int healthScore = (goalProgress * 100).toInt();
+              String fitnessStatus = pedometerService.getFitnessLevel(liveSteps);
 
-                // 2. STATS GRID
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.25,
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildModernStatCard(title: "DAILY STEPS", value: "$liveSteps", icon: Icons.directions_walk_rounded, color: Colors.cyanAccent),
-                    _buildModernStatCard(title: "CALORIES", value: "$liveCalories", icon: Icons.local_fire_department_rounded, color: Colors.orangeAccent),
-                    _buildModernStatCard(title: "DISTANCE", value: "${liveDistance.toStringAsFixed(2)} KM", icon: Icons.alt_route_rounded, color: Colors.greenAccent),
-                    _buildModernStatCard(title: "STAMINA", value: "${player?.currentStamina ?? 0}", icon: Icons.bolt_rounded, color: Colors.amberAccent),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // 3. DAILY STEP GOAL PROGRESS
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("DAILY STEP GOAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54, letterSpacing: 0.5)),
-                          Text("${(goalProgress * 100).toStringAsFixed(0)}%", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.cyan.shade700, fontSize: 13)),
+                    // 1. PLAYER STATUS
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: LinearProgressIndicator(
-                          value: goalProgress,
-                          minHeight: 8,
-                          backgroundColor: Colors.black.withValues(alpha: 0.05),
-                          color: Colors.cyan.shade400,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        "$liveSteps / ${dailyGoalTarget.toStringAsFixed(0)} STEPS COMPLETED",
-                        style: const TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.2),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // MOVEMENT STATUS / HEALTH SCORE
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          ConfettiWidget(
-                            confettiController: _confettiController,
-                            blastDirectionality: BlastDirectionality.explosive,
-                            colors: const [Colors.cyanAccent, Colors.orangeAccent, Colors.purpleAccent],
-                          ),
-                          Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              SizedBox(
-                                width: 50,
-                                height: 50,
-                                child: CircularProgressIndicator(
-                                  value: goalProgress,
-                                  strokeWidth: 5,
-                                  backgroundColor: Colors.black.withValues(alpha: 0.05),
-                                  color: healthScore > 75 ? Colors.greenAccent : (healthScore > 40 ? Colors.orangeAccent : Colors.redAccent),
-                                ),
-                              ),
-                              Text(
-                                "$healthScore",
-                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 20),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text("MOVEMENT STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                                const SizedBox(height: 4),
                                 Text(
-                                  fitnessStatus.toUpperCase(),
-                                  style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                  "STATUS: ACTIVE",
+                                  style: TextStyle(color: Colors.cyan.shade700, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Text(
+                                      player?.name.toUpperCase() ?? "NEW PLAYER",
+                                      style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                                    ),
+                                    if (hasExpBoost) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.purple.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                                        ),
+                                        child: const Text("XP 2X", style: TextStyle(color: Colors.purple, fontSize: 8, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                Text(
+                                  firebaseService.getRankTitle(player?.level ?? 1),
+                                  style: TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.orangeAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Text("🔥 ", style: TextStyle(fontSize: 16)),
+                                Text(
+                                  "$streak DAYS",
+                                  style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildBioMetric("STATUS", "OPTIMAL", Icons.favorite_rounded, Colors.redAccent),
-                          _buildBioMetric("SYNC", "100%", Icons.sync_rounded, Colors.cyan),
-                          _buildBioMetric("TEAM SPIRIT", "${player?.trustScore ?? 100}%", Icons.shield_rounded, Colors.greenAccent),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
+                    ),
+                    const SizedBox(height: 16),
 
-                if (stepSyncService.lastSyncTime != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    // 2. STATS GRID
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1.25,
                       children: [
-                        const Icon(Icons.sync_rounded, size: 13, color: Colors.black38),
-                        const SizedBox(width: 6),
-                        Text(
-                          "DATA SYNCED: ${_getRelativeSyncTime(stepSyncService.lastSyncTime!).toUpperCase()}",
-                          style: const TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                        ),
+                        _buildModernStatCard(title: "DAILY STEPS", value: "$liveSteps", icon: Icons.directions_walk_rounded, color: Colors.cyanAccent),
+                        _buildModernStatCard(title: "CALORIES", value: "$liveCalories", icon: Icons.local_fire_department_rounded, color: Colors.orangeAccent),
+                        _buildModernStatCard(title: "DISTANCE", value: "${liveDistance.toStringAsFixed(2)} KM", icon: Icons.alt_route_rounded, color: Colors.greenAccent),
+                        _buildModernStatCard(title: "STAMINA", value: "${player?.currentStamina ?? 0}", icon: Icons.bolt_rounded, color: Colors.amberAccent),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 20),
 
-                const SizedBox(height: 16),
-                _buildGhostStriderCard(player, liveSteps),
-                const SizedBox(height: 16),
-                _buildColossusRaidDashboard(player),
-                const SizedBox(height: 16),
-                _buildTeamTacticalRelayCard(player),
-                const SizedBox(height: 20),
-
-                // 4. ACTIVE GLOBAL OPERATION CARD
-                StreamBuilder<GlobalEventModel?>(
-                  stream: firebaseService.getActiveGlobalEvent(),
-                  builder: (context, eventSnapshot) {
-                    if (!eventSnapshot.hasData || eventSnapshot.data == null) return const SizedBox.shrink();
-
-                    final event = eventSnapshot.data!;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 20),
+                    // 3. DAILY STEP GOAL PROGRESS
+                    Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.shade900, Colors.blue.shade700],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.blue.withValues(alpha: 0.2),
-                            blurRadius: 12,
-                            offset: const Offset(0, 6),
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           )
                         ],
                       ),
@@ -490,163 +352,363 @@ class _HomeScreenState extends State<HomeScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                "ACTIVE GLOBAL EVENT",
-                                style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white24,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  "LIVE",
-                                  style: TextStyle(color: Colors.blue.shade100, fontSize: 8, fontWeight: FontWeight.bold),
-                                ),
-                              ),
+                              const Text("DAILY STEP GOAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54, letterSpacing: 0.5)),
+                              Text("${(goalProgress * 100).toStringAsFixed(0)}%", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.cyan.shade700, fontSize: 13)),
                             ],
                           ),
                           const SizedBox(height: 12),
-                          Text(
-                            event.title.toUpperCase(),
-                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            event.description,
-                            style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.3),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                "${(event.progress * 100).toStringAsFixed(1)}% COMPLETE",
-                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
-                              ),
-                              Text(
-                                "${event.currentSteps} / ${event.targetSteps} STEPS",
-                                style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(8),
                             child: LinearProgressIndicator(
-                              value: event.progress,
-                              minHeight: 6,
-                              backgroundColor: Colors.white10,
-                              color: Colors.blueAccent.shade100,
+                              value: goalProgress,
+                              minHeight: 8,
+                              backgroundColor: Colors.black.withValues(alpha: 0.05),
+                              color: Colors.cyan.shade400,
                             ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            "$liveSteps / ${dailyGoalTarget.toStringAsFixed(0)} STEPS COMPLETED",
+                            style: const TextStyle(color: Colors.black38, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.2),
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
+                    ),
+                    const SizedBox(height: 16),
 
-                if (player != null && player.activePowerUps.entries.any((e) => e.value.isAfter(DateTime.now()))) ...[
-                  const Text("ACTIVE POWER-UPS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 80,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: player.activePowerUps.entries.where((e) => e.value.isAfter(DateTime.now())).map((entry) {
-                        final powerUp = shopItems.firstWhere(
-                          (s) => s.id == entry.key,
-                          orElse: () => PowerUp(
-                            id: entry.key,
-                            name: "Unknown Buff",
-                            description: "",
-                            cost: 0,
-                            icon: Icons.auto_awesome,
-                            color: Colors.grey,
-                            duration: Duration.zero,
-                          ),
-                        );
-                        final remaining = entry.value.difference(DateTime.now());
-                        final minutes = remaining.inMinutes;
-                        final seconds = remaining.inSeconds % 60;
-
-                        return Container(
-                          width: 160,
-                          margin: const EdgeInsets.only(right: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: powerUp.color.withValues(alpha: 0.15), width: 1.5),
-                          ),
-                          child: Row(
+                    // MOVEMENT STATUS / HEALTH SCORE
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: powerUp.color.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(powerUp.icon, color: powerUp.color, size: 18),
+                              ConfettiWidget(
+                                confettiController: _confettiController,
+                                blastDirectionality: BlastDirectionality.explosive,
+                                colors: const [Colors.cyanAccent, Colors.orangeAccent, Colors.purpleAccent],
                               ),
-                              const SizedBox(width: 10),
+                              Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 50,
+                                    height: 50,
+                                    child: CircularProgressIndicator(
+                                      value: goalProgress,
+                                      strokeWidth: 5,
+                                      backgroundColor: Colors.black.withValues(alpha: 0.05),
+                                      color: healthScore > 75 ? Colors.greenAccent : (healthScore > 40 ? Colors.orangeAccent : Colors.redAccent),
+                                    ),
+                                  ),
+                                  Text(
+                                    "$healthScore",
+                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(width: 20),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text(powerUp.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
-                                    const SizedBox(height: 2),
+                                    const Text("MOVEMENT STATUS", style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                    const SizedBox(height: 4),
                                     Text(
-                                      "${minutes}m ${seconds}s REMAINING",
-                                      style: TextStyle(color: powerUp.color, fontWeight: FontWeight.bold, fontSize: 9),
+                                      fitnessStatus.toUpperCase(),
+                                      style: const TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                                     ),
                                   ],
                                 ),
                               ),
                             ],
                           ),
+                          const SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildBioMetric("STATUS", "OPTIMAL", Icons.favorite_rounded, Colors.redAccent),
+                              _buildBioMetric("SYNC", "100%", Icons.sync_rounded, Colors.cyan),
+                              _buildBioMetric("TEAM SPIRIT", "${player?.trustScore ?? 100}%", Icons.shield_rounded, Colors.greenAccent),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    if (stepSyncService.lastSyncTime != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.sync_rounded, size: 13, color: Colors.black38),
+                            const SizedBox(width: 6),
+                            Text(
+                              "DATA SYNCED: ${_getRelativeSyncTime(stepSyncService.lastSyncTime!).toUpperCase()}",
+                              style: const TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    const SizedBox(height: 16),
+                    _buildGhostStriderCard(player, liveSteps),
+                    const SizedBox(height: 16),
+                    _buildColossusRaidDashboard(player),
+                    const SizedBox(height: 16),
+                    _buildTeamTacticalRelayCard(player),
+                    const SizedBox(height: 16),
+                    _buildNearbyItemsRadar(),
+                    const SizedBox(height: 20),
+
+                    // 4. ACTIVE GLOBAL OPERATION CARD
+                    StreamBuilder<GlobalEventModel?>(
+                      stream: firebaseService.getActiveGlobalEvent(),
+                      builder: (context, eventSnapshot) {
+                        if (!eventSnapshot.hasData || eventSnapshot.data == null) return const SizedBox.shrink();
+
+                        final event = eventSnapshot.data!;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 20),
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.blue.shade900, Colors.blue.shade700],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withValues(alpha: 0.2),
+                                blurRadius: 12,
+                                offset: const Offset(0, 6),
+                              )
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    "ACTIVE GLOBAL EVENT",
+                                    style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white24,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      "LIVE",
+                                      style: TextStyle(color: Colors.blue.shade100, fontSize: 8, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                event.title.toUpperCase(),
+                                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                event.description,
+                                style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.3),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    "${(event.progress * 100).toStringAsFixed(1)}% COMPLETE",
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                                  ),
+                                  Text(
+                                    "${event.currentSteps} / ${event.targetSteps} STEPS",
+                                    style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: LinearProgressIndicator(
+                                  value: event.progress,
+                                  minHeight: 6,
+                                  backgroundColor: Colors.white10,
+                                  color: Colors.blueAccent.shade100,
+                                ),
+                              ),
+                            ],
+                          ),
                         );
-                      }).toList(),
+                      },
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                    const SizedBox(height: 24),
 
-                const Text("DAILY QUESTS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
-                const SizedBox(height: 12),
-                if (player != null) ...[
-                  _buildQuest(
-                    player: player, 
-                    id: "morning_walker", 
-                    title: "Morning Walk", 
-                    target: 2000, 
-                    current: _calculateMorningSteps(player), 
-                    reward: 100, 
-                    icon: Icons.wb_sunny_rounded, 
-                    color: Colors.orangeAccent,
-                    isLocked: DateTime.now().hour < 5 || DateTime.now().hour > 11,
-                    lockMessage: "AVAILABLE 05:00 - 11:00",
-                  ),
-                  const SizedBox(height: 10),
-                  _buildQuest(
-                    player: player, 
-                    id: "xp_hunter", 
-                    title: "Daily Activity Goal", 
-                    target: 500, 
-                    current: player.xp.toDouble(), 
-                    reward: 500, 
-                    icon: Icons.bolt_rounded, 
-                    color: Colors.purpleAccent
-                  ),
-                ],
-                const SizedBox(height: 24),
+                    if (player != null && player.activePowerUps.entries.any((e) => e.value.isAfter(DateTime.now()))) ...[
+                      const Text("ACTIVE POWER-UPS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 80,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: player.activePowerUps.entries.where((e) => e.value.isAfter(DateTime.now())).map((entry) {
+                            final powerUp = shopItems.firstWhere(
+                                  (s) => s.id == entry.key,
+                              orElse: () => PowerUp(
+                                id: entry.key,
+                                name: "Unknown Buff",
+                                description: "",
+                                cost: 0,
+                                icon: Icons.auto_awesome,
+                                color: Colors.grey,
+                                duration: Duration.zero,
+                              ),
+                            );
+                            final remaining = entry.value.difference(DateTime.now());
+                            final minutes = remaining.inMinutes;
+                            final seconds = remaining.inSeconds % 60;
 
-                Row(
-                  children: [
-                    Expanded(
+                            return Container(
+                              width: 160,
+                              margin: const EdgeInsets.only(right: 12),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: powerUp.color.withValues(alpha: 0.15), width: 1.5),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: powerUp.color.withValues(alpha: 0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(powerUp.icon, color: powerUp.color, size: 18),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(powerUp.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          "${minutes}m ${seconds}s REMAINING",
+                                          style: TextStyle(color: powerUp.color, fontWeight: FontWeight.bold, fontSize: 9),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    const Text("DAILY QUESTS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                    const SizedBox(height: 12),
+                    if (player != null) ...[
+                      _buildQuest(
+                        player: player,
+                        id: "morning_walker",
+                        title: "Morning Walk",
+                        target: 2000,
+                        current: _calculateMorningSteps(player),
+                        reward: 100,
+                        icon: Icons.wb_sunny_rounded,
+                        color: Colors.orangeAccent,
+                        isLocked: DateTime.now().hour < 5 || DateTime.now().hour > 11,
+                        lockMessage: "AVAILABLE 05:00 - 11:00",
+                      ),
+                      const SizedBox(height: 10),
+                      _buildQuest(
+                        player: player,
+                        id: "territory_scout",
+                        title: "Explore New Areas",
+                        target: 3,
+                        current: player.totalLand.toDouble(),
+                        reward: 250,
+                        icon: Icons.explore_rounded,
+                        color: Colors.cyanAccent,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildQuest(
+                        player: player,
+                        id: "xp_hunter",
+                        title: "Daily Activity Goal",
+                        target: 500,
+                        current: player.xp.toDouble(),
+                        reward: 500,
+                        icon: Icons.bolt_rounded,
+                        color: Colors.purpleAccent,
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black87,
+                              elevation: 0,
+                              side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CraftingScreen())),
+                            icon: const Icon(Icons.build_circle_rounded, color: Colors.cyan),
+                            label: const Text("CRAFTING", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black87,
+                              elevation: 0,
+                              side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen())),
+                            icon: const Icon(Icons.shopping_bag_rounded, color: Colors.purpleAccent),
+                            label: const Text("SHOP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
@@ -656,102 +718,69 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CraftingScreen())),
-                        icon: const Icon(Icons.build_circle_rounded, color: Colors.cyan),
-                        label: const Text("CRAFTING", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
+                        icon: const Icon(Icons.leaderboard_rounded, color: Colors.orangeAccent),
+                        label: const Text("GLOBAL LEADERBOARD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black87,
-                          elevation: 0,
-                          side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen())),
-                        icon: const Icon(Icons.shopping_bag_rounded, color: Colors.purpleAccent),
-                        label: const Text("SHOP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+                    const SizedBox(height: 24),
+
+                    const Text("RECENT REWARDS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.01),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          _buildRewardItem(icon: Icons.flash_on_rounded, title: "Quest Reward", subtitle: "You earned 100 XP", color: Colors.amber.shade700),
+                          const Divider(height: 20, thickness: 1, color: Colors.black12),
+                          _buildRewardItem(icon: Icons.shield_rounded, title: "Daily Bonus", subtitle: "You earned 20 XP for activity", color: Colors.teal),
+                        ],
                       ),
                     ),
+                    const SizedBox(height: 24),
+
+                    const Text("LIFETIME STATS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildLifetimeStat("TOTAL STEPS", "${player?.totalSteps ?? 0}"),
+                          Container(width: 1, height: 30, color: Colors.black12),
+                          _buildLifetimeStat("AREAS VISITED", "${player?.totalLand ?? 0}"),
+                          Container(width: 1, height: 30, color: Colors.black12),
+                          _buildLifetimeStat("TEAM TRUST", "${player?.trustScore ?? 0}%"),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      elevation: 0,
-                      side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
-                    icon: const Icon(Icons.leaderboard_rounded, color: Colors.orangeAccent),
-                    label: const Text("GLOBAL LEADERBOARD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                const Text("RECENT REWARDS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.01),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      _buildRewardItem(icon: Icons.flash_on_rounded, title: "Quest Reward", subtitle: "You earned 100 XP", color: Colors.amber.shade700),
-                      const Divider(height: 20, thickness: 1, color: Colors.black12),
-                      _buildRewardItem(icon: Icons.shield_rounded, title: "Daily Bonus", subtitle: "You earned 20 XP for activity", color: Colors.teal),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                const Text("LIFETIME STATS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildLifetimeStat("TOTAL STEPS", "${player?.totalSteps ?? 0}"),
-                      Container(width: 1, height: 30, color: Colors.black12),
-                      _buildLifetimeStat("TEAM TRUST", "${player?.trustScore ?? 0}%"),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ],
       ),
-      ],
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildModernStatCard({required String title, required String value, required IconData icon, required Color color}) {
     return Container(
@@ -785,7 +814,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Dynamically generate baseline from history, fallback to simulation if new player
     final Map<String, int> historicalBaseline = pedometerService.generateHistoricalBaseline(player.dailyHistory);
-    final Map<String, int> baseline = (historicalBaseline.isNotEmpty) 
+    final Map<String, int> baseline = (historicalBaseline.isNotEmpty)
         ? historicalBaseline
         : _ghostBaselineMap;
 
@@ -793,7 +822,7 @@ class _HomeScreenState extends State<HomeScreen> {
       stream: pedometerService.stepStream,
       builder: (context, stepSnapshot) {
         final currentSteps = stepSnapshot.data ?? liveSteps;
-        
+
         return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -845,7 +874,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 "Compare your steps with your past performance.",
                 style: TextStyle(color: Colors.black45, fontSize: 11),
               ),
-                if (_isGhostStriderActive) ...[
+              if (_isGhostStriderActive) ...[
                 const SizedBox(height: 16),
                 ActivityHeatmap(
                   hourlySteps: player.hourlySteps,
@@ -856,7 +885,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   stream: pedometerService.getGhostStatusStream(pedometerService.compileGhostBaseline(baseline)),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const SizedBox.shrink();
-                    
+
                     final status = snapshot.data!;
                     final double progress = (currentSteps / status.ghostTarget).clamp(0.0, 2.0);
 
@@ -890,13 +919,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              status.isAhead 
-                                  ? "🔥 ${status.stepsAhead} STEPS AHEAD" 
+                              status.isAhead
+                                  ? "🔥 ${status.stepsAhead} STEPS AHEAD"
                                   : "⚠️ ${status.stepsAhead} STEPS BEHIND",
                               style: TextStyle(
-                                fontSize: 10, 
-                                fontWeight: FontWeight.bold, 
-                                color: status.isAhead ? Colors.green.shade700 : Colors.deepPurple
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: status.isAhead ? Colors.green.shade700 : Colors.deepPurple,
                               ),
                             ),
                             Text(
@@ -928,13 +957,163 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ],
                     );
-                  }
+                  },
                 ),
-              ]
+              ],
             ],
           ),
         );
-      }
+      },
+    );
+  }
+
+  // UI COMPONENT: NEARBY ITEMS RADAR
+  Widget _buildNearbyItemsRadar() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.radar_rounded, color: Colors.cyanAccent),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "NEARBY ITEMS RADAR",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: Icon(Icons.sync, size: 18, color: _scanningNearbyItems ? Colors.cyan : Colors.grey),
+                onPressed: () {
+                  setState(() {
+                    _scanningNearbyItems = true;
+                  });
+                  Future.delayed(const Duration(seconds: 2), () {
+                    if (mounted) {
+                      setState(() {
+                        _scanningNearbyItems = false;
+                      });
+                    }
+                  });
+                },
+              )
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _scanningNearbyItems
+                ? "SCANNING FOR ITEMS: ${(_itemScanProgress * 100).toStringAsFixed(1)}%"
+                : "Scanning for items within 500 meters.",
+            style: TextStyle(
+              color: _scanningNearbyItems ? Colors.cyan : Colors.black54,
+              fontSize: 11,
+              fontWeight: _scanningNearbyItems ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          if (_scanningNearbyItems) ...[
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: _itemScanProgress,
+              minHeight: 4,
+              backgroundColor: Colors.cyanAccent.withValues(alpha: 0.1),
+              color: Colors.cyan,
+            ),
+          ],
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.cyanAccent.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on, color: Colors.cyan, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "ITEM DETECTED",
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.cyan),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Located ${_itemDistance.toStringAsFixed(0)}m away",
+                        style: const TextStyle(fontSize: 11, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.cyan,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapScreen())),
+                  child: const Text("MAP", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                )
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("INVENTORY:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)),
+              Text("Craft in Shop Tab", style: TextStyle(fontSize: 9, color: Colors.black26)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildRawElementChip("Materials", 4, Colors.amber),
+              const SizedBox(width: 8),
+              _buildRawElementChip("Power Cores", 1, Colors.deepPurple),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  // FIX: this previously rendered the literal text "$x$ " in front of the
+  // count (Text("\$x\$ ", ...)) which showed up as garbled text in the UI.
+  // Replaced with a small icon that reads cleanly at any count.
+  Widget _buildRawElementChip(String label, int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.category_rounded, color: color, size: 12),
+          const SizedBox(width: 4),
+          Text(
+            "$count $label",
+            style: TextStyle(color: color.withValues(alpha: 0.9), fontSize: 10, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
     );
   }
 
@@ -983,9 +1162,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () {
                             if (player != null) {
                               raidController.sendTacticalPing(
-                                player.uid, 
-                                player.name, 
-                                "MOVING TO INTERCEPT! GAINING VELOCITY."
+                                player.uid,
+                                player.name,
+                                "MOVING TO INTERCEPT! GAINING VELOCITY.",
                               );
                             }
                           },
@@ -1004,9 +1183,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                raidController.isRaidActive 
-                  ? "BOSS: ${raidController.bossName}"
-                  : "Scanning for nearby Colossus threats...",
+                raidController.isRaidActive
+                    ? "BOSS: ${raidController.bossName}"
+                    : "Scanning for nearby Colossus threats...",
                 style: const TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.bold),
               ),
               if (raidController.isRaidActive) ...[
@@ -1065,10 +1244,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // FIX: was `StepSyncService().challengeController...` — created a brand new
+  // StepSyncService instance on every rebuild instead of reusing the shared
+  // `stepSyncService` field the rest of this screen relies on. That could give
+  // this card a different/uninitialized relay state than the real one.
   Widget _buildTeamTacticalRelayCard(PlayerModel? player) {
     return StreamBuilder<TacticalRelayModel?>(
-      stream: player?.teamId != null 
-          ? StepSyncService().challengeController.getTeamRelay(player!.teamId!)
+      stream: player?.teamId != null
+          ? stepSyncService.challengeController.getTeamRelay(player!.teamId!)
           : const Stream.empty(),
       builder: (context, snapshot) {
         final challenge = snapshot.data;
@@ -1081,7 +1264,7 @@ class _HomeScreenState extends State<HomeScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: isMyTurn ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.05)
+              color: isMyTurn ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.05),
             ),
           ),
           child: Column(
@@ -1101,9 +1284,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(
                         isActive ? (isMyTurn ? "YOUR TURN" : "IN PROGRESS") : "INACTIVE",
                         style: TextStyle(
-                          fontSize: 10, 
-                          fontWeight: FontWeight.bold, 
-                          color: isMyTurn ? Colors.blueAccent : Colors.black38
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isMyTurn ? Colors.blueAccent : Colors.black38,
                         ),
                       ),
                     ),
@@ -1113,7 +1296,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (isActive) ...[
                 Text(
                   isMyTurn ? "REMAINING STEPS" : "CURRENT OPERATOR",
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38)
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -1149,8 +1332,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ] else ...[
-                const Text("No active team relay. Coordinate with your team to begin.", 
-                  style: TextStyle(fontSize: 12, color: Colors.black45)
+                const Text(
+                  "No active team relay. Coordinate with your team to begin.",
+                  style: TextStyle(fontSize: 12, color: Colors.black45),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -1184,9 +1368,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         );
-      }
+      },
     );
   }
+
   double _calculateMorningSteps(PlayerModel player) {
     int total = 0;
     for (int h = 5; h <= 11; h++) {
@@ -1296,44 +1481,44 @@ class _HomeScreenState extends State<HomeScreen> {
           else if (isLocked)
             const SizedBox.shrink()
           else if (isCompleted)
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              onPressed: () async {
-                if (id == "morning_walker") {
-                  final now = DateTime.now();
-                  if (now.hour < 5 || now.hour > 11) {
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: color,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                onPressed: () async {
+                  if (id == "morning_walker") {
+                    final now = DateTime.now();
+                    if (now.hour < 5 || now.hour > 11) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("ACCESS DENIED: MORNING ROUTINE ONLY AVAILABLE 0500-1100 HOURS."),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                      return;
+                    }
+                  }
+                  _confettiController.play();
+                  await firebaseService.claimQuestReward(player.uid, id, reward);
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("ACCESS DENIED: MORNING ROUTINE ONLY AVAILABLE 0500-1100 HOURS."),
-                        backgroundColor: Colors.redAccent,
+                      SnackBar(
+                        content: Text("REWARD CLAIMED: +$reward XP EARNED!"),
+                        backgroundColor: color,
                       ),
                     );
-                    return;
                   }
-                }
-                _confettiController.play();
-                await firebaseService.claimQuestReward(player.uid, id, reward);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("REWARD CLAIMED: +$reward XP EARNED!"),
-                      backgroundColor: color,
-                    ),
-                  );
-                }
-              },
-              child: const Text("CLAIM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
-            )
-          else
-            Text(
-              "+$reward XP",
-              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-            ),
+                },
+                child: const Text("CLAIM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+              )
+            else
+              Text(
+                "+$reward XP",
+                style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+              ),
         ],
       ),
     );

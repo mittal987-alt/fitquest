@@ -33,14 +33,14 @@ class DailyHistoryScreen extends StatelessWidget {
       body: sortedKeys.isEmpty
           ? _buildEmptyState()
           : ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: sortedKeys.length,
-              itemBuilder: (context, index) {
-                final dateKey = sortedKeys[index];
-                final data = player.dailyHistory[dateKey] as Map<String, dynamic>;
-                return _buildHistoryCard(dateKey, data);
-              },
-            ),
+        padding: const EdgeInsets.all(20),
+        itemCount: sortedKeys.length,
+        itemBuilder: (context, index) {
+          final dateKey = sortedKeys[index];
+          final data = player.dailyHistory[dateKey] as Map<String, dynamic>;
+          return _buildHistoryCard(dateKey, data);
+        },
+      ),
     );
   }
 
@@ -67,8 +67,13 @@ class DailyHistoryScreen extends StatelessWidget {
 
   Widget _buildHistoryCard(String dateKey, Map<String, dynamic> data) {
     DateTime date = DateTime.parse(dateKey);
-    int steps = data['steps'] ?? 0;
-    int xp = data['xpGained'] ?? 0;
+    // FIX: was `data['steps'] ?? 0` / `data['xpGained'] ?? 0` assigned
+    // directly to an `int`. If either field is ever stored as a double in
+    // Firestore (e.g. touched by a numeric FieldValue.increment elsewhere),
+    // this throws "type 'double' is not a subtype of type 'int'" at read
+    // time — the same class of bug fixed earlier in hex_tile_model.dart.
+    int steps = (data['steps'] as num?)?.toInt() ?? 0;
+    int xp = (data['xpGained'] as num?)?.toInt() ?? 0;
     List<dynamic> achievements = data['achievements'] ?? [];
 
     bool goalReached = steps >= player.dailyStepTarget;
