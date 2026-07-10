@@ -131,10 +131,6 @@ class PlayerTile extends StatelessWidget {
                   style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 Text(
-                  "🌍 ${player.totalLand} Land",
-                  style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
-                ),
-                Text(
                   "👥 ${player.team}",
                   style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
                 ),

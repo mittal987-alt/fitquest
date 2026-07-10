@@ -12,6 +12,7 @@ import 'tactical_relay_screen.dart';
 import 'package:provider/provider.dart';
 import '../controller/raid_controller.dart';
 import '../widgets/tactical_ping_feed.dart';
+import '../features/raid/raid_result_screen.dart';
 
 class TeamScreen extends StatefulWidget {
   const TeamScreen({super.key});
@@ -40,49 +41,17 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   void _showVictoryDialog(BuildContext context, String teamName) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Row(
-          children: [
-            Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 28),
-            SizedBox(width: 12),
-            Text("BOSS DEFEATED", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
-          ],
+    final raidController = context.read<RaidController>();
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RaidResultScreen(
+          participants: raidController.participants,
+          teamName: teamName,
+          totalDamage: raidController.bossMaxHp - raidController.bossCurrentHp,
+          bossName: raidController.bossName,
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "The boss has been defeated by ${teamName.toUpperCase()}!",
-              style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              "REWARDS EARNED:",
-              style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
-            ),
-            const SizedBox(height: 8),
-            _rewardItem(Icons.bolt_rounded, "500 XP", Colors.blueAccent),
-            _rewardItem(Icons.token_rounded, "10 TOKENS", Colors.orangeAccent),
-            _rewardItem(Icons.inventory_2_rounded, "ITEM CHEST x1", Colors.purpleAccent),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => Navigator.pop(context),
-            child: const Text("CLAIM REWARDS", style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }
@@ -158,7 +127,7 @@ class _TeamScreenState extends State<TeamScreen> {
               final teams = snapshot.data!;
               final currentTeam = teams.firstWhere(
                     (t) => t.id == currentPlayer?.teamId,
-                orElse: () => TeamModel(id: "", name: "No Team", color: "blue", members: 0, maxMembers: 50, totalLand: 0, totalSteps: 0, leaderId: "", strongholdActive: false, logo: ""),
+                orElse: () => TeamModel(id: "", name: "No Team", color: "blue", members: 0, maxMembers: 50, totalSteps: 0, leaderId: "", strongholdActive: false, logo: ""),
               );
 
               return SingleChildScrollView(
@@ -218,7 +187,6 @@ class _TeamScreenState extends State<TeamScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
-                                TeamStat(title: "Areas", value: currentTeam.totalLand.toString()),
                                 TeamStat(title: "Steps", value: currentTeam.totalSteps.toString()),
                                 TeamStat(title: "Boss Dmg", value: currentTeam.totalRaidDamage.toInt().toString()),
                               ],
@@ -605,7 +573,6 @@ class _TeamScreenState extends State<TeamScreen> {
                     color: "purple",
                     members: 1,
                     maxMembers: 50,
-                    totalLand: 0,
                     totalSteps: 0,
                     leaderId: FirebaseAuth.instance.currentUser!.uid,
                     strongholdActive: false,

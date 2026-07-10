@@ -61,10 +61,12 @@ class MyApp extends StatelessWidget {
           elevation: 0,
           titleTextStyle: TextStyle(
             color: Colors.black87,
-            fontSize: 20,
+            fontSize: 22,
             fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
           ),
-          iconTheme: IconThemeData(color: Colors.black87),
+          iconTheme: IconThemeData(color: Colors.black87, size: 20),
+          scrolledUnderElevation: 0,
         ),
         cardTheme: CardThemeData(
           color: Colors.white,

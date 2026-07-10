@@ -530,10 +530,10 @@ class ProfileScreen extends StatelessWidget {
                             color: Colors.blueAccent,
                           ),
                           _compactStatTile(
-                            label: "TERRITORY",
-                            value: player.totalLand.toString(),
-                            target: "AREAS",
-                            icon: Icons.grid_view_rounded,
+                            label: "STEPS",
+                            value: player.totalSteps.toString(),
+                            target: "LIFETIME",
+                            icon: Icons.auto_graph_rounded,
                             color: Colors.green,
                           ),
                           _compactStatTile(
@@ -689,8 +689,8 @@ class ProfileScreen extends StatelessWidget {
           _achievementTile(
             icon: Icons.map_rounded,
             title: "Explorer",
-            subtitle: "Capture 50+ Areas",
-            isUnlocked: player.totalLand >= 50,
+            subtitle: "Capture 10+ Areas",
+            isUnlocked: player.totalSteps >= 50000, // Changed criteria to steps
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),

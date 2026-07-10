@@ -63,13 +63,15 @@ class TacticalRelayController {
         .collection('active_tactical_relay')
         .doc('current');
 
+    String? pingMessage;
+    bool isFinished = false;
+
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(docRef);
       if (!snapshot.exists) return;
 
       final challenge = TacticalRelayModel.fromMap(snapshot.data()!);
       
-      // Safety Check: Ensure relay is still active and operator has met target
       if (!challenge.isActive || challenge.currentSteps < challenge.targetSteps) {
         return;
       }
@@ -79,9 +81,9 @@ class TacticalRelayController {
       if (currentIndex != -1 && currentIndex < challenge.sequence.length - 1) {
         final nextPlayerId = challenge.sequence[currentIndex + 1];
         
-        // Fetch next player name (Note: ideally this would be cached or part of the team doc)
-        final nextPlayer = await _firebaseService.getPlayer(nextPlayerId);
-        final nextName = nextPlayer?.name ?? "Operator ${currentIndex + 2}";
+        // Transactional read for the next player's name
+        final nextPlayerDoc = await transaction.get(_firestore.collection('players').doc(nextPlayerId));
+        final nextName = nextPlayerDoc.data()?['name'] ?? "Operator ${currentIndex + 2}";
         
         transaction.update(docRef, {
           'currentPlayerId': nextPlayerId,
@@ -90,29 +92,34 @@ class TacticalRelayController {
           'startTime': FieldValue.serverTimestamp(),
         });
 
-        // Notify the team via ping
-        await _firebaseService.sendTacticalPing(
-          teamId,
-          "CHALLENGE_CHANNEL",
-          "RELAY TOKEN TRANSFERRED TO ${nextName.toUpperCase()}"
-        );
+        pingMessage = "RELAY TOKEN TRANSFERRED TO ${nextName.toUpperCase()}";
       } else {
-        // Challenge finished - Atomic Deactivation
         transaction.update(docRef, {'isActive': false});
-        
-        // AWARD CURRENCY & XP TO ALL TEAM MEMBERS
-        final playersSnapshot = await _firestore.collection('players').where('teamId', isEqualTo: teamId).get();
-        for (var doc in playersSnapshot.docs) {
-          await _firebaseService.updateCurrency(doc.id, 500); 
-          await _firebaseService.incrementXP(uid: doc.id, xpToAdd: 1000);
-        }
-
-        await _firebaseService.sendTacticalPing(
-          teamId,
-          "CHALLENGE_CHANNEL",
-          "TACTICAL STEP RELAY COMPLETE - 500 CREDITS & 1000 XP AWARDED TO ALL OPERATORS"
-        );
+        isFinished = true;
       }
     });
+
+    // Execute side-effects (pings and rewards) outside the transaction
+    if (pingMessage != null) {
+      await _firebaseService.sendTacticalPing(
+        teamId,
+        "CHALLENGE_CHANNEL",
+        pingMessage!
+      );
+    }
+
+    if (isFinished) {
+      final playersSnapshot = await _firestore.collection('players').where('teamId', isEqualTo: teamId).get();
+      for (var doc in playersSnapshot.docs) {
+        await _firebaseService.updateCurrency(doc.id, 500); 
+        await _firebaseService.incrementXP(uid: doc.id, xpToAdd: 1000);
+      }
+
+      await _firebaseService.sendTacticalPing(
+        teamId,
+        "CHALLENGE_CHANNEL",
+        "TACTICAL STEP RELAY COMPLETE - 500 CREDITS & 1000 XP AWARDED TO ALL OPERATORS"
+      );
+    }
   }
 }

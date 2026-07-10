@@ -7,7 +7,6 @@ class TeamModel {
   final bool strongholdActive;
   final int members;
   final int maxMembers;
-  final int totalLand;
   final int totalSteps;
   final double totalRaidDamage;
   final String leaderId;
@@ -21,7 +20,6 @@ class TeamModel {
     required this.color,
     required this.members,
     required this.maxMembers,
-    required this.totalLand,
     required this.totalSteps,
     this.totalRaidDamage = 0.0,
     required this.leaderId,
@@ -41,7 +39,6 @@ class TeamModel {
       color: map["color"] ?? "blue",
       members: map["members"] ?? 0,
       maxMembers: map["maxMembers"] ?? 50,
-      totalLand: map["totalLand"] ?? 0,
       totalSteps: map["totalSteps"] ?? 0,
       totalRaidDamage: (map["totalRaidDamage"] ?? 0.0).toDouble(),
       strongholdActive: map['strongholdActive'] ?? false,
@@ -64,7 +61,6 @@ class TeamModel {
       "color": color,
       "members": members,
       "maxMembers": maxMembers,
-      "totalLand": totalLand,
       "totalSteps": totalSteps,
       "totalRaidDamage": totalRaidDamage,
       "leaderId": leaderId,

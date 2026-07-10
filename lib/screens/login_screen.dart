@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firebase_service.dart';
 import '../services/auth_service.dart';
+import '../services/pedometer_service.dart';
 import 'main_navigation.dart';
 import 'class_selection_screen.dart';
 
@@ -48,11 +49,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (isLogin) {
         await auth.signInWithEmailAndPassword(email: email, password: password);
+        PedometerService().reset();
       } else {
         UserCredential userCredential = await auth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
+        PedometerService().reset();
         await firebaseService.createPlayer(
           uid: userCredential.user!.uid,
           name: name,
@@ -170,6 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     verificationCompleted: (cred) async {
                       try {
                         UserCredential userCredential = await auth.signInWithCredential(cred);
+                        PedometerService().reset();
                         bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
                         if (isNew) {
                           await firebaseService.createPlayer(
@@ -215,6 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       vId!,
                       codeController.text.trim(),
                     );
+                    PedometerService().reset();
                     bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
                     if (isNew) {
                       await firebaseService.createPlayer(
@@ -366,6 +371,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         try {
                           UserCredential? userCredential = await authService.signInWithGoogle();
                           if (userCredential != null) {
+                            PedometerService().reset();
                             bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
                             if (isNew) {
                               await firebaseService.createPlayer(
@@ -396,6 +402,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onTap: () async {
                         try {
                           UserCredential userCredential = await authService.signInAnonymously();
+                          PedometerService().reset();
                           await firebaseService.createPlayer(
                             uid: userCredential.user!.uid,
                             name: "Guest Player",

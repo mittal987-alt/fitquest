@@ -8,24 +8,32 @@ class RaidParticipant {
   final String playerUid;
   final String displayName;
   int stepsContributed;
+  double damageContributed;
+  double ghostDamageContributed;
   bool hasPatchedFirewall;
 
   RaidParticipant({
     required this.playerUid,
     required this.displayName,
     this.stepsContributed = 0,
+    this.damageContributed = 0.0,
+    this.ghostDamageContributed = 0.0,
     this.hasPatchedFirewall = false,
   });
 
   /// Factory method to clone with state updates
   RaidParticipant copyWith({
     int? stepsContributed,
+    double? damageContributed,
+    double? ghostDamageContributed,
     bool? hasPatchedFirewall,
   }) {
     return RaidParticipant(
       playerUid: playerUid,
       displayName: displayName,
       stepsContributed: stepsContributed ?? this.stepsContributed,
+      damageContributed: damageContributed ?? this.damageContributed,
+      ghostDamageContributed: ghostDamageContributed ?? this.ghostDamageContributed,
       hasPatchedFirewall: hasPatchedFirewall ?? this.hasPatchedFirewall,
     );
   }
@@ -50,6 +58,7 @@ class RaidController extends ChangeNotifier {
   Timer? _regenTimer;
 
   StreamSubscription? _teamSubscription;
+  StreamSubscription? _membersSubscription;
   StreamSubscription? _eventSubscription;
   StreamSubscription? _pingSubscription;
 
@@ -79,6 +88,7 @@ class RaidController extends ChangeNotifier {
     _activeRaidId = "raid_$teamId"; // Simplified ID mapping
 
     _teamSubscription?.cancel();
+    _membersSubscription?.cancel();
     _eventSubscription?.cancel();
     _pingSubscription?.cancel();
 
@@ -95,7 +105,34 @@ class RaidController extends ChangeNotifier {
       }
     });
 
-    // 2. Listen to Events sub-collection for real-time broadcasts
+    // 2. Listen to Team Members (Players)
+    _membersSubscription = _firestore
+        .collection("players")
+        .where("teamId", isEqualTo: teamId)
+        .snapshots()
+        .listen((snap) {
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final uid = doc.id;
+        final name = data["name"] ?? "Unknown";
+        
+        if (_participants.containsKey(uid)) {
+          _participants[uid] = _participants[uid]!.copyWith(
+            stepsContributed: (data["dailySteps"] as num?)?.toInt() ?? 0,
+          );
+        } else {
+          _participants[uid] = RaidParticipant(
+            playerUid: uid,
+            displayName: name,
+            stepsContributed: (data["dailySteps"] as num?)?.toInt() ?? 0,
+          );
+        }
+      }
+      _evaluateGlobalHackStatus();
+      notifyListeners();
+    });
+
+    // 3. Listen to Events sub-collection for real-time broadcasts
     _eventSubscription = _firestore
         .collection("teams")
         .doc(teamId)
@@ -198,6 +235,18 @@ class RaidController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sends a tactical ping to the team raid channel
+  Future<void> sendTacticalPing(String playerUid, String playerName, String message) async {
+    if (_teamId == null) return;
+    
+    await _firestore.collection("teams").doc(_teamId).collection("pings").add({
+      'playerUid': playerUid,
+      'playerName': playerName,
+      'message': message,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
   /// Terminates the current active raid tracker and clears loops
   void shutdownController() {
     _regenTimer?.cancel();
@@ -208,18 +257,24 @@ class RaidController extends ChangeNotifier {
 
   /// Processes steps synced by a player, translates them to damage vector,
   /// and validates firewall patches.
-  void registerPlayerSteps(String playerUid, int stepsToSync, {double damageMultiplier = 1.0}) {
+  void registerPlayerSteps(String playerUid, int stepsToSync, {double damageMultiplier = 1.0, double? damageOverride, bool isAheadOfGhost = false}) {
     if (!isRaidActive) return;
 
     final participant = _participants[playerUid];
     if (participant == null) return;
 
     // 1 step = 1 HP damage dealt to Colossus defenses (modified by tier multiplier)
-    final double rawDamage = stepsToSync * GameplayRules.damagePerStep * damageMultiplier;
+    // If damageOverride is provided, use it directly (already calculated with multipliers)
+    final double rawDamage = damageOverride ?? (stepsToSync * GameplayRules.damagePerStep * damageMultiplier);
     _bossCurrentHp = (_bossCurrentHp - rawDamage).clamp(0.0, _bossMaxHp);
 
-    // Track total steps contributed during this operational shift
+    // Track total steps and damage contributed
     participant.stepsContributed += stepsToSync;
+    participant.damageContributed += rawDamage;
+    
+    if (isAheadOfGhost) {
+      participant.ghostDamageContributed += rawDamage;
+    }
 
     // Check if the player contribution meets criteria to patch active firewall penalty
     if (!participant.hasPatchedFirewall &&
@@ -266,6 +321,7 @@ class RaidController extends ChangeNotifier {
   void dispose() {
     _regenTimer?.cancel();
     _teamSubscription?.cancel();
+    _membersSubscription?.cancel();
     _eventSubscription?.cancel();
     _pingSubscription?.cancel();
     super.dispose();

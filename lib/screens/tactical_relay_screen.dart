@@ -20,6 +20,27 @@ class TacticalRelayScreen extends StatefulWidget {
 class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
   final TacticalRelayController _challengeController = TacticalRelayController();
   final FirebaseService _firebaseService = FirebaseService();
+  final Map<String, String> _nameCache = {};
+
+  void _ensureNamesCached(List<String> uids) {
+    bool hasMissing = uids.any((uid) => !_nameCache.containsKey(uid));
+    if (hasMissing) {
+      _fetchNames(uids);
+    }
+  }
+
+  Future<void> _fetchNames(List<String> uids) async {
+    for (String uid in uids) {
+      if (!_nameCache.containsKey(uid)) {
+        final player = await _firebaseService.getPlayer(uid);
+        if (mounted) {
+          setState(() {
+            _nameCache[uid] = player?.name ?? "OPERATOR";
+          });
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -233,10 +254,9 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1),
           ),
           const SizedBox(height: 16),
-          FutureBuilder<List<String>>(
-            future: _fetchSequenceNames(challenge.sequence),
-            builder: (context, nameSnapshot) {
-              final names = nameSnapshot.data ?? List.generate(challenge.sequence.length, (i) => "OPERATOR ${i + 1}");
+          Builder(
+            builder: (context) {
+              _ensureNamesCached(challenge.sequence);
               
               return Column(
                 children: challenge.sequence.asMap().entries.map((entry) {
@@ -244,7 +264,7 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                   final playerId = entry.value;
                   final bool isPast = index < challenge.sequence.indexOf(challenge.currentPlayerId);
                   final bool isCurrent = playerId == challenge.currentPlayerId;
-                  final String displayName = names[index];
+                  final String displayName = _nameCache[playerId] ?? "OPERATOR ${index + 1}";
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -304,15 +324,6 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
         ],
       ),
     );
-  }
-
-  Future<List<String>> _fetchSequenceNames(List<String> uids) async {
-    List<String> names = [];
-    for (String uid in uids) {
-      final player = await _firebaseService.getPlayer(uid);
-      names.add(player?.name ?? "OPERATOR");
-    }
-    return names;
   }
 
   void _showStartChallengeDialog() {

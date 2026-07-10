@@ -256,11 +256,6 @@ class TeamMembersScreen extends StatelessWidget {
                               Row(
                                 children: [
                                   Text(
-                                    "🗺️ ${player.totalLand} SECTORS",
-                                    style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
                                     "🤝 ${player.trustScore} TRUST",
                                     style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),

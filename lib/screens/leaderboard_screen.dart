@@ -280,7 +280,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 4.0),
                         child: Text(
-                          "👥 ${team.members} members  •  🌍 ${team.totalLand} areas\n⚡ Efficiency: ${avgEfficiency.toStringAsFixed(0)} steps/member",
+                          "👥 ${team.members} members  •  ⚡ Efficiency: ${avgEfficiency.toStringAsFixed(0)} steps/member",
                           style: const TextStyle(color: Colors.black54, fontSize: 11, height: 1.4),
                         ),
                       ),

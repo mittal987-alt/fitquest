@@ -2,19 +2,26 @@ import 'dart:async';
 import 'dart:math';
 import 'package:pedometer/pedometer.dart';
 import '../models/player_model.dart';
+import '../config/gameplay_rules.dart';
 
 /// Represents the RPG impact of physical movement segments.
 class TacticalPulse {
+  final int steps;
   final double raidDamage;
   final double scanProgress;
   final int apRegained;
   final String? discoveredMaterial;
+  final double velocityMultiplier;
+  final bool isAheadOfGhost;
 
   TacticalPulse({
+    required this.steps,
     required this.raidDamage,
     required this.scanProgress,
     required this.apRegained,
     this.discoveredMaterial,
+    this.velocityMultiplier = 1.0,
+    this.isAheadOfGhost = false,
   });
 }
 
@@ -70,6 +77,7 @@ class PedometerService {
   // Internal state caches
   int _lastKnownStepCount = 0;
   int _todayCumulativeSteps = 0;
+  PlayerModel? _playerContext;
   final Map<int, int> _hourlyStepsBuffer = {};
   Timer? _hourlyAggregationTimer;
   Timer? _simulationTimer;
@@ -115,6 +123,32 @@ class PedometerService {
     );
   }
 
+  /// Aggregates historical daily archives into a single averaged hourly baseline.
+  Map<String, int> generateHistoricalBaseline(Map<String, dynamic> dailyHistory) {
+    if (dailyHistory.isEmpty) return {};
+
+    final Map<String, List<int>> hourlyAggregator = {};
+
+    dailyHistory.forEach((date, data) {
+      if (data is Map && data.containsKey('hourlySteps')) {
+        final Map<String, dynamic> dayHourly = data['hourlySteps'];
+        dayHourly.forEach((hour, steps) {
+          hourlyAggregator.putIfAbsent(hour, () => []).add((steps as num).toInt());
+        });
+      }
+    });
+
+    final Map<String, int> averagedBaseline = {};
+
+    hourlyAggregator.forEach((hour, stepsList) {
+      if (stepsList.isNotEmpty) {
+        averagedBaseline[hour] = (stepsList.reduce((a, b) => a + b) / stepsList.length).round();
+      }
+    });
+
+    return averagedBaseline;
+  }
+
   /// Provides a stream of GhostStatus updates given a fixed or dynamic baseline.
   Stream<GhostStatus> getGhostStatusStream(Map<String, int> baseline) {
     return stepStream.map((_) => calculateGhostStatus(baseline));
@@ -122,7 +156,9 @@ class PedometerService {
 
   /// Bootstraps tracking streams. Connects to device sensors or initializes 
   /// simulation routines in emulator scenarios.
-  void startTracking({bool useSimulator = true, PlayerModel? playerContext}) {
+  void startTracking({bool useSimulator = true, PlayerModel? playerContext, int initialSteps = 0}) {
+    _playerContext = playerContext;
+    _todayCumulativeSteps = initialSteps;
     _hourlyStepsBuffer.clear();
     _startHourlyAggregationCycle();
 
@@ -162,7 +198,7 @@ class PedometerService {
 
     final int delta = totalHardwareSteps - _lastKnownStepCount;
     if (delta > 0) {
-      _registerSteps(delta);
+      registerSteps(delta, playerContext: _playerContext);
     }
     _lastKnownStepCount = totalHardwareSteps;
   }
@@ -194,7 +230,7 @@ class PedometerService {
   }
 
   /// Safely records newly registered walking steps into live cumulative pools.
-  void _registerSteps(int stepsCount, {PlayerModel? playerContext}) {
+  void registerSteps(int stepsCount, {PlayerModel? playerContext}) {
     _todayCumulativeSteps += stepsCount;
     _lastStepTime = DateTime.now();
     _stepStreamController.add(_todayCumulativeSteps);
@@ -214,32 +250,61 @@ class PedometerService {
     if (player.activePowerUps.containsKey("energy_boost")) {
       DateTime expiry = player.activePowerUps["energy_boost"]!;
       if (expiry.isAfter(DateTime.now())) {
-        // High-end multiplier for Elite users in Flow
-        bioDamageMult = 1.5;
+        // Use the profile-calculated multiplier from PlayerModel
+        bioDamageMult = player.energyBoostRaidMultiplier;
       }
     }
 
-    // RPG Logic: Strength increases Raid Damage
-    double damage = steps * (player.effectiveStrength / 10.0) * bioDamageMult;
+    // Ghost Strider Velocity Bonus integration
+    // Use historical baseline if available, fallback to hardcoded circadian curve
+    final Map<String, int> historicalBaseline = generateHistoricalBaseline(player.dailyHistory);
+    final Map<String, int> baseline = compileGhostBaseline(
+      historicalBaseline.isNotEmpty ? historicalBaseline : player.hourlySteps
+    );
     
-    // RPG Logic: Agility increases Scanning Velocity
-    double scan = steps * (player.effectiveAgility / 5000.0);
+    final status = calculateGhostStatus(baseline);
+    double velocityBonus = 1.0;
+    
+    // Only apply bonus if the feature is explicitly enabled in player profile
+    if (player.isGhostStriderEnabled && status.isAhead) {
+      // Velocity Bonus scales up to 1.5x based on how much faster player is than ghost
+      velocityBonus = (status.velocityIndex).clamp(1.0, 1.5);
+    }
+
+    // RPG Logic: Strength increases Raid Damage, modified by Energy Boost and Ghost Velocity
+    double damage = steps * (player.effectiveStrength / 10.0) * bioDamageMult * velocityBonus;
+    
+    // RPG Logic: Agility increases Scanning Velocity, boosted by Ghost Strider velocity
+    double scan = steps * (player.effectiveAgility / 5000.0) * velocityBonus;
 
     // RPG Logic: Endurance increases AP recovery frequency
     int apGained = (steps / (200 - player.effectiveEndurance)).floor();
 
-    // Loot Logic: 5% chance to find a material per pulse
+    // Loot Logic: 5% chance to find a material per pulse, 
+    // increased to 8% if Ghost Strider is active and ahead.
     String? found;
-    if (Random().nextDouble() < 0.05) {
+    double lootChance = 0.05;
+    if (player.isGhostStriderEnabled && status.isAhead) {
+      lootChance = 0.08;
+    }
+
+    if (Random().nextDouble() < lootChance) {
       final materials = ["Silicon", "Dark Energy", "Circuitry", "Plating"];
-      found = materials[Random().nextInt(materials.length)];
+      if (player.isGhostStriderEnabled && status.isAhead && Random().nextDouble() < 0.2) {
+        found = "Power Core"; // 20% of successful loot is a Power Core if ahead of ghost
+      } else {
+        found = materials[Random().nextInt(materials.length)];
+      }
     }
 
     _tacticalPulseController.add(TacticalPulse(
+      steps: steps,
       raidDamage: damage,
       scanProgress: scan,
       apRegained: apGained,
       discoveredMaterial: found,
+      velocityMultiplier: velocityBonus,
+      isAheadOfGhost: status.isAhead,
     ));
   }
 
@@ -270,10 +335,15 @@ class PedometerService {
     _simulationTimer?.cancel();
     final random = Random();
 
-    _simulationTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      // Simulate physical stride intervals: 15 to 45 steps every tick
-      final int simulatedStrideDelta = 15 + random.nextInt(30);
-      _registerSteps(simulatedStrideDelta, playerContext: playerContext);
+    _simulationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      // Simulate high-frequency or burst strides: 15 to 100 steps every tick
+      // Occasional burst simulation to test "Critical Hit" UI
+      final bool isBurst = random.nextDouble() < 0.2;
+      final int simulatedStrideDelta = isBurst 
+          ? 60 + random.nextInt(60) // Higher delta for crit testing
+          : 15 + random.nextInt(20); 
+
+      registerSteps(simulatedStrideDelta, playerContext: _playerContext);
     });
   }
 
@@ -293,8 +363,8 @@ class PedometerService {
   void startListening() => startTracking(useSimulator: false);
   void stopListening() => dispose();
 
-  double calculateCalories() => _todayCumulativeSteps * 0.04;
-  double calculateDistanceKm() => _todayCumulativeSteps * 0.0008;
+  double calculateCalories() => _todayCumulativeSteps * GameplayRules.caloriesPerStep;
+  double calculateDistanceKm() => _todayCumulativeSteps * GameplayRules.distanceKmPerStep;
   int getLevel() => (_todayCumulativeSteps / 2000).floor() + 1;
   bool isRealWalking() => DateTime.now().difference(_lastStepTime).inSeconds < 15;
   

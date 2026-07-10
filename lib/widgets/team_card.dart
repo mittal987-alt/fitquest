@@ -81,14 +81,6 @@ class TeamCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  "🌍 ${team.totalLand} Land",
-                  style: const TextStyle(
-                    color: Colors.black54,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
                   "👣 ${team.totalSteps} Steps",
                   style: const TextStyle(
                     color: Colors.black54,

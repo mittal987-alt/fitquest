@@ -28,7 +28,6 @@ void main() {
           totalSteps: i * 100,
           dailySteps: i * 10,
           lastHardwareStepCount: -1,
-          totalLand: 5,
           trustScore: 100,
           level: 1,
           xp: 500,

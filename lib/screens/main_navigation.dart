@@ -12,6 +12,7 @@ import '../services/pedometer_service.dart';
 import '../services/step_sync_service.dart';
 import '../services/firebase_service.dart';
 import '../services/notification_service.dart';
+import '../controller/raid_controller.dart';
 import '../models/player_model.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -83,6 +84,9 @@ class _MainNavigationState extends State<MainNavigation> {
           }
           if (player.teamId != null) {
             notificationService.subscribeToTeam(player.teamId!);
+            if (mounted) {
+              context.read<RaidController>().initTeamRaid(player.teamId!);
+            }
           }
 
           setState(() {

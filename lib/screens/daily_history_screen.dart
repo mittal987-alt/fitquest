@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/player_model.dart';
 import '../services/firebase_service.dart';
+import '../features/tactical/widgets/activity_heatmap.dart';
 
 class DailyHistoryScreen extends StatelessWidget {
   final PlayerModel player;
@@ -132,6 +133,11 @@ class DailyHistoryScreen extends StatelessWidget {
               const SizedBox(width: 24),
               _statItem(Icons.emoji_events_rounded, "${achievements.length}", "REWARDS", Colors.purple),
             ],
+          ),
+          const SizedBox(height: 20),
+          ActivityHeatmap(
+            hourlySteps: Map<String, int>.from(data['hourlySteps'] ?? {}),
+            ghostBaseline: player.hourlySteps,
           ),
           if (achievements.isNotEmpty) ...[
             const SizedBox(height: 16),

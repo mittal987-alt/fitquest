@@ -39,8 +39,9 @@ class PlayerModel {
   final String? teamId;
   final int totalSteps;
   final int dailySteps;
+  final int dailyCalories;
+  final double dailyDistance;
   final int lastHardwareStepCount;
-  final int totalLand;
   final int trustScore;
   final int level;
   final int xp;
@@ -49,6 +50,7 @@ class PlayerModel {
   final DateTime? lastTeamAction;
   final int streakCount;
   final int totalRaidDamage;
+  final int ghostRaidDamage;
   final DateTime? lastActiveDate;
   final List<String> claimedQuests;
   final Map<String, DateTime> activePowerUps;
@@ -66,6 +68,7 @@ class PlayerModel {
   final Map<String, dynamic> dailyHistory;
   final double energyBoostRaidMultiplier;
   final double energyBoostXpMultiplier;
+  final bool isGhostStriderEnabled;
 
   // Physical Telemetry Nodes
   final double? heightCm;
@@ -144,8 +147,9 @@ class PlayerModel {
     this.teamId,
     required this.totalSteps,
     required this.dailySteps,
+    this.dailyCalories = 0,
+    this.dailyDistance = 0.0,
     required this.lastHardwareStepCount,
-    required this.totalLand,
     required this.trustScore,
     required this.level,
     required this.xp,
@@ -154,6 +158,7 @@ class PlayerModel {
     this.lastTeamAction,
     this.streakCount = 0,
     this.totalRaidDamage = 0,
+    this.ghostRaidDamage = 0,
     this.lastActiveDate,
     this.claimedQuests = const [],
     this.activePowerUps = const {},
@@ -164,6 +169,7 @@ class PlayerModel {
     this.dailyHistory = const {},
     this.energyBoostRaidMultiplier = 1.0,
     this.energyBoostXpMultiplier = 1.0,
+    this.isGhostStriderEnabled = true,
     this.heightCm,
     this.weightKg,
     this.dailyStepTarget = 10000,
@@ -187,8 +193,9 @@ class PlayerModel {
     String? teamId,
     int? totalSteps,
     int? dailySteps,
+    int? dailyCalories,
+    double? dailyDistance,
     int? lastHardwareStepCount,
-    int? totalLand,
     int? trustScore,
     int? level,
     int? xp,
@@ -197,6 +204,7 @@ class PlayerModel {
     DateTime? lastTeamAction,
     int? streakCount,
     int? totalRaidDamage,
+    int? ghostRaidDamage,
     DateTime? lastActiveDate,
     List<String>? claimedQuests,
     Map<String, DateTime>? activePowerUps,
@@ -207,6 +215,7 @@ class PlayerModel {
     Map<String, dynamic>? dailyHistory,
     double? energyBoostRaidMultiplier,
     double? energyBoostXpMultiplier,
+    bool? isGhostStriderEnabled,
     double? heightCm,
     double? weightKg,
     int? dailyStepTarget,
@@ -229,8 +238,9 @@ class PlayerModel {
       teamId: teamId ?? this.teamId,
       totalSteps: totalSteps ?? this.totalSteps,
       dailySteps: dailySteps ?? this.dailySteps,
+      dailyCalories: dailyCalories ?? this.dailyCalories,
+      dailyDistance: dailyDistance ?? this.dailyDistance,
       lastHardwareStepCount: lastHardwareStepCount ?? this.lastHardwareStepCount,
-      totalLand: totalLand ?? this.totalLand,
       trustScore: trustScore ?? this.trustScore,
       level: level ?? this.level,
       xp: xp ?? this.xp,
@@ -239,6 +249,7 @@ class PlayerModel {
       lastTeamAction: lastTeamAction ?? this.lastTeamAction,
       streakCount: streakCount ?? this.streakCount,
       totalRaidDamage: totalRaidDamage ?? this.totalRaidDamage,
+      ghostRaidDamage: ghostRaidDamage ?? this.ghostRaidDamage,
       lastActiveDate: lastActiveDate ?? this.lastActiveDate,
       claimedQuests: claimedQuests ?? this.claimedQuests,
       activePowerUps: activePowerUps ?? this.activePowerUps,
@@ -249,6 +260,7 @@ class PlayerModel {
       dailyHistory: dailyHistory ?? this.dailyHistory,
       energyBoostRaidMultiplier: energyBoostRaidMultiplier ?? this.energyBoostRaidMultiplier,
       energyBoostXpMultiplier: energyBoostXpMultiplier ?? this.energyBoostXpMultiplier,
+      isGhostStriderEnabled: isGhostStriderEnabled ?? this.isGhostStriderEnabled,
       heightCm: heightCm ?? this.heightCm,
       weightKg: weightKg ?? this.weightKg,
       dailyStepTarget: dailyStepTarget ?? this.dailyStepTarget,
@@ -285,8 +297,9 @@ class PlayerModel {
       isInTeam: map["isInTeam"] is bool ? map["isInTeam"] : false,
       totalSteps: (map["totalSteps"] as num?)?.toInt() ?? 0,
       dailySteps: (map["dailySteps"] as num?)?.toInt() ?? 0,
+      dailyCalories: (map["dailyCalories"] as num?)?.toInt() ?? 0,
+      dailyDistance: (map["dailyDistance"] as num?)?.toDouble() ?? 0.0,
       lastHardwareStepCount: (map["lastHardwareStepCount"] as num?)?.toInt() ?? -1,
-      totalLand: (map["totalLand"] as num?)?.toInt() ?? 0,
       trustScore: (map["trustScore"] as num?)?.toInt() ?? 100,
       level: (map["level"] as num?)?.toInt() ?? 1,
       xp: (map["xp"] as num?)?.toInt() ?? 0,
@@ -295,6 +308,7 @@ class PlayerModel {
       lastTeamAction: map["lastTeamAction"] is Timestamp ? (map["lastTeamAction"] as Timestamp).toDate() : null,
       streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
       totalRaidDamage: (map["totalRaidDamage"] as num?)?.toInt() ?? 0,
+      ghostRaidDamage: (map["ghostRaidDamage"] as num?)?.toInt() ?? 0,
       lastActiveDate: map["lastActiveDate"] is Timestamp ? (map["lastActiveDate"] as Timestamp).toDate() : null,
       claimedQuests: map["claimedQuests"] != null ? List<String>.from(map["claimedQuests"]) : const [],
       activePowerUps: powerUps,
@@ -305,6 +319,7 @@ class PlayerModel {
       dailyHistory: Map<String, dynamic>.from(map['dailyHistory'] ?? {}),
       energyBoostRaidMultiplier: (map["energyBoostRaidMultiplier"] as num?)?.toDouble() ?? (map["rechargeRaidMultiplier"] as num?)?.toDouble() ?? 1.0,
       energyBoostXpMultiplier: (map["energyBoostXpMultiplier"] as num?)?.toDouble() ?? (map["rechargeXpMultiplier"] as num?)?.toDouble() ?? 1.0,
+      isGhostStriderEnabled: map["isGhostStriderEnabled"] is bool ? map["isGhostStriderEnabled"] : true,
       heightCm: (map["heightCm"] as num?)?.toDouble(),
       weightKg: (map["weightKg"] as num?)?.toDouble(),
       dailyStepTarget: (map["dailyStepTarget"] as num?)?.toInt() ?? 10000,
@@ -334,8 +349,9 @@ class PlayerModel {
       "teamId": teamId,
       "totalSteps": totalSteps,
       "dailySteps": dailySteps,
+      "dailyCalories": dailyCalories,
+      "dailyDistance": dailyDistance,
       "lastHardwareStepCount": lastHardwareStepCount,
-      "totalLand": totalLand,
       "trustScore": trustScore,
       "level": level,
       "isInTeam": isInTeam,
@@ -345,6 +361,7 @@ class PlayerModel {
       "lastTeamAction": lastTeamAction != null ? Timestamp.fromDate(lastTeamAction!) : null,
       "streakCount": streakCount,
       "totalRaidDamage": totalRaidDamage,
+      "ghostRaidDamage": ghostRaidDamage,
       "lastActiveDate": lastActiveDate != null ? Timestamp.fromDate(lastActiveDate!) : null,
       "claimedQuests": claimedQuests,
       "activePowerUps": powerUps,
@@ -355,6 +372,7 @@ class PlayerModel {
       "dailyHistory": dailyHistory,
       "energyBoostRaidMultiplier": energyBoostRaidMultiplier,
       "energyBoostXpMultiplier": energyBoostXpMultiplier,
+      "isGhostStriderEnabled": isGhostStriderEnabled,
       "heightCm": heightCm,
       "weightKg": weightKg,
       "dailyStepTarget": dailyStepTarget,

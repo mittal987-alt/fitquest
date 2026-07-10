@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_service.dart';
+import 'pedometer_service.dart';
 import '../models/player_model.dart';
 import '../controller/tactical_relay_controller.dart';
 
@@ -43,8 +44,11 @@ class StepSyncService {
           int currentHardwareSteps = event.steps;
           int lastHardwareSteps = player.lastHardwareStepCount;
 
-          // Handle first-time initialization or device reboots (where hardware steps < last stored)
+          // REBOOT OR DRIFT HANDLING
+          // If the hardware counter is significantly lower than our last record, 
+          // or if it's the first time tracking (-1), we treat it as a reboot/reset.
           if (lastHardwareSteps == -1 || currentHardwareSteps < lastHardwareSteps) {
+            doublePrint("HARDWARE DRIFT DETECTED: Resetting baseline to $currentHardwareSteps");
             await firebaseService.updateLastHardwareSteps(
               uid: uid,
               hardwareSteps: currentHardwareSteps,
@@ -54,9 +58,29 @@ class StepSyncService {
 
           int deltaSteps = currentHardwareSteps - lastHardwareSteps;
 
+          // DRIFT PROTECTION: Sanity check for massive step jumps (e.g. sensor glitches)
+          // Rejecting deltas > 5000 in a single event as likely unrealistic drift.
+          if (deltaSteps > 5000) {
+             doublePrint("ANOMALOUS DRIFT REJECTED: +$deltaSteps steps ignored.");
+             await firebaseService.updateLastHardwareSteps(
+              uid: uid,
+              hardwareSteps: currentHardwareSteps,
+            );
+            return;
+          }
+
           if (deltaSteps > 0) {
-            // Update base metrics
-            await firebaseService.updateSteps(uid: uid, stepsToAdd: deltaSteps);
+            // Update base metrics and physical telemetry
+            await firebaseService.updateDailyPhysicalStats(
+              uid, 
+              deltaSteps, 
+              deltaSteps * 0.04, 
+              deltaSteps * 0.00075
+            );
+            await firebaseService.logHourlyActivity(uid, deltaSteps);
+            
+            // Push delta to live gameplay service for RPG pulses and UI updates
+            PedometerService().registerSteps(deltaSteps, playerContext: player);
             
             // Sync to team if applicable
             if (player.isInTeam && player.teamId != null) {

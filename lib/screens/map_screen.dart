@@ -829,13 +829,6 @@ class _MapScreenState extends State<MapScreen> {
 
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: finalXP);
 
-    final myTilesCount = allTiles.where((t) => t.ownerId == ownerId).length;
-    if (player.isInTeam && player.teamId != null) {
-      await firebaseService.updateTeamLand(teamId: player.teamId!, totalLand: myTilesCount);
-    } else {
-      await firebaseService.updateLand(uid: player.uid, totalLand: myTilesCount);
-    }
-
     generateGrid();
     if (mounted) setState(() {});
   }

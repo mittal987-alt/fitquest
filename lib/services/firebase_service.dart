@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -11,6 +12,7 @@ import '../models/gear_model.dart';
 import '../models/bounty_model.dart';
 import '../models/anomaly_model.dart';
 import '../models/activity_model.dart';
+import '../models/raid_log_model.dart';
 
 class FirebaseService {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -49,8 +51,12 @@ class FirebaseService {
       isInTeam: false,
       totalSteps: 0,
       dailySteps: 0,
+      dailyCalories: 0,
+      dailyDistance: 0.0,
+      streakCount: 0,
+      totalRaidDamage: 0,
+      ghostRaidDamage: 0,
       lastHardwareStepCount: -1,
-      totalLand: 0,
       trustScore: 100,
       level: 1,
       xp: 0,
@@ -64,7 +70,6 @@ class FirebaseService {
       energyBoostRaidMultiplier: 1.0,
       energyBoostXpMultiplier: 1.0,
     );
-
     await firestore.collection("players").doc(uid).set(player.toMap());
   }
 
@@ -108,6 +113,16 @@ class FirebaseService {
       "lastUpdated": FieldValue.serverTimestamp(),
     });
     debugPrint("ML FITNESS PROFILE UPDATED: ${plan.tier} | Goal: $fitnessGoal");
+  }
+
+  Future<void> updateDailyPhysicalStats(String uid, int steps, double calories, double distance) async {
+    await firestore.collection("players").doc(uid).update({
+      "dailySteps": FieldValue.increment(steps),
+      "totalSteps": FieldValue.increment(steps),
+      "dailyCalories": FieldValue.increment(calories.toInt()),
+      "dailyDistance": FieldValue.increment(distance),
+      "lastSyncTime": FieldValue.serverTimestamp(),
+    });
   }
 
   /// Logs the workout, applies XP bonus based on tier, and activates the energy boost buff
@@ -250,20 +265,12 @@ class FirebaseService {
   }
 
   // =========================
-  // UPDATE LAND
+  // UPDATE GHOST STRIDER TOGGLE
   // =========================
-  Future<void> updateLand({
-    required String uid,
-    required int totalLand,
-  }) async {
-    try {
-      await firestore.collection("players").doc(uid).update({
-        "totalLand": totalLand,
-      });
-      debugPrint("LAND UPDATED => $totalLand");
-    } catch (e) {
-      debugPrint("LAND UPDATE ERROR => $e");
-    }
+  Future<void> updateGhostStriderToggle(String uid, bool isActive) async {
+    await firestore.collection("players").doc(uid).update({
+      "isGhostStriderEnabled": isActive,
+    });
   }
 
   // =========================
@@ -335,12 +342,12 @@ class FirebaseService {
 
       // Update daily history XP tracking
       String todayKey = DateTime.now().toIso8601String().split('T')[0];
-      
+
       Map<String, dynamic> updates = {
         "xp": newXp,
         "dailyHistory.$todayKey.xpGained": FieldValue.increment(finalXpToAdd),
       };
-      
+
       if (newLevel > currentLevel) {
         updates["level"] = newLevel;
         // Optionally log level up in achievements for that day
@@ -374,6 +381,10 @@ class FirebaseService {
         "streakCount": 1,
         "lastActiveDate": Timestamp.fromDate(today),
         "claimedQuests": [],
+        "dailySteps": 0,
+        "dailyCalories": 0,
+        "dailyDistance": 0.0,
+        "currentStamina": 100,
       });
     } else {
       final lastDate = DateTime(lastActiveDate.year, lastActiveDate.month, lastActiveDate.day);
@@ -384,6 +395,9 @@ class FirebaseService {
         String yesterdayKey = lastDate.toIso8601String().split('T')[0];
         Map<String, dynamic> historyNode = {
           "steps": data["dailySteps"] ?? 0,
+          "calories": data["dailyCalories"] ?? 0,
+          "distance": data["dailyDistance"] ?? 0.0,
+          "hourlySteps": data["hourlySteps"] ?? {},
           "xpGained": 0, // In a real app, we'd track this throughout the day
           "achievements": [], // Logic for daily achievement badges
           "timestamp": Timestamp.fromDate(lastDate),
@@ -393,6 +407,10 @@ class FirebaseService {
           "lastActiveDate": Timestamp.fromDate(today),
           "claimedQuests": [],
           "dailySteps": 0,
+          "dailyCalories": 0,
+          "dailyDistance": 0.0,
+          "currentStamina": 100,
+          "hourlySteps": {},
           "dailyHistory.$yesterdayKey": historyNode,
         };
 
@@ -840,28 +858,28 @@ class FirebaseService {
     final playerRef = firestore.collection("players").doc(uid);
     final teamRef = firestore.collection("teams").doc(teamId);
 
-    return firestore.runTransaction((transaction) async {
+    final result = await firestore.runTransaction((transaction) async {
       final playerSnap = await transaction.get(playerRef);
       final teamSnap = await transaction.get(teamRef);
 
-      if (!playerSnap.exists || !teamSnap.exists) return false;
+      if (!playerSnap.exists || !teamSnap.exists) return {"success": false};
 
       final player = PlayerModel.fromMap(playerSnap.data()!);
 
       // Check for a specific 'lastRaidAttack' field if it exists in data but not in model yet
       final rawLastAttack = (playerSnap.data()?["lastRaidAttack"] as Timestamp?)?.toDate();
-      
+
       if (rawLastAttack != null && DateTime.now().difference(rawLastAttack).inMinutes < 5) {
-        return false;
+        return {"success": false};
       }
 
       int staminaCost = 50;
-      if (player.currentStamina < staminaCost) return false;
+      if (player.currentStamina < staminaCost) return {"success": false};
 
       double baseDmg = (player.effectiveStrength + player.effectiveAgility).toDouble();
       double gearMult = player.getModifier('raid_dmg_mult', allGear);
       double strongholdBonus = (teamSnap.data()?["strongholdActive"] == true) ? 1.5 : 1.0;
-      
+
       // ENERGY BOOST BONUS
       double energyBoostMult = 1.0;
       if (player.activePowerUps.containsKey("energy_boost")) {
@@ -882,7 +900,7 @@ class FirebaseService {
 
       double currentBossHp = (teamSnap.data()?["raidBossHp"] ?? 100000.0).toDouble();
       double newBossHp = (currentBossHp - totalDmg).clamp(0.0, 1000000.0);
-      
+
       transaction.update(teamRef, {
         "raidBossHp": newBossHp,
         "totalRaidDamage": FieldValue.increment(totalDmg),
@@ -899,8 +917,23 @@ class FirebaseService {
         }
       );
 
+      bool isDefeated = false;
+      String bossName = teamSnap.data()?["raidBossName"] ?? "GLITCH_COLOSSUS_V4";
+      double finalTotalDamage = (teamSnap.data()?["totalRaidDamage"] ?? 0.0) + totalDmg;
+
       // RAID DEFEATED LOGIC
       if (newBossHp <= 0) {
+        isDefeated = true;
+        final raidLogRef = teamRef.collection("raid_history").doc();
+        transaction.set(raidLogRef, {
+          "bossName": bossName,
+          "timestamp": FieldValue.serverTimestamp(),
+          "totalDamage": finalTotalDamage,
+          "victorName": player.name,
+          "lootDrops": ["RARE_CORE", "500_CREDITS"],
+          "isSuccess": true,
+        });
+
         transaction.set(
           firestore.collection("teams").doc(teamId).collection("events").doc("raid_victory"),
           {
@@ -913,24 +946,44 @@ class FirebaseService {
         transaction.update(teamRef, {
           "raidActive": false,
           "lastVictory": FieldValue.serverTimestamp(),
+          "totalRaidDamage": 0.0, // Reset for next raid
         });
       }
 
-      return true;
+      return {
+        "success": true,
+        "defeated": isDefeated,
+        "totalDamage": finalTotalDamage,
+        "bossName": bossName
+      };
     });
+
+    if (result["success"] == true && result["defeated"] == true) {
+      await distributeRaidRewards(
+        teamId: teamId,
+        totalDamage: result["totalDamage"] as double,
+        bossName: result["bossName"] as String
+      );
+    }
+
+    return result["success"] == true;
   }
 
   Future<void> contributeRaidDamage(String teamId, double damage) async {
     final teamRef = firestore.collection("teams").doc(teamId);
-    await firestore.runTransaction((transaction) async {
+    final result = await firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(teamRef);
-      if (!snapshot.exists) return;
+      if (!snapshot.exists) return {"defeated": false};
 
       double currentHp = (snapshot.data()?["raidBossHp"] ?? 100000.0).toDouble();
       double newHp = (currentHp - damage).clamp(0.0, 1000000.0);
       transaction.update(teamRef, {
         "raidBossHp": newHp,
       });
+
+      bool isDefeated = false;
+      double finalTotalDamage = (snapshot.data()?["totalRaidDamage"] ?? 0.0) + damage;
+      String bossName = snapshot.data()?["raidBossName"] ?? "GLITCH_COLOSSUS_V4";
 
       // Periodic HP Sync log for broadcast
       if (newHp % 500 < damage || newHp <= 0) {
@@ -945,11 +998,114 @@ class FirebaseService {
       }
 
       if (newHp <= 0) {
+        isDefeated = true;
+        final raidLogRef = teamRef.collection("raid_history").doc();
+        transaction.set(raidLogRef, {
+          "bossName": bossName,
+          "timestamp": FieldValue.serverTimestamp(),
+          "totalDamage": finalTotalDamage,
+          "victorName": "Team Effort",
+          "lootDrops": ["BASIC_SCRAP", "100_CREDITS"],
+          "isSuccess": true,
+        });
+
         transaction.update(teamRef, {
           "raidActive": false,
           "lastVictory": FieldValue.serverTimestamp(),
+          "totalRaidDamage": 0.0,
         });
       }
+
+      return {
+        "defeated": isDefeated,
+        "totalDamage": finalTotalDamage,
+        "bossName": bossName
+      };
+    });
+
+    if (result["defeated"] == true) {
+      await distributeRaidRewards(
+        teamId: teamId,
+        totalDamage: result["totalDamage"] as double,
+        bossName: result["bossName"] as String
+      );
+    }
+  }
+
+  /// Distributes rewards to all participants of a defeated raid.
+  /// Scaled by their contribution to the total damage dealt.
+  Future<void> distributeRaidRewards({
+    required String teamId,
+    required double totalDamage,
+    required String bossName,
+  }) async {
+    try {
+      final participantsQuery = await firestore
+          .collection("players")
+          .where("teamId", isEqualTo: teamId)
+          .where("totalRaidDamage", isGreaterThan: 0)
+          .get();
+
+      if (participantsQuery.docs.isEmpty) return;
+
+      final batch = firestore.batch();
+      final random = Random();
+      final todayKey = DateTime.now().toIso8601String().split('T')[0];
+
+      for (var doc in participantsQuery.docs) {
+        final data = doc.data();
+        final int playerDamage = (data["totalRaidDamage"] as num?)?.toInt() ?? 0;
+
+        // Calculate contribution ratio
+        double ratio = totalDamage > 0 ? playerDamage / totalDamage : (1.0 / participantsQuery.docs.length);
+        ratio = ratio.clamp(0.0, 1.0);
+
+        // RPG Reward Scaling
+        int xpReward = (1000 * ratio).toInt() + 500;
+        int currencyReward = (500 * ratio).toInt() + 250;
+
+        // Material Drop Logic
+        Map<String, int> inventory = Map<String, int>.from(data["inventory"] ?? {});
+        List<String> lootTypes = ["Silicon", "Dark Energy", "Circuitry", "Plating"];
+
+        // High contributors have better chances at rare drops
+        int drops = 1;
+        if (ratio > 0.3) drops = 2;
+        if (ratio > 0.6) drops = 3;
+
+        for (int i = 0; i < drops; i++) {
+          if (random.nextDouble() < 0.4) {
+            String item = lootTypes[random.nextInt(lootTypes.length)];
+            inventory[item] = (inventory[item] ?? 0) + 1;
+          }
+        }
+
+        batch.update(doc.reference, {
+          "xp": FieldValue.increment(xpReward),
+          "currency": FieldValue.increment(currencyReward),
+          "inventory": inventory,
+          "totalRaidDamage": 0, // RESET for next operation
+          "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion(["RAID DEFEATED: $bossName"]),
+        });
+      }
+
+      await batch.commit();
+      debugPrint("RAID REWARDS DISTRIBUTED FOR TEAM: $teamId");
+    } catch (e) {
+      debugPrint("FAILED TO DISTRIBUTE RAID REWARDS: $e");
+    }
+  }
+
+  Stream<List<RaidLog>> getRaidHistory(String teamId) {
+    return firestore
+        .collection("teams")
+        .doc(teamId)
+        .collection("raid_history")
+        .orderBy("timestamp", descending: true)
+        .limit(20)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => RaidLog.fromMap(doc.data(), doc.id)).toList();
     });
   }
 
@@ -1065,15 +1221,6 @@ class FirebaseService {
       equipped[gear.slot.toString().split('.').last] = gear.id;
 
       transaction.update(docRef, {"equippedGear": equipped});
-    });
-  }
-
-  Future<void> updateTeamLand({
-    required String teamId,
-    required int totalLand,
-  }) async {
-    await firestore.collection("teams").doc(teamId).update({
-      "totalLand": totalLand,
     });
   }
 
@@ -1212,10 +1359,14 @@ class FirebaseService {
   }
 
   Future<void> logHourlyActivity(String uid, int steps) async {
-    String hourKey = DateTime.now().hour.toString();
+    final now = DateTime.now();
+    String hourKey = now.hour.toString().padLeft(2, '0');
+    String todayKey = now.toIso8601String().split('T')[0];
+
     final docRef = firestore.collection("players").doc(uid);
     await docRef.update({
       "hourlySteps.$hourKey": FieldValue.increment(steps),
+      "dailyHistory.$todayKey.hourlySteps.$hourKey": FieldValue.increment(steps),
     });
   }
 
