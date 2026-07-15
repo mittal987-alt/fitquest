@@ -15,7 +15,7 @@ class ActivityModel {
     required this.exerciseGuide,
   });
 
-  factory ActivityModel.fromBmiAndGoal(double? bmi, String? goal) {
+  factory ActivityModel.fromBmiAndGoal(double? bmi, String? goal, {int trustScore = 100, int level = 1}) {
     // Default values
     String tier = "ACTIVE";
     int duration = 30;
@@ -28,7 +28,7 @@ class ActivityModel {
       {"name": "Plank", "tip": "Squeeze glutes, hold steady."}
     ];
 
-    // BMI Base Logic
+    // 1. PHYSICAL BASELINE (BMI Logic)
     if (bmi != null) {
       if (bmi >= 30.0) {
         tier = "RESTORATIVE";
@@ -55,7 +55,19 @@ class ActivityModel {
       }
     }
 
-    // Goal-Based Refinement (Heuristic ML Engine)
+    // 2. NEURAL ADAPTATION (Consistency & Level Scaling)
+    // The "ML" engine rewards high trust and level with "Overclocked" multipliers
+    double neuralFactor = (trustScore / 100.0) + (level / 50.0);
+    xpMult *= neuralFactor.clamp(0.8, 1.5);
+    raidMult *= neuralFactor.clamp(0.8, 1.5);
+
+    if (trustScore > 95 && level > 5) {
+      // "VETERAN" Overclocking
+      duration = (duration * 1.1).toInt();
+      xpMult += 0.3;
+    }
+
+    // 3. STRATEGIC GOAL REFINEMENT
     if (goal == "weight_loss") {
       duration = (duration * 1.2).toInt();
       xpMult += 0.2;

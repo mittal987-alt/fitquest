@@ -22,7 +22,7 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
       'name': 'SCOUT',
       'icon': Icons.directions_run_rounded,
       'color': Colors.cyanAccent,
-      'description': 'Specializes in agility and speed. +5 AGI base bonus. Reduced AP cost for capture actions.',
+      'description': 'Fast and agile. Perfect for explorers who want to capture new areas easily.',
       'stats': {'STR': 8, 'AGI': 15, 'END': 10}
     },
     {
@@ -30,7 +30,7 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
       'name': 'TANK',
       'icon': Icons.shield_rounded,
       'color': Colors.orangeAccent,
-      'description': 'Built for endurance and raw power. +5 STR base bonus. Higher maximum stamina capacity.',
+      'description': 'Strong and tough. Perfect for those who want more power and extra energy.',
       'stats': {'STR': 15, 'AGI': 8, 'END': 12}
     },
     {
@@ -38,7 +38,7 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
       'name': 'MEDIC',
       'icon': Icons.health_and_safety_rounded,
       'color': Colors.greenAccent,
-      'description': 'Tactical support and rapid recovery. +5 END base bonus. Faster stamina regeneration.',
+      'description': 'Steady and reliable. Perfect for staying active longer and recovering energy fast.',
       'stats': {'STR': 10, 'AGI': 10, 'END': 15}
     },
   ];
@@ -77,12 +77,12 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "SELECT OPERATOR CLASS",
+                "CHOOSE YOUR CLASS",
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: Colors.black87),
               ),
               const SizedBox(height: 8),
               const Text(
-                "Choose your tactical specialization to initialize base attribute vectors.",
+                "Pick the role that fits your playstyle. This sets your starting stats and special perks.",
                 style: TextStyle(color: Colors.black45, fontSize: 13),
               ),
               const SizedBox(height: 32),
@@ -178,7 +178,7 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
                   onPressed: selectedClass == null || loading ? null : _handleSelection,
                   child: loading
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text("INITIALIZE CLASS DATA", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                      : const Text("START YOUR JOURNEY", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)),
                 ),
               ),
             ],

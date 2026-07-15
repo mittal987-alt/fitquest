@@ -100,8 +100,15 @@ class MovementTrackingService {
   Future<bool> dispatchTeamJoinRequest(BuildContext context, TeamRequestModel request) async {
     try {
       // Search the database for existing pending requests for this player
+      // FIX: was `.collection("requests")` — every other read/write of join
+      // requests in this app (sendJoinRequest, getTeamRequests, acceptRequest,
+      // rejectRequest in firebase_service.dart) uses "team_requests". This
+      // method isn't currently called from anywhere, but if it ever is, the
+      // wrong collection name would mean it never finds the player's real
+      // pending request and the "one active request" rule silently never
+      // triggers.
       final activeRequestsQuery = await FirebaseFirestore.instance
-          .collection("requests")
+          .collection("team_requests")
           .where("playerId", isEqualTo: request.playerId)
           .where("status", isEqualTo: "pending")
           .get();
@@ -190,7 +197,9 @@ class AntiCheatService {
     double distanceMultiplier = 1.0,
   }) {
     // Base radius (~222m) multiplied by augmentation factor
-    double maxValidProximity = (0.002 * 2.0 * 111000) * distanceMultiplier;
+    // FIX: had a stray `* 2.0` that made the real base radius 444m instead
+    // of the ~222m the comment describes. Confirmed 222m is correct.
+    double maxValidProximity = (0.002 * 111000) * distanceMultiplier;
     return userIsWalking && !captureBlocked && (distanceToTileMeters < maxValidProximity);
   }
 }

@@ -19,6 +19,7 @@ import '../features/tactical/widgets/activity_heatmap.dart';
 import '../widgets/energy_boost_badge.dart';
 
 import '../features/raid/raid_history_screen.dart';
+import '../features/raid/raid_boss_screen.dart';
 
 import 'package:provider/provider.dart';
 import '../controller/raid_controller.dart';
@@ -37,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late ConfettiController _confettiController;
   late Stream<PlayerModel?> _playerStream;
   StreamSubscription<TacticalPulse>? _pulseSubscription;
+  StreamSubscription<DriftEvent>? _driftSubscription;
   Timer? refreshTimer;
 
   // Live Feature State
@@ -48,6 +50,42 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _scanningNearbyItems = false;
   double _itemScanProgress = 0.0;
   final double _itemDistance = 342.0;
+
+  // ============================================================
+  // DESIGN SYSTEM
+  // Every card on this screen previously mixed slightly different
+  // corner radii (20 vs 24), border alphas (0.05 vs 0.06), and shadow
+  // strengths (0.01 vs 0.02) depending on which section wrote it.
+  // These shared tokens/helpers make every card, header, and spacing
+  // gap on the page consistent, so the whole screen reads as one
+  // coherent design instead of a stack of similar-but-not-quite-matching
+  // pieces.
+  // ============================================================
+  static const double _kCardRadius = 24;
+  static const double _kChipRadius = 12;
+  static const double _kSectionGap = 20;
+
+  BoxDecoration _cardDecoration({Color? borderColor, double borderWidth = 1}) {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(_kCardRadius),
+      border: Border.all(color: borderColor ?? Colors.black.withValues(alpha: 0.05), width: borderWidth),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.03),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1),
+    );
+  }
 
   @override
   void initState() {
@@ -81,7 +119,71 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       stepSyncService.startTracking();
+      _subscribeToDriftEvents();
     }
+  }
+
+  void _subscribeToDriftEvents() {
+    _driftSubscription?.cancel();
+    _driftSubscription = stepSyncService.driftEventStream.listen((event) {
+      if (mounted) {
+        _showSyncConflictDialog(event);
+      }
+    });
+  }
+
+  void _showSyncConflictDialog(DriftEvent event) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_kCardRadius)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent),
+            SizedBox(width: 12),
+            Text("SYNC CONFLICT", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Anomalous telemetry drift detected. A large jump in steps was blocked to ensure RPG integrity.",
+              style: TextStyle(color: Colors.black54, height: 1.4),
+            ),
+            const SizedBox(height: 20),
+            _conflictStat("DETECTED DELTA", "+${event.delta} STEPS"),
+            _conflictStat("MAX THRESHOLD", "${event.threshold} STEPS"),
+            const SizedBox(height: 12),
+            const Text(
+              "Your baseline has been anchored to your current hardware count. If this was a legitimate long walk, try syncing more frequently.",
+              style: TextStyle(color: Colors.black38, fontSize: 11, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("ACKNOWLEDGE", style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _conflictStat(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black45)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.black87)),
+        ],
+      ),
+    );
   }
 
   void _subscribeToTacticalPulse() {
@@ -91,6 +193,12 @@ class _HomeScreenState extends State<HomeScreen> {
       final player = await firebaseService.getPlayer(currentUid);
 
       if (mounted) {
+        // Force refresh the player context in StepSync to ensure subsequent pulses 
+        // use the absolute latest stats if they've changed since the last stream emission.
+        if (player != null) {
+          stepSyncService.updateConfig(player);
+        }
+
         final double finalDamage = pulse.raidDamage; // PedometerService already applied bioDamageMult
 
         // Detect Critical Hit (Large damage delta)
@@ -167,6 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _confettiController.dispose();
     refreshTimer?.cancel();
     _pulseSubscription?.cancel();
+    _driftSubscription?.cancel();
     stepSyncService.stopTracking();
     super.dispose();
   }
@@ -206,6 +315,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
               final player = snapshot.data;
 
+              // Ensure StepSyncService and PedometerService have the latest player context
+              if (player != null) {
+                stepSyncService.updateConfig(player);
+                pedometerService.updatePlayerContext(player);
+              }
+
               // Sync local toggle with player state to prevent "auto-off" UI resets
               if (player != null && _isGhostStriderActive != player.isGhostStriderEnabled) {
                 _isGhostStriderActive = player.isGhostStriderEnabled;
@@ -241,18 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     // 1. PLAYER STATUS
                     Container(
                       padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
+                      decoration: _cardDecoration(),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -267,9 +371,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
-                                    Text(
-                                      player?.name.toUpperCase() ?? "NEW PLAYER",
-                                      style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                                    Flexible(
+                                      child: Text(
+                                        player?.name.toUpperCase() ?? "NEW PLAYER",
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                                      ),
                                     ),
                                     if (hasExpBoost) ...[
                                       const SizedBox(width: 8),
@@ -285,6 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ],
                                   ],
                                 ),
+                                const SizedBox(height: 2),
                                 Text(
                                   firebaseService.getRankTitle(player?.level ?? 1),
                                   style: TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2),
@@ -292,6 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ),
                           ),
+                          const SizedBox(width: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
@@ -300,6 +409,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.3)),
                             ),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Text("🔥 ", style: TextStyle(fontSize: 16)),
                                 Text(
@@ -312,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: _kSectionGap),
 
                     // 2. STATS GRID
                     GridView.count(
@@ -329,23 +439,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         _buildModernStatCard(title: "STAMINA", value: "${player?.currentStamina ?? 0}", icon: Icons.bolt_rounded, color: Colors.amberAccent),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: _kSectionGap),
 
                     // 3. DAILY STEP GOAL PROGRESS
                     Container(
                       padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
+                      decoration: _cardDecoration(),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -374,23 +473,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: _kSectionGap),
 
                     // MOVEMENT STATUS / HEALTH SCORE
                     Container(
                       padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
+                      decoration: _cardDecoration(),
                       child: Column(
                         children: [
                           Row(
@@ -447,7 +535,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: _kSectionGap),
 
                     if (stepSyncService.lastSyncTime != null)
                       Padding(
@@ -465,15 +553,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
 
-                    const SizedBox(height: 16),
                     _buildGhostStriderCard(player, liveSteps),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: _kSectionGap),
                     _buildColossusRaidDashboard(player),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: _kSectionGap),
                     _buildTeamTacticalRelayCard(player),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: _kSectionGap),
                     _buildNearbyItemsRadar(),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: _kSectionGap),
 
                     // 4. ACTIVE GLOBAL OPERATION CARD
                     StreamBuilder<GlobalEventModel?>(
@@ -483,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         final event = eventSnapshot.data!;
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 20),
+                          margin: const EdgeInsets.only(bottom: _kSectionGap),
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
@@ -491,7 +578,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(_kCardRadius),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.blue.withValues(alpha: 0.2),
@@ -562,10 +649,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         );
                       },
                     ),
-                    const SizedBox(height: 24),
 
                     if (player != null && player.activePowerUps.entries.any((e) => e.value.isAfter(DateTime.now()))) ...[
-                      const Text("ACTIVE POWER-UPS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                      _sectionHeader("ACTIVE POWER-UPS"),
                       const SizedBox(height: 12),
                       SizedBox(
                         height: 80,
@@ -594,7 +680,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(_kChipRadius + 8),
                                 border: Border.all(color: powerUp.color.withValues(alpha: 0.15), width: 1.5),
                               ),
                               child: Row(
@@ -628,10 +714,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           }).toList(),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: _kSectionGap),
                     ],
 
-                    const Text("DAILY QUESTS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                    _sectionHeader("DAILY QUESTS"),
                     const SizedBox(height: 12),
                     if (player != null) ...[
                       _buildQuest(
@@ -669,7 +755,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Colors.purpleAccent,
                       ),
                     ],
-                    const SizedBox(height: 24),
+                    const SizedBox(height: _kSectionGap),
 
                     Row(
                       children: [
@@ -723,24 +809,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         label: const Text("GLOBAL LEADERBOARD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: _kSectionGap),
 
-                    const Text("RECENT REWARDS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                    _sectionHeader("RECENT REWARDS"),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.01),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
+                      decoration: _cardDecoration(),
                       child: Column(
                         children: [
                           _buildRewardItem(icon: Icons.flash_on_rounded, title: "Quest Reward", subtitle: "You earned 100 XP", color: Colors.amber.shade700),
@@ -749,17 +824,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: _kSectionGap),
 
-                    const Text("LIFETIME STATS", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1)),
+                    _sectionHeader("LIFETIME STATS"),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                      ),
+                      decoration: _cardDecoration(),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
@@ -771,7 +842,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: _kSectionGap),
                   ],
                 ),
               );
@@ -782,24 +853,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // FIX/POLISH: previously a bare icon with no background, inconsistent with
+  // every other icon on this screen (quest icons, bio metrics, power-up
+  // chips all use a soft colored circle behind the icon). Added one here too
+  // so the whole screen uses one consistent icon language, and switched to
+  // the shared _cardDecoration() so its radius/shadow matches every other
+  // card exactly instead of using its own slightly different values.
   Widget _buildModernStatCard({required String title, required String value, required IconData icon, required Color color}) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: _cardDecoration(),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 24),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
           const SizedBox(height: 10),
           Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.black87)),
           const SizedBox(height: 2),
@@ -825,21 +899,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return Container(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: _isGhostStriderActive ? Colors.deepPurpleAccent.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.05),
-              width: 1.5,
-            ),
-            boxShadow: [
-              if (_isGhostStriderActive)
-                BoxShadow(
-                  color: Colors.deepPurpleAccent.withValues(alpha: 0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
-            ],
+          decoration: _cardDecoration(
+            borderColor: _isGhostStriderActive ? Colors.deepPurpleAccent.withValues(alpha: 0.3) : null,
+            borderWidth: 1.5,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -971,11 +1033,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildNearbyItemsRadar() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-      ),
+      decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1092,15 +1150,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // FIX: this previously rendered the literal text "$x$ " in front of the
-  // count (Text("\$x\$ ", ...)) which showed up as garbled text in the UI.
-  // Replaced with a small icon that reads cleanly at any count.
   Widget _buildRawElementChip(String label, int count, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_kChipRadius - 4),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
@@ -1122,12 +1177,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, raidController, child) {
         return Container(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
-          ),
+          decoration: _cardDecoration(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1213,6 +1263,31 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.orangeAccent,
                   ),
                 ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      if (player?.teamId != null) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RaidBossScreen(teamId: player!.teamId!),
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orangeAccent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_kChipRadius)),
+                    ),
+                    icon: const Icon(Icons.bolt_rounded, size: 16),
+                    label: const Text("ENTER RAID CHAMBER", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                  ),
+                ),
               ] else ...[
                 const SizedBox(height: 12),
                 SizedBox(
@@ -1231,7 +1306,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.history_rounded, size: 16),
                     label: const Text("VIEW RAID ARCHIVES", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                     style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_kChipRadius)),
                       side: const BorderSide(color: Colors.black12),
                     ),
                   ),
@@ -1244,10 +1319,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // FIX: was `StepSyncService().challengeController...` — created a brand new
-  // StepSyncService instance on every rebuild instead of reusing the shared
-  // `stepSyncService` field the rest of this screen relies on. That could give
-  // this card a different/uninitialized relay state than the real one.
   Widget _buildTeamTacticalRelayCard(PlayerModel? player) {
     return StreamBuilder<TacticalRelayModel?>(
       stream: player?.teamId != null
@@ -1260,12 +1331,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return Container(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: isMyTurn ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.05),
-            ),
+          decoration: _cardDecoration(
+            borderColor: isMyTurn ? Colors.blueAccent.withValues(alpha: 0.3) : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1325,7 +1392,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         backgroundColor: isMyTurn ? Colors.blueAccent : Colors.black.withValues(alpha: 0.05),
                         foregroundColor: isMyTurn ? Colors.white : Colors.black87,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_kChipRadius)),
                       ),
                       child: const Text("VIEW RELAY"),
                     ),
@@ -1358,7 +1425,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       }
                     },
                     style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_kChipRadius)),
                       side: const BorderSide(color: Colors.black12),
                     ),
                     child: const Text("OPEN RELAY COMM"),
@@ -1400,7 +1467,7 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(_kCardRadius - 4),
         border: Border.all(
           color: isClaimed || isLocked ? Colors.black.withValues(alpha: 0.03) : color.withValues(alpha: 0.15),
           width: 1.5,
@@ -1423,13 +1490,16 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      title.toUpperCase(),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        color: isClaimed || isLocked ? Colors.black38 : Colors.black87,
-                        letterSpacing: 0.3,
+                    Flexible(
+                      child: Text(
+                        title.toUpperCase(),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          color: isClaimed || isLocked ? Colors.black38 : Colors.black87,
+                          letterSpacing: 0.3,
+                        ),
                       ),
                     ),
                     if (isLocked && !isClaimed) ...[

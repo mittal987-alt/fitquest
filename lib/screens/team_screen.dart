@@ -42,7 +42,7 @@ class _TeamScreenState extends State<TeamScreen> {
 
   void _showVictoryDialog(BuildContext context, String teamName) {
     final raidController = context.read<RaidController>();
-    
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -71,7 +71,20 @@ class _TeamScreenState extends State<TeamScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser!.uid;
+    // FIX: was `FirebaseAuth.instance.currentUser!.uid` — force-unwrap that
+    // throws if this screen is ever reached with no signed-in user.
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5F7FA),
+        body: Center(
+          child: Text(
+            "NOT LOGGED IN",
+            style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
 
     return StreamBuilder<PlayerModel?>(
       stream: firebaseService.getPlayerStream(currentUid),
@@ -231,18 +244,27 @@ class _TeamScreenState extends State<TeamScreen> {
                               ),
                               onPressed: () async {
                                 final scaffoldMessenger = ScaffoldMessenger.of(context);
-                                  // ENERGY BOOST BONUS
-                                  double energyBoostMult = 1.0;
-                                  if (currentPlayer?.activePowerUps.containsKey("energy_boost") == true) {
-                                    DateTime expiry = currentPlayer!.activePowerUps["energy_boost"]!;
-                                    if (expiry.isAfter(DateTime.now())) {
-                                      energyBoostMult = currentPlayer.energyBoostRaidMultiplier;
-                                    }
-                                  }
 
-                                  double totalDmg = ((currentPlayer?.effectiveStrength ?? 10) + (currentPlayer?.effectiveAgility ?? 10)) * 1.0 * (currentTeam.strongholdActive ? 1.5 : 1.0) * energyBoostMult;
+                                // FIX: this used to re-compute an *estimated*
+                                // damage number client-side (missing the
+                                // 'raid_dmg_mult' gear multiplier entirely,
+                                // and using potentially-stale currentTeam/
+                                // currentPlayer snapshots) just to guess
+                                // whether the attack was lethal, via
+                                // `currentTeam.raidBossHp - totalDmg <= 0`.
+                                // The real, authoritative damage calculation
+                                // (with gear included) only happens inside
+                                // executeTeamRaidAttack's Firestore
+                                // transaction — so that estimate could easily
+                                // undershoot and silently skip showing the
+                                // victory screen for a kill the player
+                                // actually landed (rewards still got
+                                // distributed correctly server-side either
+                                // way, but the celebratory popup wouldn't
+                                // show). Now uses the transaction's own
+                                // "defeated" result directly instead.
+                                final (success, defeated) = await firebaseService.executeTeamRaidAttack(currentUid, currentTeam.id);
 
-                                  bool success = await firebaseService.executeTeamRaidAttack(currentUid, currentTeam.id);
                                 if (!success) {
                                   scaffoldMessenger.showSnackBar(
                                     const SnackBar(
@@ -257,15 +279,15 @@ class _TeamScreenState extends State<TeamScreen> {
                                       backgroundColor: Colors.greenAccent,
                                     ),
                                   );
-                                  
+
                                   // TRIGGER TACTICAL PING FOR DAMAGE
                                   await firebaseService.sendTacticalPing(
-                                    currentTeam.id, 
-                                    "FRONT_LINE", 
-                                    "${currentPlayer?.name.toUpperCase()} ATTACKED THE BOSS"
+                                      currentTeam.id,
+                                      "FRONT_LINE",
+                                      "${currentPlayer?.name.toUpperCase()} ATTACKED THE BOSS"
                                   );
 
-                                  if (context.mounted && currentTeam.raidBossHp - totalDmg <= 0) {
+                                  if (context.mounted && defeated) {
                                     _showVictoryDialog(context, currentTeam.name);
                                   }
                                 }
@@ -446,11 +468,17 @@ class _TeamScreenState extends State<TeamScreen> {
                                 return;
                               }
 
-                              final user = FirebaseAuth.instance.currentUser!;
                               TeamRequestModel request = TeamRequestModel(
                                 requestId: DateTime.now().millisecondsSinceEpoch.toString(),
-                                playerId: user.uid,
-                                playerName: user.email ?? "Anonymous Player",
+                                playerId: currentUid,
+                                // FIX: was `user.email ?? "Anonymous Player"` —
+                                // this showed the applicant's EMAIL ADDRESS to
+                                // the team leader reviewing requests (see
+                                // team_requests_screen.dart, which displays
+                                // `request.playerName`), instead of their
+                                // actual in-game name, and leaked an email
+                                // address unnecessarily in the process.
+                                playerName: currentPlayer?.name ?? "Anonymous Player",
                                 teamId: team.id,
                                 teamName: team.name,
                                 status: "pending",

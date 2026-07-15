@@ -30,22 +30,18 @@ class ActivityHeatmap extends StatelessWidget {
             touchTooltipData: BarTouchTooltipData(
               tooltipBgColor: Colors.blueGrey.darken(0.8).withValues(alpha: 0.9),
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                final isGhost = rodIndex == 1;
-                final isPeak = isGhost && rod.toY.toInt() == maxGhostSteps && maxGhostSteps > 0;
-                final label = isGhost ? (isPeak ? "GHOST PEAK 🔥" : "GHOST") : "YOU";
-                
                 return BarTooltipItem(
-                  "$label\n",
-                  TextStyle(
-                    color: isPeak ? Colors.amberAccent : Colors.white, 
+                  "ACTIVITY\n",
+                  const TextStyle(
+                    color: Colors.white, 
                     fontWeight: FontWeight.bold, 
                     fontSize: 10
                   ),
                   children: [
                     TextSpan(
                       text: "${rod.toY.toInt()} steps",
-                      style: TextStyle(
-                        color: isGhost ? Colors.deepPurpleAccent : Colors.cyanAccent, 
+                      style: const TextStyle(
+                        color: Colors.cyanAccent,
                         fontWeight: FontWeight.w900, 
                         fontSize: 12
                       ),
@@ -83,13 +79,11 @@ class ActivityHeatmap extends StatelessWidget {
     );
   }
 
-  List<BarChartGroupData> _buildBars(int maxGhostSteps) {
+  List<BarChartGroupData> _buildBars(int _) {
     List<BarChartGroupData> bars = [];
     for (int i = 0; i < 24; i++) {
       final String hourKey = i.toString().padLeft(2, '0');
       int steps = hourlySteps[hourKey] ?? 0;
-      int ghostSteps = ghostBaseline?[hourKey] ?? 0;
-      bool isPeak = ghostSteps > 0 && ghostSteps == maxGhostSteps;
 
       bars.add(
         BarChartGroupData(
@@ -97,20 +91,10 @@ class ActivityHeatmap extends StatelessWidget {
           barRods: [
             BarChartRodData(
               toY: steps.toDouble(),
-              color: steps > ghostSteps && ghostSteps > 0 ? Colors.cyan : Colors.blueAccent.withValues(alpha: 0.4),
-              width: 6,
+              color: Colors.cyanAccent,
+              width: 8,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
             ),
-            if (ghostBaseline != null)
-              BarChartRodData(
-                toY: ghostSteps.toDouble(),
-                color: isPeak ? Colors.deepPurpleAccent : Colors.deepPurpleAccent.withValues(alpha: 0.3),
-                width: 6,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                borderSide: isPeak 
-                  ? const BorderSide(color: Colors.amberAccent, width: 1.5)
-                  : const BorderSide(color: Colors.transparent),
-              ),
           ],
         ),
       );

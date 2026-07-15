@@ -48,6 +48,7 @@ class PlayerModel {
   final int currency;
   final String avatar;
   final DateTime? lastTeamAction;
+  final DateTime? lastRaidAttack;
   final int streakCount;
   final int totalRaidDamage;
   final int ghostRaidDamage;
@@ -156,6 +157,7 @@ class PlayerModel {
     this.currency = 0,
     required this.avatar,
     this.lastTeamAction,
+    this.lastRaidAttack,
     this.streakCount = 0,
     this.totalRaidDamage = 0,
     this.ghostRaidDamage = 0,
@@ -211,6 +213,7 @@ class PlayerModel {
     int? currency,
     String? avatar,
     DateTime? lastTeamAction,
+    DateTime? lastRaidAttack,
     int? streakCount,
     int? totalRaidDamage,
     int? ghostRaidDamage,
@@ -257,6 +260,7 @@ class PlayerModel {
       currency: currency ?? this.currency,
       avatar: avatar ?? this.avatar,
       lastTeamAction: lastTeamAction ?? this.lastTeamAction,
+      lastRaidAttack: lastRaidAttack ?? this.lastRaidAttack,
       streakCount: streakCount ?? this.streakCount,
       totalRaidDamage: totalRaidDamage ?? this.totalRaidDamage,
       ghostRaidDamage: ghostRaidDamage ?? this.ghostRaidDamage,
@@ -317,6 +321,7 @@ class PlayerModel {
       currency: (map["currency"] as num?)?.toInt() ?? 0,
       avatar: map["avatar"]?.toString() ?? "",
       lastTeamAction: map["lastTeamAction"] is Timestamp ? (map["lastTeamAction"] as Timestamp).toDate() : null,
+      lastRaidAttack: map["lastRaidAttack"] is Timestamp ? (map["lastRaidAttack"] as Timestamp).toDate() : null,
       streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
       totalRaidDamage: (map["totalRaidDamage"] as num?)?.toInt() ?? 0,
       ghostRaidDamage: (map["ghostRaidDamage"] as num?)?.toInt() ?? 0,
@@ -371,6 +376,7 @@ class PlayerModel {
       "currency": currency,
       "avatar": avatar,
       "lastTeamAction": lastTeamAction != null ? Timestamp.fromDate(lastTeamAction!) : null,
+      "lastRaidAttack": lastRaidAttack != null ? Timestamp.fromDate(lastRaidAttack!) : null,
       "streakCount": streakCount,
       "totalRaidDamage": totalRaidDamage,
       "ghostRaidDamage": ghostRaidDamage,

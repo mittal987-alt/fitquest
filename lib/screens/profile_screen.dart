@@ -6,12 +6,14 @@ import '../services/firebase_service.dart';
 import 'login_screen.dart';
 import 'armory_screen.dart';
 import 'daily_history_screen.dart';
+import 'goal_adjustment_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  void _showUpdateAvatarDialog(BuildContext context, String uid) {
-    final controller = TextEditingController();
+  void _showUpdateAvatarDialog(BuildContext context, PlayerModel player) {
+    final avatarController = TextEditingController(text: player.avatar);
+    final nameController = TextEditingController(text: player.name);
     final ImagePicker picker = ImagePicker();
     bool isUpdating = false;
 
@@ -23,110 +25,133 @@ class ProfileScreen extends StatelessWidget {
           return AlertDialog(
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: const Text("UPDATE AVATAR", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isUpdating) ...[
-                  const Center(
-                    child: Column(
+            title: const Text("EDIT PROFILE", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (isUpdating) ...[
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(color: Colors.blueAccent),
+                            SizedBox(height: 16),
+                            Text("SAVING CHANGES...", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueAccent)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const Text("DISPLAY NAME", style: TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nameController,
+                      enabled: !isUpdating,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        hintText: "Enter your name",
+                        hintStyle: const TextStyle(color: Colors.black26),
+                        filled: true,
+                        fillColor: const Color(0xFFF5F7FA),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text("PROFILE IMAGE", style: TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    const SizedBox(height: 12),
+                    Row(
                       children: [
-                        CircularProgressIndicator(color: Colors.blueAccent),
-                        SizedBox(height: 16),
-                        Text("UPLOADING ASSETS...", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueAccent)),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF5F7FA),
+                              foregroundColor: Colors.blueAccent,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () async {
+                              final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                              if (image != null) {
+                                setDialogState(() => isUpdating = true);
+                                final bytes = await image.readAsBytes();
+                                final url = await FirebaseService().uploadAvatarFile(player.uid, bytes);
+                                if (url != null) {
+                                  await FirebaseService().updateAvatar(uid: player.uid, avatarUrl: url);
+                                  if (context.mounted) Navigator.pop(context);
+                                } else {
+                                  setDialogState(() => isUpdating = false);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text("Upload failed. Please check your connection or permissions.")),
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.photo_library_rounded, size: 18),
+                            label: const Text("GALLERY", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF5F7FA),
+                              foregroundColor: Colors.blueAccent,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () async {
+                              final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                              if (image != null) {
+                                setDialogState(() => isUpdating = true);
+                                final bytes = await image.readAsBytes();
+                                final url = await FirebaseService().uploadAvatarFile(player.uid, bytes);
+                                if (url != null) {
+                                  await FirebaseService().updateAvatar(uid: player.uid, avatarUrl: url);
+                                  if (context.mounted) Navigator.pop(context);
+                                } else {
+                                  setDialogState(() => isUpdating = false);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text("Upload failed. Please check your connection.")),
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                            label: const Text("CAMERA", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ] else ...[
-                  const Text("DIRECT UPLOAD", style: TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF5F7FA),
-                            foregroundColor: Colors.blueAccent,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: () async {
-                            final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                            if (image != null) {
-                              setDialogState(() => isUpdating = true);
-                              final bytes = await image.readAsBytes();
-                              final url = await FirebaseService().uploadAvatarFile(uid, bytes);
-                              if (url != null) {
-                                await FirebaseService().updateAvatar(uid: uid, avatarUrl: url);
-                                if (context.mounted) Navigator.pop(context);
-                              } else {
-                                setDialogState(() => isUpdating = false);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text("Upload failed. Please check your connection or permissions.")),
-                                  );
-                                }
-                              }
-                            }
-                          },
-                          icon: const Icon(Icons.photo_library_rounded, size: 18),
-                          label: const Text("GALLERY", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 20),
+                    const Text("OR IMAGE URL", style: TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: avatarController,
+                      enabled: !isUpdating,
+                      decoration: InputDecoration(
+                        hintText: "https://example.com/photo.jpg",
+                        hintStyle: const TextStyle(color: Colors.black26),
+                        filled: true,
+                        fillColor: const Color(0xFFF5F7FA),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF5F7FA),
-                            foregroundColor: Colors.blueAccent,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: () async {
-                            final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
-                            if (image != null) {
-                              setDialogState(() => isUpdating = true);
-                              final bytes = await image.readAsBytes();
-                              final url = await FirebaseService().uploadAvatarFile(uid, bytes);
-                              if (url != null) {
-                                await FirebaseService().updateAvatar(uid: uid, avatarUrl: url);
-                                if (context.mounted) Navigator.pop(context);
-                              } else {
-                                setDialogState(() => isUpdating = false);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text("Upload failed. Please check your connection.")),
-                                  );
-                                }
-                              }
-                            }
-                          },
-                          icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                          label: const Text("CAMERA", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const Text("OR ENTER IMAGE URL", style: TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    enabled: !isUpdating,
-                    decoration: InputDecoration(
-                      hintText: "https://example.com/photo.jpg",
-                      hintStyle: const TextStyle(color: Colors.black26),
-                      filled: true,
-                      fillColor: const Color(0xFFF5F7FA),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
             actions: isUpdating ? [] : [
               TextButton(
@@ -141,27 +166,21 @@ class ProfileScreen extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () async {
-                  if (controller.text.isNotEmpty) {
-                    setDialogState(() => isUpdating = true);
-                    await FirebaseService().updateAvatar(uid: uid, avatarUrl: controller.text);
-                    if (context.mounted) Navigator.pop(context);
+                  setDialogState(() => isUpdating = true);
+                  if (nameController.text.isNotEmpty && nameController.text != player.name) {
+                    await FirebaseService().updatePlayerName(uid: player.uid, name: nameController.text);
                   }
+                  if (avatarController.text != player.avatar) {
+                    await FirebaseService().updateAvatar(uid: player.uid, avatarUrl: avatarController.text);
+                  }
+                  if (context.mounted) Navigator.pop(context);
                 },
-                child: const Text("UPDATE URL", style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text("SAVE CHANGES", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           );
         },
       ),
-    );
-  }
-
-  void _showBiometricsModal(BuildContext context, PlayerModel player) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _BiometricsEditorSheet(player: player),
     );
   }
 
@@ -251,9 +270,6 @@ class ProfileScreen extends StatelessWidget {
                           colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
                         ),
                       ),
-                      child: CustomPaint(
-                        painter: _GridPainter(),
-                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(top: 60, left: 20, right: 20),
@@ -311,7 +327,7 @@ class ProfileScreen extends StatelessWidget {
                                   bottom: 0,
                                   right: 0,
                                   child: GestureDetector(
-                                    onTap: () => _showUpdateAvatarDialog(context, player.uid),
+                                    onTap: () => _showUpdateAvatarDialog(context, player),
                                     child: Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
@@ -478,7 +494,12 @@ class ProfileScreen extends StatelessWidget {
                         subtitle: "SET YOUR GOALS & PREFERENCES",
                         icon: Icons.monitor_heart_rounded,
                         color: Colors.teal,
-                        onTap: () => _showBiometricsModal(context, player),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => GoalAdjustmentScreen(player: player)),
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
                       _profileActionTile(
@@ -690,7 +711,14 @@ class ProfileScreen extends StatelessWidget {
             icon: Icons.map_rounded,
             title: "Explorer",
             subtitle: "Capture 10+ Areas",
-            isUnlocked: player.totalSteps >= 50000, // Changed criteria to steps
+            // FIX: was `player.totalSteps >= 50000` with a comment admitting
+            // "Changed criteria to steps" — a workaround from before
+            // PlayerModel had a working `totalLand` field. The achievement's
+            // own label says "Capture 10+ Areas", so it should check land
+            // captured, not steps walked. Now that totalLand exists and is
+            // properly maintained (see firebase_service.dart / map_screen.dart
+            // capture flow), this checks the metric it actually describes.
+            isUnlocked: player.totalLand >= 10,
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
@@ -812,212 +840,4 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-class _BiometricsEditorSheet extends StatefulWidget {
-  final PlayerModel player;
-  const _BiometricsEditorSheet({required this.player});
-
-  @override
-  State<_BiometricsEditorSheet> createState() => _BiometricsEditorSheetState();
-}
-
-class _BiometricsEditorSheetState extends State<_BiometricsEditorSheet> {
-  late double _height;
-  late double _weight;
-  late String _goal;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _height = widget.player.heightCm ?? 170.0;
-    _weight = widget.player.weightKg ?? 65.0;
-    _goal = widget.player.fitnessGoal ?? "maintenance";
-  }
-
-  Map<String, dynamic> _computeMatrix() {
-    double meters = _height / 100;
-    double bmi = _weight / (meters * meters);
-
-    if (bmi < 18.5) {
-      return {"bmi": bmi, "tier": "UNDERWEIGHT", "steps": 6000, "mins": 20, "color": Colors.blue};
-    } else if (bmi < 25.0) {
-      return {"bmi": bmi, "tier": "NORMAL WEIGHT", "steps": 10000, "mins": 30, "color": Colors.green};
-    } else if (bmi < 30.0) {
-      return {"bmi": bmi, "tier": "OVERWEIGHT", "steps": 12000, "mins": 45, "color": Colors.orange};
-    } else {
-      return {"bmi": bmi, "tier": "OBESE", "steps": 8000, "mins": 30, "color": Colors.redAccent};
-    }
-  }
-
-  Widget _buildGoalChip(String id, String label) {
-    bool selected = _goal == id;
-    return GestureDetector(
-      onTap: () => setState(() => _goal = id),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? Colors.blueAccent : const Color(0xFFF5F7FA),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? Colors.blueAccent : Colors.black.withValues(alpha: 0.05)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : Colors.black54,
-            fontWeight: FontWeight.bold,
-            fontSize: 11,
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final matrix = _computeMatrix();
-
-    return Container(
-      padding: EdgeInsets.only(
-        top: 24,
-        left: 24,
-        right: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
-      ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("UPDATE FITNESS STATS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black87, letterSpacing: 0.5)),
-              if (_isSaving) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent))
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Text("FITNESS GOAL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildGoalChip("weight_loss", "Weight Loss"),
-                const SizedBox(width: 8),
-                _buildGoalChip("muscle_gain", "Muscle Gain"),
-                const SizedBox(width: 8),
-                _buildGoalChip("endurance", "Endurance"),
-                const SizedBox(width: 8),
-                _buildGoalChip("maintenance", "Maintenance"),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text("HEIGHT: ${_height.toStringAsFixed(0)} CM", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
-          Slider(
-            value: _height,
-            min: 120,
-            max: 220,
-            activeColor: Colors.blueAccent,
-            inactiveColor: const Color(0xFFF5F7FA),
-            onChanged: _isSaving ? null : (val) => setState(() => _height = val),
-          ),
-          const SizedBox(height: 12),
-          Text("WEIGHT: ${_weight.toStringAsFixed(1)} KG", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
-          Slider(
-            value: _weight,
-            min: 40,
-            max: 150,
-            activeColor: Colors.blueAccent,
-            inactiveColor: const Color(0xFFF5F7FA),
-            onChanged: _isSaving ? null : (val) => setState(() => _weight = val),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: (matrix['color'] as Color).withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: (matrix['color'] as Color).withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(matrix['tier'], style: TextStyle(color: matrix['color'], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
-                    const SizedBox(height: 2),
-                    Text("BMI: ${(matrix['bmi'] as double).toStringAsFixed(1)}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.black87)),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text("🎯 ${matrix['steps']} STEPS/DAY", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black87)),
-                    const SizedBox(height: 4),
-                    Text("⏱️ ${matrix['mins']} MIN ACTIVE", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black87)),
-                  ],
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              onPressed: _isSaving ? null : () async {
-                setState(() => _isSaving = true);
-                try {
-                  await FirebaseService().updateBiometrics(
-                    uid: widget.player.uid,
-                    heightCm: _height,
-                    weightKg: _weight,
-                    fitnessGoal: _goal,
-                    stepTarget: matrix['steps'],
-                    exerciseTarget: matrix['mins'],
-                  );
-                  if (context.mounted) Navigator.pop(context);
-                } catch (_) {
-                  setState(() => _isSaving = false);
-                }
-              },
-              child: const Text("SAVE FITNESS GOALS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-            ),
-          )
-        ],
-      ),
-    );
-  }
-}
-
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
-      ..strokeWidth = 1.0;
-
-    for (double i = 0; i < size.width; i += 20) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-    for (double i = 0; i < size.height; i += 20) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -127,8 +127,22 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
   }
 
   Widget _buildActiveChallenge(TacticalRelayModel challenge) {
-    final currentUid = _firebaseService.auth.currentUser!.uid;
+    // FIX: was `_firebaseService.auth.currentUser!.uid` — guarded instead of
+    // force-unwrapped, consistent with the rest of the app. This screen is
+    // only reachable while logged in, but a bare `!` still crashes instantly
+    // rather than degrading if that ever changes mid-session.
+    final currentUid = _firebaseService.auth.currentUser?.uid;
+    if (currentUid == null) {
+      return const Center(
+        child: Text("NOT LOGGED IN", style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold)),
+      );
+    }
     final bool isMyTurn = challenge.currentPlayerId == currentUid;
+
+    // FIX: was recomputed inside the per-item .map() below via
+    // `challenge.sequence.indexOf(challenge.currentPlayerId)` — same lookup
+    // repeated once per list item instead of once total. Hoisted out.
+    final int currentPlayerIndex = challenge.sequence.indexOf(challenge.currentPlayerId);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -257,12 +271,12 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
           Builder(
             builder: (context) {
               _ensureNamesCached(challenge.sequence);
-              
+
               return Column(
                 children: challenge.sequence.asMap().entries.map((entry) {
                   final index = entry.key;
                   final playerId = entry.value;
-                  final bool isPast = index < challenge.sequence.indexOf(challenge.currentPlayerId);
+                  final bool isPast = index < currentPlayerIndex;
                   final bool isCurrent = playerId == challenge.currentPlayerId;
                   final String displayName = _nameCache[playerId] ?? "OPERATOR ${index + 1}";
 
@@ -289,13 +303,13 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                             child: isPast
                                 ? const Icon(Icons.check, color: Colors.green, size: 16)
                                 : Text(
-                                    "${index + 1}",
-                                    style: TextStyle(
-                                      color: isCurrent ? Colors.white : Colors.black38,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
+                              "${index + 1}",
+                              style: TextStyle(
+                                color: isCurrent ? Colors.white : Colors.black38,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -368,14 +382,14 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                 sequence.insert(0, currentUid);
 
                 final firstPlayer = await _firebaseService.getPlayer(currentUid);
-                
+
                 await _challengeController.startRelay(
                   teamId: widget.teamId,
                   sequence: sequence,
                   targetPerPlayer: 5000,
                   playerName: firstPlayer?.name ?? "Operator",
                 );
-                
+
                 scaffoldMessenger.showSnackBar(
                   const SnackBar(
                     content: Text("TACTICAL RELAY STARTED"),

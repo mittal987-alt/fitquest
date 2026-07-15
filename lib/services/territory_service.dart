@@ -55,9 +55,6 @@ class TerritoryService {
   // ==========================================================
   // NATIVE TERRITORY FUSION (Removes internal grid lines)
   // ==========================================================
-// ==========================================================
-  // NATIVE TERRITORY FUSION (Removes internal grid lines)
-  // ==========================================================
   List<Polygon> buildUnifiedTerritory({
     required String groupKey,
     required List<String> tileIds,
@@ -93,10 +90,10 @@ class TerritoryService {
           consumeTapEvents: true,
           onTap: () => onTap(tileId),
           // Strongholds have deeper, more saturated colors
-          fillColor: isStronghold 
-              ? color.withValues(alpha: 0.6) 
+          fillColor: isStronghold
+              ? color.withValues(alpha: 0.6)
               : color.withValues(alpha: 0.35),
-          strokeColor: isStronghold 
+          strokeColor: isStronghold
               ? Colors.white.withValues(alpha: 0.8)
               : (isActualEdge ? color.withValues(alpha: 0.9) : Colors.transparent),
           strokeWidth: isStronghold ? 4 : (isActualEdge ? 3 : 0),

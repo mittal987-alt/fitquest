@@ -11,6 +11,21 @@ class ShopScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
 
+    // FIX: was `firebaseService.auth.currentUser!.uid` — same force-unwrap
+    // issue already fixed in armory_screen.dart / crafting_screen.dart.
+    final uid = firebaseService.auth.currentUser?.uid;
+    if (uid == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5F7FA),
+        body: Center(
+          child: Text(
+            "NOT LOGGED IN",
+            style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -29,7 +44,7 @@ class ShopScreen extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: StreamBuilder<PlayerModel?>(
-        stream: firebaseService.getPlayerStream(firebaseService.auth.currentUser!.uid),
+        stream: firebaseService.getPlayerStream(uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));

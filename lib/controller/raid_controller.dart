@@ -99,13 +99,16 @@ class RaidController extends ChangeNotifier {
         _bossCurrentHp = (data["raidBossHp"] ?? _bossMaxHp).toDouble();
         final Timestamp? expiry = data["raidExpiry"] as Timestamp?;
         _raidExpiryTime = expiry?.toDate();
-        
+
         debugPrint("RAID SYNC [TEAM]: Boss HP @ $_bossCurrentHp");
         notifyListeners();
       }
     });
 
     // 2. Listen to Team Members (Players)
+    // NOTE: this is the single source of truth for RaidParticipant.stepsContributed
+    // (total daily steps, not raid-specific steps) — confirmed intentional.
+    // registerPlayerSteps() below no longer increments it separately.
     _membersSubscription = _firestore
         .collection("players")
         .where("teamId", isEqualTo: teamId)
@@ -115,7 +118,7 @@ class RaidController extends ChangeNotifier {
         final data = doc.data();
         final uid = doc.id;
         final name = data["name"] ?? "Unknown";
-        
+
         if (_participants.containsKey(uid)) {
           _participants[uid] = _participants[uid]!.copyWith(
             stepsContributed: (data["dailySteps"] as num?)?.toInt() ?? 0,
@@ -238,7 +241,7 @@ class RaidController extends ChangeNotifier {
   /// Sends a tactical ping to the team raid channel
   Future<void> sendTacticalPing(String playerUid, String playerName, String message) async {
     if (_teamId == null) return;
-    
+
     await _firestore.collection("teams").doc(_teamId).collection("pings").add({
       'playerUid': playerUid,
       'playerName': playerName,
@@ -268,10 +271,15 @@ class RaidController extends ChangeNotifier {
     final double rawDamage = damageOverride ?? (stepsToSync * GameplayRules.damagePerStep * damageMultiplier);
     _bossCurrentHp = (_bossCurrentHp - rawDamage).clamp(0.0, _bossMaxHp);
 
-    // Track total steps and damage contributed
-    participant.stepsContributed += stepsToSync;
+    // FIX: this used to also do `participant.stepsContributed += stepsToSync;`
+    // here, which fought with the _membersSubscription listener above that
+    // periodically overwrites stepsContributed with the player's total
+    // dailySteps — whichever fired last would silently clobber the other.
+    // Confirmed dailySteps (from the listener) should be the single source
+    // of truth, so the increment here is removed; damage/ghost-damage
+    // tracking is unaffected since those aren't touched by the listener.
     participant.damageContributed += rawDamage;
-    
+
     if (isAheadOfGhost) {
       participant.ghostDamageContributed += rawDamage;
     }

@@ -89,7 +89,16 @@ class TeamRequestsScreen extends StatelessWidget {
                               child: player?.avatar != null && player!.avatar.isNotEmpty
                                   ? ClipRRect(
                                 borderRadius: BorderRadius.circular(24),
-                                child: Image.network(player.avatar, fit: BoxFit.cover),
+                                child: Image.network(
+                                  player.avatar,
+                                  fit: BoxFit.cover,
+                                  // FIX: no fallback previously — a broken
+                                  // avatar URL would render Flutter's default
+                                  // broken-image glyph instead of degrading
+                                  // gracefully like the rest of the app does.
+                                  errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(Icons.person_search_rounded, color: Colors.blueAccent, size: 22),
+                                ),
                               )
                                   : const Icon(Icons.person_search_rounded, color: Colors.blueAccent, size: 22),
                             ),

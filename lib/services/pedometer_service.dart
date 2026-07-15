@@ -154,7 +154,12 @@ class PedometerService {
     return stepStream.map((_) => calculateGhostStatus(baseline));
   }
 
-  /// Bootstraps tracking streams. Connects to device sensors or initializes 
+  /// Updates the player profile context for RPG calculation and material discovery logic.
+  void updatePlayerContext(PlayerModel? context) {
+    _playerContext = context;
+  }
+
+  /// Bootstraps tracking streams. Connects to device sensors or initializes
   /// simulation routines in emulator scenarios.
   void startTracking({bool useSimulator = true, PlayerModel? playerContext, int initialSteps = 0}) {
     _playerContext = playerContext;
@@ -176,13 +181,16 @@ class PedometerService {
     _hardwareSubscription?.cancel();
     _stepStreamController.close();
     _hourlySegmentController.close();
+    // FIX: _tacticalPulseController was never closed here, unlike the other
+    // two broadcast controllers — a straightforward resource-cleanup miss.
+    _tacticalPulseController.close();
   }
 
   /// Binds to real hardware signals. (Typically integrates the standard 'pedometer' package stream)
   void _bindHardwareSensors() {
     _hardwareSubscription?.cancel();
     _hardwareSubscription = Pedometer.stepCountStream.listen(
-      (StepCount event) {
+          (StepCount event) {
         _processRawHardwareSteps(event.steps);
       },
       onError: (error) => print("[TELEMETRY] PEDOMETER FAULT: $error"),
@@ -206,8 +214,8 @@ class PedometerService {
   /// Sets up a system loop to parse accumulated steps at hour boundaries.
   void _startHourlyAggregationCycle() {
     _hourlyAggregationTimer?.cancel();
-    
-    // Evaluate buffers periodically (simulation scales this down to 30-second sweeps, 
+
+    // Evaluate buffers periodically (simulation scales this down to 30-second sweeps,
     // whereas live hardware updates trigger at real-time hour ticks)
     _hourlyAggregationTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       final now = DateTime.now();
@@ -259,12 +267,12 @@ class PedometerService {
     // Use historical baseline if available, fallback to hardcoded circadian curve
     final Map<String, int> historicalBaseline = generateHistoricalBaseline(player.dailyHistory);
     final Map<String, int> baseline = compileGhostBaseline(
-      historicalBaseline.isNotEmpty ? historicalBaseline : player.hourlySteps
+        historicalBaseline.isNotEmpty ? historicalBaseline : player.hourlySteps
     );
-    
+
     final status = calculateGhostStatus(baseline);
     double velocityBonus = 1.0;
-    
+
     // Only apply bonus if the feature is explicitly enabled in player profile
     if (player.isGhostStriderEnabled && status.isAhead) {
       // Velocity Bonus scales up to 1.5x based on how much faster player is than ghost
@@ -273,14 +281,14 @@ class PedometerService {
 
     // RPG Logic: Strength increases Raid Damage, modified by Energy Boost and Ghost Velocity
     double damage = steps * (player.effectiveStrength / 10.0) * bioDamageMult * velocityBonus;
-    
+
     // RPG Logic: Agility increases Scanning Velocity, boosted by Ghost Strider velocity
     double scan = steps * (player.effectiveAgility / 5000.0) * velocityBonus;
 
     // RPG Logic: Endurance increases AP recovery frequency
     int apGained = (steps / (200 - player.effectiveEndurance)).floor();
 
-    // Loot Logic: 5% chance to find a material per pulse, 
+    // Loot Logic: 5% chance to find a material per pulse,
     // increased to 8% if Ghost Strider is active and ahead.
     String? found;
     double lootChance = 0.05;
@@ -311,13 +319,13 @@ class PedometerService {
   /// Translates absolute, raw historical step configurations to 24-hour baseline distributions.
   Map<String, int> compileGhostBaseline(Map<String, int> rawHourlySteps) {
     final Map<String, int> normalDistributionCurve = {};
-    
+
     // Fill up 24 hours of ghost profiles to avoid UI breaking curves
     for (int i = 0; i < 24; i++) {
       final String hourKey = i.toString().padLeft(2, '0');
       normalDistributionCurve[hourKey] = rawHourlySteps[hourKey] ?? _generateSimulatedGhostHour(i);
     }
-    
+
     return normalDistributionCurve;
   }
 
@@ -339,9 +347,9 @@ class PedometerService {
       // Simulate high-frequency or burst strides: 15 to 100 steps every tick
       // Occasional burst simulation to test "Critical Hit" UI
       final bool isBurst = random.nextDouble() < 0.2;
-      final int simulatedStrideDelta = isBurst 
+      final int simulatedStrideDelta = isBurst
           ? 60 + random.nextInt(60) // Higher delta for crit testing
-          : 15 + random.nextInt(20); 
+          : 15 + random.nextInt(20);
 
       registerSteps(simulatedStrideDelta, playerContext: _playerContext);
     });
@@ -367,7 +375,7 @@ class PedometerService {
   double calculateDistanceKm() => _todayCumulativeSteps * GameplayRules.distanceKmPerStep;
   int getLevel() => (_todayCumulativeSteps / 2000).floor() + 1;
   bool isRealWalking() => DateTime.now().difference(_lastStepTime).inSeconds < 15;
-  
+
   double getGoalProgress({int dailyGoal = 10000}) {
     if (dailyGoal <= 0) return 0.0;
     return _todayCumulativeSteps / dailyGoal;

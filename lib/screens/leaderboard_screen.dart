@@ -224,10 +224,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         return Column(
           children: [
             _buildTopCard(
-              title: "APEX GLOBAL TEAM",
+              title: "APEX EFFICIENCY TEAM",
               name: teams[0].name,
-              value: "${teams[0].totalSteps} Total Steps",
-              icon: Icons.groups_rounded,
+              value: "${teams[0].stepEfficiency.toStringAsFixed(0)} Avg Steps",
+              icon: Icons.bolt_rounded,
               neonColor: Colors.cyanAccent,
             ),
             Expanded(
@@ -236,7 +236,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 itemCount: teams.length,
                 itemBuilder: (context, index) {
                   final team = teams[index];
-                  final dynamic avgEfficiency = team.totalSteps / (team.members > 0 ? team.members : 1);
+                  final double avgEfficiency = team.stepEfficiency;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),

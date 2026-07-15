@@ -9,14 +9,22 @@ import '../models/hex_tile_model.dart';
 import '../models/team_request_model.dart';
 import '../models/global_event_model.dart';
 import '../models/gear_model.dart';
+import '../models/power_up_model.dart';
 import '../models/bounty_model.dart';
 import '../models/anomaly_model.dart';
 import '../models/activity_model.dart';
 import '../models/raid_log_model.dart';
+import '../config/gameplay_rules.dart';
 
 class FirebaseService {
-  final FirebaseFirestore firestore = FirebaseFirestore.instance;
-  final FirebaseAuth auth = FirebaseAuth.instance;
+  final FirebaseFirestore firestore;
+  final FirebaseAuth auth;
+
+  FirebaseService({
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+  })  : firestore = firestore ?? FirebaseFirestore.instance,
+        auth = auth ?? FirebaseAuth.instance;
 
   // =========================
   // CURRENT USER
@@ -56,6 +64,7 @@ class FirebaseService {
       streakCount: 0,
       totalRaidDamage: 0,
       ghostRaidDamage: 0,
+      lastRaidAttack: null,
       lastHardwareStepCount: -1,
       totalLand: 0,
       trustScore: 100,
@@ -117,13 +126,65 @@ class FirebaseService {
     debugPrint("ML FITNESS PROFILE UPDATED: ${plan.tier} | Goal: $fitnessGoal");
   }
 
+  Future<Map<String, dynamic>> syncTelemetry({
+    required String uid,
+    required int deltaSteps,
+    required int currentHardwareSteps,
+    required PlayerModel player,
+  }) async {
+    final now = DateTime.now();
+    final String todayKey = now.toIso8601String().split('T')[0];
+    final String hourKey = now.hour.toString().padLeft(2, '0');
+
+    // SECURITY: Ensure dailySteps and History always use the same delta
+    // to prevent the 16 vs 765 discrepancy.
+    final int safeDelta = deltaSteps;
+
+    final double calories = deltaSteps * GameplayRules.caloriesPerStep;
+    final double distance = deltaSteps * GameplayRules.distanceKmPerStep;
+
+    // The Step count remains 1x for physical accuracy
+    // But the XP Reward scales based on ML/Gear multipliers (the "Offer")
+    double xpMult = player.energyBoostXpMultiplier; // This is our 1.2x, 1.5x, etc.
+    final int xpGain = (deltaSteps ~/ 10 * xpMult).toInt();
+
+    final Map<String, dynamic> updates = {
+      "dailySteps": FieldValue.increment(deltaSteps),
+      "totalSteps": FieldValue.increment(deltaSteps),
+      "dailyCalories": FieldValue.increment(calories.toInt()),
+      "dailyDistance": FieldValue.increment(distance.toDouble()),
+      "lastHardwareStepCount": currentHardwareSteps,
+      "lastSyncTime": FieldValue.serverTimestamp(),
+      "hourlySteps.$hourKey": FieldValue.increment(deltaSteps),
+      "dailyHistory.$todayKey.steps": FieldValue.increment(deltaSteps),
+      "dailyHistory.$todayKey.calories": FieldValue.increment(calories.toInt()),
+      "dailyHistory.$todayKey.distance": FieldValue.increment(distance.toDouble()),
+      "dailyHistory.$todayKey.hourlySteps.$hourKey": FieldValue.increment(deltaSteps),
+    };
+
+    if (xpGain > 0) {
+      updates["xp"] = FieldValue.increment(xpGain);
+      updates["dailyHistory.$todayKey.xpGained"] = FieldValue.increment(xpGain);
+    }
+
+    await firestore.collection("players").doc(uid).update(updates);
+    
+    // NEW: Return the updated totals so the UI can refresh immediately
+    // and avoid the "16 steps" stale cache problem.
+    return updates;
+  }
+
   Future<void> updateDailyPhysicalStats(String uid, int steps, double calories, double distance) async {
+    String todayKey = DateTime.now().toIso8601String().split('T')[0];
     await firestore.collection("players").doc(uid).update({
       "dailySteps": FieldValue.increment(steps),
       "totalSteps": FieldValue.increment(steps),
       "dailyCalories": FieldValue.increment(calories.toInt()),
       "dailyDistance": FieldValue.increment(distance),
       "lastSyncTime": FieldValue.serverTimestamp(),
+      "dailyHistory.$todayKey.steps": FieldValue.increment(steps),
+      "dailyHistory.$todayKey.calories": FieldValue.increment(calories.toInt()),
+      "dailyHistory.$todayKey.distance": FieldValue.increment(distance),
     });
   }
 
@@ -508,6 +569,18 @@ class FirebaseService {
   }
 
   // =========================
+  // UPDATE PLAYER NAME
+  // =========================
+  Future<void> updatePlayerName({
+    required String uid,
+    required String name,
+  }) async {
+    await firestore.collection("players").doc(uid).update({
+      "name": name,
+    });
+  }
+
+  // =========================
   // UPLOAD AVATAR FILE
   // =========================
   Future<String?> uploadAvatarFile(String uid, Uint8List fileBytes) async {
@@ -645,10 +718,6 @@ class FirebaseService {
     });
   }
 
-  // FIX: previously read team.members then wrote (count - 1) in two separate
-  // steps. If two members left at the same moment they could read the same
-  // stale count and one decrement would be lost. FieldValue.increment(-1) is
-  // atomic at the database level, so this can no longer drift.
   Future<void> leaveTeam({
     required String uid,
     required String teamId,
@@ -665,8 +734,6 @@ class FirebaseService {
     });
   }
 
-  // FIX: same atomic-increment fix as leaveTeam, plus safe field access
-  // (teamDoc["members"] throws if the field is missing; .data()?[...] does not).
   Future<void> kickPlayer({
     required String playerId,
     required String teamId,
@@ -701,7 +768,6 @@ class FirebaseService {
     });
   }
 
-  // FIX: atomic increment instead of read-then-write on "members".
   Future<void> acceptRequest({
     required String requestId,
     required String playerId,
@@ -869,7 +935,13 @@ class FirebaseService {
     });
   }
 
-  Future<bool> executeTeamRaidAttack(String uid, String teamId) async {
+  /// Returns (success, defeated): `success` is whether the attack itself went
+  /// through (stamina available, not on cooldown, etc); `defeated` is whether
+  /// this attack was the one that brought the boss to 0 HP. Callers should use
+  /// `defeated` directly instead of re-deriving it from a locally-estimated
+  /// damage number, since the authoritative damage calculation (including
+  /// gear modifiers) only happens here, inside the transaction.
+  Future<(bool success, bool defeated)> executeTeamRaidAttack(String uid, String teamId) async {
     final playerRef = firestore.collection("players").doc(uid);
     final teamRef = firestore.collection("teams").doc(teamId);
 
@@ -981,7 +1053,7 @@ class FirebaseService {
       );
     }
 
-    return result["success"] == true;
+    return (result["success"] == true, result["defeated"] == true);
   }
 
   Future<void> contributeRaidDamage(String teamId, double damage) async {
@@ -1144,6 +1216,8 @@ class FirebaseService {
     final docRef = firestore.collection("players").doc(uid);
     return firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return false;
+
       Map<String, int> inv = Map<String, int>.from(snapshot.data()?["inventory"] ?? {});
 
       for (var entry in recipe.entries) {
@@ -1154,10 +1228,25 @@ class FirebaseService {
         inv[entry.key] = inv[entry.key]! - entry.value;
       }
 
-      transaction.update(docRef, {
-        "inventory": inv,
-        "ownedGear": FieldValue.arrayUnion([gearId])
-      });
+      Map<String, dynamic> updates = {"inventory": inv};
+
+      final matchingPowerUps = shopItems.where((p) => p.id == gearId);
+      if (matchingPowerUps.isNotEmpty) {
+        final powerUp = matchingPowerUps.first;
+        Map<String, dynamic> activePowerUps = Map<String, dynamic>.from(snapshot.data()?["activePowerUps"] ?? {});
+
+        DateTime baseTime = DateTime.now();
+        if (activePowerUps.containsKey(gearId)) {
+          final currentExpiry = (activePowerUps[gearId] as Timestamp).toDate();
+          if (currentExpiry.isAfter(baseTime)) baseTime = currentExpiry;
+        }
+        activePowerUps[gearId] = Timestamp.fromDate(baseTime.add(powerUp.duration));
+        updates["activePowerUps"] = activePowerUps;
+      } else {
+        updates["ownedGear"] = FieldValue.arrayUnion([gearId]);
+      }
+
+      transaction.update(docRef, updates);
       return true;
     });
   }

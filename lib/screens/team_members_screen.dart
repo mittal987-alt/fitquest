@@ -51,7 +51,20 @@ class TeamMembersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser!.uid;
+    // FIX: was `FirebaseAuth.instance.currentUser!.uid` — guard instead of
+    // force-unwrap, consistent with the rest of the app.
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5F7FA),
+        body: Center(
+          child: Text(
+            "NOT LOGGED IN",
+            style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
     final bool isLeader = currentUid == leaderId;
     final FirebaseService firebaseService = FirebaseService();
 
@@ -73,9 +86,15 @@ class TeamMembersScreen extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // FIX: was `.where("team", isEqualTo: teamName)` — team NAMES aren't
+        // guaranteed unique anywhere in this app (create_team just takes
+        // free-text input), so two teams sharing a name would leak each
+        // other's members into this roster. `teamId` is a real Firestore
+        // document id and is guaranteed unique, and this widget already
+        // receives it — using it here is strictly more correct.
         stream: FirebaseFirestore.instance
             .collection("players")
-            .where("team", isEqualTo: teamName)
+            .where("teamId", isEqualTo: teamId)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -143,7 +162,24 @@ class TeamMembersScreen extends StatelessWidget {
                           child: player.avatar.isNotEmpty
                               ? ClipRRect(
                             borderRadius: BorderRadius.circular(22),
-                            child: Image.network(player.avatar, fit: BoxFit.cover),
+                            child: Image.network(
+                              player.avatar,
+                              fit: BoxFit.cover,
+                              // FIX: no fallback previously — a broken/expired
+                              // avatar URL would show Flutter's default
+                              // broken-image glyph instead of degrading
+                              // gracefully like the rest of the app does.
+                              errorBuilder: (context, error, stackTrace) => Center(
+                                child: Text(
+                                  "#${index + 1}",
+                                  style: TextStyle(
+                                    color: playerIsLeader ? Colors.orangeAccent : Colors.blueAccent,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
                           )
                               : Center(
                             child: Text(

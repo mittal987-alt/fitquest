@@ -68,6 +68,12 @@ class _MapScreenState extends State<MapScreen> {
 
   Set<String> myOwnedTileIds = {};
 
+  // FIX: was never stored, so it could only ever self-cancel on its *next*
+  // scheduled tick after dispose (up to 2 minutes late) instead of
+  // immediately. Now cancelled explicitly in dispose(), same as every other
+  // subscription in this file.
+  Timer? _regenTimer;
+
   @override
   void initState() {
     super.initState();
@@ -146,9 +152,13 @@ class _MapScreenState extends State<MapScreen> {
     try {
       String style = await DefaultAssetBundle.of(context)
           .loadString('assets/map_style_light.json');
-      setState(() {
-        _mapStyleJson = style;
-      });
+      // FIX: this was the one async callback in the file missing a `mounted`
+      // guard before setState — every other listener here already checks it.
+      if (mounted) {
+        setState(() {
+          _mapStyleJson = style;
+        });
+      }
     } catch (e) {
       debugPrint("Error loading map style configuration: $e");
     }
@@ -162,7 +172,12 @@ class _MapScreenState extends State<MapScreen> {
 
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        String myUid = user.isAnonymous ? "anon" : user.uid;
+        // FIX: was `user.isAnonymous ? "anon" : user.uid` — tiles are always
+        // saved with the real Firebase uid (see captureTile(), which never
+        // special-cases anonymous users), so this literal "anon" string never
+        // matched anything, meaning anonymous/guest players' own territory
+        // was always computed as empty here.
+        String myUid = user.uid;
         myOwnedTileIds = tiles
             .where((t) => t.ownerId == myUid)
             .map((t) => t.tileId)
@@ -193,7 +208,7 @@ class _MapScreenState extends State<MapScreen> {
   void startTracking() {
     positionStream?.cancel();
     pulseSubscription?.cancel();
-    
+
     // Subscribe to TacticalPulse for Anomaly Scanning
     pulseSubscription = pedometerService.tacticalPulseStream.listen((pulse) {
       if (mounted && scanningAnomaly != null) {
@@ -249,12 +264,12 @@ class _MapScreenState extends State<MapScreen> {
         currentPosition = LatLng(position.latitude, position.longitude);
 
         // Update Ghost Trail
-        if (breadcrumbs.isEmpty || 
+        if (breadcrumbs.isEmpty ||
             locationService.calculateDistance(
-              startLat: breadcrumbs.last.latitude,
-              startLng: breadcrumbs.last.longitude,
-              endLat: currentPosition.latitude,
-              endLng: currentPosition.longitude) > 10) {
+                startLat: breadcrumbs.last.latitude,
+                startLng: breadcrumbs.last.longitude,
+                endLat: currentPosition.latitude,
+                endLng: currentPosition.longitude) > 10) {
           breadcrumbs.add(currentPosition);
           if (breadcrumbs.length > 100) breadcrumbs.removeAt(0);
         }
@@ -288,7 +303,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void startRegenLoop() {
-    Timer.periodic(
+    _regenTimer?.cancel();
+    _regenTimer = Timer.periodic(
       const Duration(minutes: 2),
           (timer) async {
         if (!mounted) {
@@ -296,7 +312,7 @@ class _MapScreenState extends State<MapScreen> {
           return;
         }
         await regenerateTerritories();
-        
+
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           await firebaseService.regenerateStamina(user.uid);
@@ -381,7 +397,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _completeAnomalyScan() async {
     if (scanningAnomaly == null || currentPlayer == null) return;
-    
+
     final anomaly = scanningAnomaly!;
     setState(() {
       scanningAnomaly = null;
@@ -389,7 +405,7 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     await firebaseService.claimAnomaly(currentPlayer!.uid, anomaly);
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -455,19 +471,19 @@ class _MapScreenState extends State<MapScreen> {
         endLng: bounty.longitude,
       );
 
-        if (dist < 200) {
-          circles.add(
-            Circle(
-              circleId: const CircleId("radar"),
-              center: currentPosition,
-              radius: 200,
-              strokeWidth: 2,
-              strokeColor: Colors.cyan.withValues(alpha: 0.3),
-              fillColor: Colors.cyan.withValues(alpha: 0.05),
-            ),
-          );
-          break; // Show only one radar ring
-        }
+      if (dist < 200) {
+        circles.add(
+          Circle(
+            circleId: const CircleId("radar"),
+            center: currentPosition,
+            radius: 200,
+            strokeWidth: 2,
+            strokeColor: Colors.cyan.withValues(alpha: 0.3),
+            fillColor: Colors.cyan.withValues(alpha: 0.05),
+          ),
+        );
+        break; // Show only one radar ring
+      }
     }
 
     // Bounty Markers
@@ -812,13 +828,19 @@ class _MapScreenState extends State<MapScreen> {
 
     // FLOW STATE BONUS: 4.5 to 7.0 km/h is the sweet spot
     double flowMultiplier = (speedKmh >= 4.5 && speedKmh <= 7.0) ? 1.5 : 1.0;
-    
+
     // ENERGY BOOST BONUS
+    // FIX: was hardcoded to 1.5 whenever energy_boost was active. Every other
+    // place in the app that applies this buff (firebase_service.dart's
+    // incrementXP, for example) uses the player's actual computed
+    // energyBoostXpMultiplier, which varies by fitness tier/goal (1.2x-2.2x+),
+    // not a flat 1.5x. Territory-capture XP was the one activity giving a
+    // different (and often wrong) bonus for the same buff.
     double energyBoostMultiplier = 1.0;
     if (player.activePowerUps.containsKey("energy_boost")) {
       DateTime expiry = player.activePowerUps["energy_boost"]!;
       if (expiry.isAfter(DateTime.now())) {
-        energyBoostMultiplier = 1.5;
+        energyBoostMultiplier = player.energyBoostXpMultiplier;
       }
     }
 
@@ -1060,7 +1082,7 @@ class _MapScreenState extends State<MapScreen> {
                         final navigator = Navigator.of(context);
                         final scaffoldMessenger = ScaffoldMessenger.of(context);
                         navigator.pop();
-                        
+
                         // Check if it's a stronghold
                         bool isStronghold = false;
                         for (var team in allTeams) {
@@ -1087,7 +1109,7 @@ class _MapScreenState extends State<MapScreen> {
                           );
                           return;
                         }
-                        
+
                         await attackTile(tile);
                       },
                       icon: const Icon(Icons.flash_on_rounded),
@@ -1109,7 +1131,7 @@ class _MapScreenState extends State<MapScreen> {
                         final navigator = Navigator.of(context);
                         final scaffoldMessenger = ScaffoldMessenger.of(context);
                         navigator.pop();
-                        
+
                         final user = FirebaseAuth.instance.currentUser;
                         if (user == null) return;
                         final uid = user.uid;
@@ -1204,7 +1226,7 @@ class _MapScreenState extends State<MapScreen> {
         strongholdTileIds: strongholdTiles,
         onTap: (tileId) {
           final tile = tiles.firstWhere(
-            (t) => t.tileId == tileId,
+                (t) => t.tileId == tileId,
             orElse: () => HexTileModel(
               tileId: tileId,
               latitude: 0.0,
@@ -1231,6 +1253,13 @@ class _MapScreenState extends State<MapScreen> {
     teamsStream?.cancel();
     anomaliesStream?.cancel();
     pulseSubscription?.cancel();
+    // FIX: these two were started in initState() (listenToPlayer(),
+    // listenToGear()) but never cancelled here, unlike every other
+    // subscription in this file — a real leak once this screen's owning
+    // widget is actually disposed (e.g. on sign-out).
+    playerStream?.cancel();
+    gearStream?.cancel();
+    _regenTimer?.cancel();
     super.dispose();
   }
 

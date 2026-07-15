@@ -37,9 +37,16 @@ class TeamModel {
       id: map["id"] ?? "",
       name: map["name"] ?? "",
       color: map["color"] ?? "blue",
-      members: map["members"] ?? 0,
-      maxMembers: map["maxMembers"] ?? 50,
-      totalSteps: map["totalSteps"] ?? 0,
+      // FIX: was `map["members"] ?? 0` etc, assuming Firestore always hands
+      // back an int. leaderboard_screen.dart's efficiency calc
+      // (team.totalSteps / team.members) and firebase_service.dart's
+      // FieldValue.increment(-1)/(1) calls on "members" make a stray double
+      // unlikely in practice, but this matches the safe-cast pattern already
+      // applied to hex_tile_model.dart and daily_history_screen.dart for the
+      // same class of risk.
+      members: (map["members"] as num?)?.toInt() ?? 0,
+      maxMembers: (map["maxMembers"] as num?)?.toInt() ?? 50,
+      totalSteps: (map["totalSteps"] as num?)?.toInt() ?? 0,
       totalRaidDamage: (map["totalRaidDamage"] ?? 0.0).toDouble(),
       strongholdActive: map['strongholdActive'] ?? false,
       leaderId: map["leaderId"] ?? "",
@@ -70,6 +77,11 @@ class TeamModel {
       "raidBossHp": raidBossHp,
     };
   }
+
+  // =========================
+  // CALCULATED STATS
+  // =========================
+  double get stepEfficiency => totalSteps / (members > 0 ? members : 1);
 
   // =========================
   // TEAM COLOR
