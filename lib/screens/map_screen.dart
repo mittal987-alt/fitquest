@@ -11,12 +11,15 @@ import '../services/pedometer_service.dart';
 import '../services/territory_service.dart';
 import '../services/anti_cheat_service.dart';
 import '../services/firebase_service.dart';
+import '../services/treasure_service.dart';
 import '../models/hex_tile_model.dart';
 import '../models/player_model.dart';
 import '../models/bounty_model.dart';
 import '../models/team_model.dart';
 import '../models/gear_model.dart';
 import '../models/anomaly_model.dart';
+import '../models/world_event_model.dart';
+import 'hacking_minigame_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -25,19 +28,21 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   GoogleMapController? mapController;
   final LocationService locationService = LocationService();
   final PedometerService pedometerService = PedometerService();
   final TerritoryService territoryService = TerritoryService();
   final AntiCheatService antiCheatService = AntiCheatService();
   final FirebaseService firebaseService = FirebaseService();
+  final TreasureService treasureService = TreasureService();
 
   StreamSubscription<Position>? positionStream;
   StreamSubscription<List<HexTileModel>>? hexTilesStream;
   StreamSubscription<List<BountyModel>>? bountiesStream;
   StreamSubscription<List<TeamModel>>? teamsStream;
   StreamSubscription<List<AnomalyModel>>? anomaliesStream;
+  StreamSubscription<List<WorldEventModel>>? worldEventsStream;
 
   LatLng currentPosition = const LatLng(28.6139, 77.2090);
   final Set<Polygon> hexagons = {};
@@ -51,6 +56,9 @@ class _MapScreenState extends State<MapScreen> {
   List<TeamModel> allTeams = [];
   List<GearModel> allGear = [];
   List<AnomalyModel> allAnomalies = [];
+  List<WorldEventModel> allWorldEvents = [];
+  List<LatLng> treasureChests = [];
+  List<LatLng> mineralNodes = []; // Rare material mining nodes
   PlayerModel? currentPlayer;
 
   AnomalyModel? scanningAnomaly;
@@ -68,6 +76,13 @@ class _MapScreenState extends State<MapScreen> {
 
   Set<String> myOwnedTileIds = {};
 
+  // Animation controllers for territory capture
+  late AnimationController _captureAnimController;
+  late Animation<double> _captureScale;
+  late Animation<double> _captureOpacity;
+  bool _showCaptureOverlay = false;
+  String _lastCaptureMsg = "";
+
   // FIX: was never stored, so it could only ever self-cancel on its *next*
   // scheduled tick after dispose (up to 2 minutes late) instead of
   // immediately. Now cancelled explicitly in dispose(), same as every other
@@ -77,15 +92,72 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _initAnimations();
     _loadMapStyle();
     initializeLocation();
     listenToHexTiles();
     listenToBounties();
     listenToTeams();
     listenToAnomalies();
+    listenToWorldEvents();
     listenToPlayer();
     listenToGear();
     startRegenLoop();
+    _spawnTreasure();
+    _spawnMineralNodes();
+  }
+
+  void _spawnMineralNodes() {
+    if (currentPosition != const LatLng(28.6139, 77.2090)) {
+      final random = Random();
+      setState(() {
+        mineralNodes = List.generate(3, (index) {
+          double latOffset = (random.nextDouble() - 0.5) * 0.005;
+          double lngOffset = (random.nextDouble() - 0.5) * 0.005;
+          return LatLng(currentPosition.latitude + latOffset, currentPosition.longitude + lngOffset);
+        });
+      });
+    }
+  }
+
+  void _spawnTreasure() {
+    if (currentPosition != const LatLng(28.6139, 77.2090)) {
+      setState(() {
+        treasureChests = treasureService.spawnChests(currentPosition, 5);
+      });
+    }
+  }
+
+  void _initAnimations() {
+    _captureAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+
+    _captureScale = CurvedAnimation(
+      parent: _captureAnimController,
+      curve: const Interval(0.0, 0.4, curve: Curves.easeOutBack),
+    );
+
+    _captureOpacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 60),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 20),
+    ]).animate(_captureAnimController);
+  }
+
+  void _triggerCaptureAnimation(String message) {
+    if (mounted) {
+      setState(() {
+        _lastCaptureMsg = message;
+        _showCaptureOverlay = true;
+      });
+      _captureAnimController.forward(from: 0.0).then((_) {
+        if (mounted) {
+          setState(() => _showCaptureOverlay = false);
+        }
+      });
+    }
   }
 
   void listenToGear() {
@@ -105,6 +177,18 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) {
         setState(() {
           allAnomalies = anomalies;
+          updateMarkers();
+        });
+      }
+    });
+  }
+
+  void listenToWorldEvents() {
+    worldEventsStream?.cancel();
+    worldEventsStream = firebaseService.getWorldEvents().listen((events) {
+      if (mounted) {
+        setState(() {
+          allWorldEvents = events;
           updateMarkers();
         });
       }
@@ -151,9 +235,7 @@ class _MapScreenState extends State<MapScreen> {
   void _loadMapStyle() async {
     try {
       String style = await DefaultAssetBundle.of(context)
-          .loadString('assets/map_style_light.json');
-      // FIX: this was the one async callback in the file missing a `mounted`
-      // guard before setState — every other listener here already checks it.
+          .loadString('assets/map_style.json');
       if (mounted) {
         setState(() {
           _mapStyleJson = style;
@@ -198,6 +280,7 @@ class _MapScreenState extends State<MapScreen> {
 
     updatePlayerMarker();
     generateGrid();
+    _spawnTreasure();
     startTracking();
     if (mounted) setState(() {});
   }
@@ -280,6 +363,19 @@ class _MapScreenState extends State<MapScreen> {
 
         if (antiCheatService.isVehicle(speedKmh)) {
           antiCheatService.applyVehicleWarning();
+          // Cancel any active anomaly scan if user enters a vehicle
+          if (scanningAnomaly != null) {
+            setState(() {
+              scanningAnomaly = null;
+              anomalyScanProgress = 0.0;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Signal Interrupted: Anomaly detection requires walking speed!"),
+                backgroundColor: Colors.orangeAccent,
+              ),
+            );
+          }
         }
 
         if (isWalking) {
@@ -377,6 +473,14 @@ class _MapScreenState extends State<MapScreen> {
 
   void _checkAnomalyProximity() {
     if (scanningAnomaly != null) {
+      if (antiCheatService.isVehicle(speedKmh)) {
+        setState(() {
+          scanningAnomaly = null;
+          anomalyScanProgress = 0.0;
+        });
+        return;
+      }
+
       double dist = locationService.calculateDistance(
         startLat: currentPosition.latitude,
         startLng: currentPosition.longitude,
@@ -510,6 +614,42 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
+    // Treasure Markers
+    for (int i = 0; i < treasureChests.length; i++) {
+      markers.add(
+        Marker(
+          markerId: MarkerId("treasure_$i"),
+          position: treasureChests[i],
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose),
+          onTap: () => _showTreasureDetails(treasureChests[i], i),
+        ),
+      );
+    }
+
+    // Mineral Node Markers
+    for (int i = 0; i < mineralNodes.length; i++) {
+      markers.add(
+        Marker(
+          markerId: MarkerId("mineral_$i"),
+          position: mineralNodes[i],
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          onTap: () => _showMineralNodeDetails(mineralNodes[i], i),
+        ),
+      );
+    }
+
+    // World Event Markers
+    for (var event in allWorldEvents) {
+      markers.add(
+        Marker(
+          markerId: MarkerId("world_event_${event.id}"),
+          position: event.position,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+          onTap: () => _showWorldEventDetails(event),
+        ),
+      );
+    }
+
     // Stronghold Markers (Center of clusters)
     for (var team in allTeams) {
       for (var centerId in team.strongholdClusters) {
@@ -543,47 +683,418 @@ class _MapScreenState extends State<MapScreen> {
         return Container(
           padding: const EdgeInsets.all(28),
           decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            color: Color(0xFF161B22),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.radar_rounded, size: 64, color: Colors.cyan),
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Icon(Icons.radar_rounded, size: 64, color: Color(0xFF8E2DE2)),
               const SizedBox(height: 16),
               Text(
                 "MYSTERY ${anomaly.type.toUpperCase()}",
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black87),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
               ),
               const SizedBox(height: 8),
               const Text(
                 "Keep moving to unlock these rewards.",
-                style: TextStyle(fontSize: 16, color: Colors.black54),
+                style: TextStyle(fontSize: 16, color: Colors.white70),
               ),
               const SizedBox(height: 24),
               if (canScan)
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.cyan,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  onPressed: () {
-                    setState(() {
-                      scanningAnomaly = anomaly;
-                      anomalyScanProgress = 0.0;
-                    });
-                    Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.sync),
-                  label: const Text("START UNLOCKING", style: TextStyle(fontWeight: FontWeight.w900)),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        scanningAnomaly = anomaly;
+                        anomalyScanProgress = 0.0;
+                      });
+                      Navigator.pop(context);
+                    },
+                    icon: const Icon(Icons.sync),
+                    label: const Text("START UNLOCKING", style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
                 )
               else
                 Text(
                   "Located ${dist.toStringAsFixed(0)}m away. Move within 50m to start unlocking.",
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showTreasureDetails(LatLng position, int index) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        double dist = locationService.calculateDistance(
+          startLat: currentPosition.latitude,
+          startLng: currentPosition.longitude,
+          endLat: position.latitude,
+          endLng: position.longitude,
+        );
+
+        bool canClaim = dist < 30;
+
+        return Container(
+          padding: const EdgeInsets.all(28),
+          decoration: const BoxDecoration(
+            color: Color(0xFF161B22),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Icon(Icons.inventory_2_rounded, size: 64, color: Colors.amber),
+              const SizedBox(height: 16),
+              const Text(
+                "TREASURE CACHE",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "A forgotten supply crate has been detected.",
+                style: TextStyle(fontSize: 16, color: Colors.white70),
+              ),
+              const SizedBox(height: 24),
+              if (canClaim)
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.amber, Colors.orange],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () async {
+                      if (currentPlayer != null) {
+                        await treasureService.claimChest(currentPlayer!.uid, "common");
+                        setState(() {
+                          treasureChests.removeAt(index);
+                          updateMarkers();
+                        });
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Treasure Claimed! XP and Materials added."),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.lock_open_rounded),
+                    label: const Text("CLAIM TREASURE", style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                )
+              else
+                Text(
+                  "Located ${dist.toStringAsFixed(0)}m away. Move within 30m to open.",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showMineralNodeDetails(LatLng position, int index) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        double dist = locationService.calculateDistance(
+          startLat: currentPosition.latitude,
+          startLng: currentPosition.longitude,
+          endLat: position.latitude,
+          endLng: position.longitude,
+        );
+
+        bool canMine = dist < 30;
+
+        return Container(
+          padding: const EdgeInsets.all(28),
+          decoration: const BoxDecoration(
+            color: Color(0xFF161B22),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Icon(Icons.settings_input_component_rounded, size: 64, color: Colors.greenAccent),
+              const SizedBox(height: 16),
+              const Text(
+                "RARE MINERAL NODE",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Extraction site for Silicon, Nanites, and Energy Cores.",
+                style: TextStyle(fontSize: 16, color: Colors.white70),
+              ),
+              const SizedBox(height: 24),
+              if (canMine)
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.greenAccent, Colors.teal],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () async {
+                      if (currentPlayer != null) {
+                        final materials = [
+                          CraftingRecipes.materialSilicon,
+                          CraftingRecipes.materialNanites,
+                          CraftingRecipes.materialEnergyCore
+                        ];
+                        final randomMat = materials[Random().nextInt(materials.length)];
+                        
+                        // Update inventory via firebase
+                        Map<String, int> inv = Map<String, int>.from(currentPlayer!.inventory);
+                        inv[randomMat] = (inv[randomMat] ?? 0) + 1;
+                        await firebaseService.firestore.collection("players").doc(currentPlayer!.uid).update({
+                          "inventory": inv,
+                          "xp": FieldValue.increment(50),
+                        });
+
+                        setState(() {
+                          mineralNodes.removeAt(index);
+                          updateMarkers();
+                        });
+                        
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Mined 1x ${randomMat.toUpperCase()}!"),
+                              backgroundColor: Colors.teal,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.precision_manufacturing_rounded),
+                    label: const Text("EXTRACT MATERIALS", style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                )
+              else
+                Text(
+                  "Located ${dist.toStringAsFixed(0)}m away. Move within 30m to mine.",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showWorldEventDetails(WorldEventModel event) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        double dist = locationService.calculateDistance(
+          startLat: currentPosition.latitude,
+          startLng: currentPosition.longitude,
+          endLat: event.position.latitude,
+          endLng: event.position.longitude,
+        );
+
+        bool canParticipate = dist < 100;
+
+        return Container(
+          padding: const EdgeInsets.all(28),
+          decoration: const BoxDecoration(
+            color: Color(0xFF161B22),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Icon(Icons.public_rounded, size: 64, color: Colors.deepPurpleAccent),
+              const SizedBox(height: 16),
+              Text(
+                event.title.toUpperCase(),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                event.description,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Colors.white70),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                "TEAM LEADERBOARD",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white54, letterSpacing: 1),
+              ),
+              const SizedBox(height: 12),
+              ...event.teamContributions.entries.take(3).map((e) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("TEAM ${e.key.substring(0, 5)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text("${e.value} PT", style: const TextStyle(color: Colors.deepPurpleAccent, fontWeight: FontWeight.w900)),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 24),
+              if (canParticipate)
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: event.eventType == "Data Breach" 
+                        ? [Colors.cyanAccent, Colors.blueAccent]
+                        : [Colors.deepPurpleAccent, Colors.blueAccent],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () async {
+                      if (currentPlayer != null && currentPlayer!.teamId != null) {
+                        if (event.eventType == "Data Breach") {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => HackingMinigameScreen(
+                                eventId: event.id,
+                                teamId: currentPlayer!.teamId!,
+                                uid: currentPlayer!.uid,
+                                onComplete: (success) async {
+                                  if (success) {
+                                    await firebaseService.contributeToWorldEvent(
+                                      event.id, 
+                                      currentPlayer!.teamId!, 
+                                      currentPlayer!.uid,
+                                      bonus: 5,
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        } else {
+                          await firebaseService.contributeToWorldEvent(
+                            event.id, 
+                            currentPlayer!.teamId!, 
+                            currentPlayer!.uid,
+                          );
+                          if (mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Contribution registered! Team rank updated."),
+                                backgroundColor: Colors.deepPurpleAccent,
+                              ),
+                            );
+                          }
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Join a team to participate in world events!")),
+                        );
+                      }
+                    },
+                    icon: Icon(event.eventType == "Data Breach" ? Icons.terminal_rounded : Icons.flash_on_rounded),
+                    label: Text(
+                      event.eventType == "Data Breach" ? "INITIALIZE BREACH" : "CONTRIBUTE (10 STAMINA)", 
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  "Located ${dist.toStringAsFixed(0)}m away. Move within 100m to participate.",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.deepPurpleAccent, fontWeight: FontWeight.bold),
                 ),
             ],
           ),
@@ -612,22 +1123,31 @@ class _MapScreenState extends State<MapScreen> {
         return Container(
           padding: const EdgeInsets.all(28),
           decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            color: Color(0xFF161B22),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               const Icon(Icons.stars_rounded, size: 64, color: Colors.orange),
               const SizedBox(height: 16),
               const Text(
                 "BOUNTY GOAL",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black87),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
               ),
               const SizedBox(height: 8),
-              Text(
+              const Text(
                 "Reach this goal for rewards.",
-                style: const TextStyle(fontSize: 16, color: Colors.black54),
+                style: TextStyle(fontSize: 16, color: Colors.white70),
               ),
               const SizedBox(height: 24),
               Row(
@@ -642,41 +1162,60 @@ class _MapScreenState extends State<MapScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: canClaim ? Colors.orange : Colors.grey[300],
-                        foregroundColor: canClaim ? Colors.white : Colors.grey[600],
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      onPressed: canClaim ? () async {
-                        final navigator = Navigator.of(context);
-                        final scaffoldMessenger = ScaffoldMessenger.of(context);
-                        navigator.pop();
-                        final user = FirebaseAuth.instance.currentUser;
-                        if (user != null) {
-                          // Bounty Claim costs 15 Stamina
-                          bool hasStamina = await firebaseService.consumeStamina(user.uid, 15);
-                          if (!hasStamina) {
-                            scaffoldMessenger.showSnackBar(
+                    child: Container(
+                      decoration: canClaim ? BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ) : null,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: canClaim ? Colors.transparent : Colors.white10,
+                          foregroundColor: canClaim ? Colors.white : Colors.white38,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: canClaim ? () async {
+                          if (antiCheatService.isVehicle(speedKmh)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text("Insufficient Stamina to claim bounty!"),
-                                backgroundColor: Colors.orange,
+                                content: Text("Action Blocked: Cannot claim bounties in a vehicle!"),
+                                backgroundColor: Colors.redAccent,
                               ),
                             );
                             return;
                           }
 
-                          await firebaseService.claimBounty(user.uid, bounty);
-                          scaffoldMessenger.showSnackBar(
-                            const SnackBar(content: Text("Bounty Claimed!"), backgroundColor: Colors.green),
-                          );
-                        }
-                      } : null,
-                      icon: const Icon(Icons.check_circle_outline_rounded),
-                      label: Text(
-                        canClaim ? "CLAIM" : "OUT OF RANGE",
-                        style: const TextStyle(fontWeight: FontWeight.w900),
+                          final navigator = Navigator.of(context);
+                          final scaffoldMessenger = ScaffoldMessenger.of(context);
+                          navigator.pop();
+                          final user = FirebaseAuth.instance.currentUser;
+                          if (user != null) {
+                            // Bounty Claim costs 15 Stamina
+                            bool hasStamina = await firebaseService.consumeStamina(user.uid, 15);
+                            if (!hasStamina) {
+                              scaffoldMessenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text("Insufficient Stamina to claim bounty!"),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
+
+                            await firebaseService.claimBounty(user.uid, bounty);
+                            scaffoldMessenger.showSnackBar(
+                              const SnackBar(content: Text("Bounty Claimed!"), backgroundColor: Colors.green),
+                            );
+                          }
+                        } : null,
+                        icon: const Icon(Icons.check_circle_outline_rounded),
+                        label: Text(
+                          canClaim ? "CLAIM" : "OUT OF RANGE",
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
                       ),
                     ),
                   ),
@@ -684,11 +1223,11 @@ class _MapScreenState extends State<MapScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
-                        foregroundColor: Colors.blueAccent,
+                        backgroundColor: Colors.white10,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        side: const BorderSide(color: Colors.blueAccent, width: 1),
+                        side: const BorderSide(color: Colors.white24, width: 1),
                       ),
                       onPressed: () {
                         setState(() {
@@ -708,7 +1247,7 @@ class _MapScreenState extends State<MapScreen> {
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(
                     "Thermal Goggles Active (+${((radiusMult - 1) * 100).toInt()}% Range)",
-                    style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Color(0xFF8E2DE2), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ),
             ],
@@ -722,16 +1261,16 @@ class _MapScreenState extends State<MapScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.1),
+        color: const Color(0xFF8E2DE2).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+        border: Border.all(color: const Color(0xFF8E2DE2).withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: Colors.orange),
+          Icon(icon, size: 18, color: const Color(0xFF8E2DE2)),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         ],
       ),
     );
@@ -851,6 +1390,8 @@ class _MapScreenState extends State<MapScreen> {
 
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: finalXP);
 
+    _triggerCaptureAnimation("TERRITORY SECURED");
+
     generateGrid();
     if (mounted) setState(() {});
   }
@@ -932,11 +1473,7 @@ class _MapScreenState extends State<MapScreen> {
       int xpReward = 100;
       await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: Colors.green, content: Text("Territory Captured!")),
-        );
-      }
+      _triggerCaptureAnimation("SECTOR NEUTRALIZED");
     } else {
       HexTileModel damagedTile = HexTileModel(
         tileId: tile.tileId,
@@ -1002,6 +1539,101 @@ class _MapScreenState extends State<MapScreen> {
     await firebaseService.incrementXP(uid: player.uid, xpToAdd: xpReward);
   }
 
+  Widget _mapFloatingButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: const Color(0xFF161B22).withValues(alpha: 0.9),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Icon(icon, color: Colors.white, size: 20),
+      ),
+    );
+  }
+
+  Widget _statMini(IconData icon, String value) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Colors.white38, size: 16),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+      ],
+    );
+  }
+
+  void _showMapDetailsSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
+        decoration: const BoxDecoration(
+          color: Color(0xFF161B22),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(
+                color: Colors.white12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text("TODAY'S WALK", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _metricLarge(Icons.directions_walk_rounded, "${currentPlayer?.dailySteps ?? 0}", "Steps"),
+                _metricLarge(Icons.straighten_rounded, "${currentPlayer?.dailyDistance.toStringAsFixed(1)}", "km"),
+                _metricLarge(Icons.explore_rounded, "${(currentPlayer?.totalLand ?? 0) * 0.025}", "km² Area"),
+              ],
+            ),
+            const SizedBox(height: 32),
+            Container(
+              width: double.infinity,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text("CLOSE DATA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metricLarge(IconData icon, String value, String label) {
+    return Column(
+      children: [
+        Icon(icon, color: const Color(0xFF8E2DE2), size: 32),
+        const SizedBox(height: 12),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
+        Text(label.toUpperCase(), style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+      ],
+    );
+  }
+
   void showTileDetails(HexTileModel tile) {
     showModalBottomSheet(
       context: context,
@@ -1010,25 +1642,38 @@ class _MapScreenState extends State<MapScreen> {
         return Container(
           padding: const EdgeInsets.all(28),
           decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            color: Color(0xFF161B22),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: double.infinity,
+                alignment: Alignment.center,
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Row(
                 children: [
                   Icon(
                     tile.ownerType == "solo" ? Icons.person_rounded : Icons.groups_rounded,
                     size: 36,
-                    color: Colors.blueAccent,
+                    color: const Color(0xFF8E2DE2),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
                       tile.ownerName,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black87),
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
                     ),
                   ),
                 ],
@@ -1037,20 +1682,20 @@ class _MapScreenState extends State<MapScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   tile.ownerType == "solo" ? "⚔️ Player Territory" : "🛡️ Team Territory",
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.black54, fontSize: 13),
+                  style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white54, fontSize: 13),
                 ),
               ),
               const SizedBox(height: 24),
-              Row(
+              const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Defense Strength", style: TextStyle(fontSize: 16, color: Colors.black54, fontWeight: FontWeight.bold)),
-                  Text("${tile.power}/100", style: const TextStyle(fontSize: 16, color: Colors.blueAccent, fontWeight: FontWeight.w900)),
+                  Text("Defense Strength", style: TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.bold)),
+                  Text("XP REWARD: 100", style: TextStyle(fontSize: 12, color: Color(0xFF8E2DE2), fontWeight: FontWeight.w900)),
                 ],
               ),
               const SizedBox(height: 12),
@@ -1059,9 +1704,9 @@ class _MapScreenState extends State<MapScreen> {
                 child: LinearProgressIndicator(
                   value: tile.power / 100,
                   minHeight: 12,
-                  backgroundColor: Colors.black.withValues(alpha: 0.05),
+                  backgroundColor: Colors.white10,
                   valueColor: AlwaysStoppedAnimation(
-                    tile.power > 70 ? Colors.green : tile.power > 40 ? Colors.orange : Colors.red,
+                    tile.power > 70 ? Colors.greenAccent : tile.power > 40 ? Colors.orangeAccent : Colors.redAccent,
                   ),
                 ),
               ),
@@ -1120,10 +1765,10 @@ class _MapScreenState extends State<MapScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
-                        foregroundColor: Colors.blueAccent,
+                        backgroundColor: const Color(0xFF8E2DE2).withValues(alpha: 0.1),
+                        foregroundColor: const Color(0xFF8E2DE2),
                         elevation: 0,
-                        side: BorderSide(color: Colors.blueAccent.withValues(alpha: 0.2), width: 1.5),
+                        side: BorderSide(color: const Color(0xFF8E2DE2).withValues(alpha: 0.2), width: 1.5),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
@@ -1252,7 +1897,9 @@ class _MapScreenState extends State<MapScreen> {
     bountiesStream?.cancel();
     teamsStream?.cancel();
     anomaliesStream?.cancel();
+    worldEventsStream?.cancel();
     pulseSubscription?.cancel();
+    _captureAnimController.dispose();
     // FIX: these two were started in initState() (listenToPlayer(),
     // listenToGear()) but never cancelled here, unlike every other
     // subscription in this file — a real leak once this screen's owning
@@ -1275,7 +1922,7 @@ class _MapScreenState extends State<MapScreen> {
             markers: markers,
             circles: circles,
             polylines: polylines,
-            myLocationEnabled: false, // Using custom marker instead
+            myLocationEnabled: false,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             compassEnabled: false,
@@ -1283,6 +1930,102 @@ class _MapScreenState extends State<MapScreen> {
               mapController = controller;
             },
           ),
+
+          // Top Header Overlay for Map Info
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            left: 16,
+            right: 16,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161B22).withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on_rounded, color: Color(0xFF8E2DE2), size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        "SECTOR ${territoryService.getHexId(currentPosition.latitude, currentPosition.longitude).substring(0, 6)}",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1),
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    _mapFloatingButton(Icons.layers_rounded, () {
+                      // Layer toggle logic could go here
+                    }),
+                    const SizedBox(width: 12),
+                    _mapFloatingButton(Icons.my_location_rounded, () {
+                      if (mapController != null) {
+                        mapController!.animateCamera(CameraUpdate.newLatLng(currentPosition));
+                      }
+                    }),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          if (_showCaptureOverlay)
+            Center(
+              child: FadeTransition(
+                opacity: _captureOpacity,
+                child: ScaleTransition(
+                  scale: _captureScale,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(50),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF8E2DE2).withValues(alpha: 0.4),
+                          blurRadius: 24,
+                          spreadRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.security_rounded, color: Colors.white, size: 48),
+                        const SizedBox(height: 12),
+                        Text(
+                          _lastCaptureMsg,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.0,
+                          ),
+                        ),
+                        const Text(
+                          "+ XP GAINED",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           if (scanningAnomaly != null)
             Positioned(
@@ -1356,79 +2099,105 @@ class _MapScreenState extends State<MapScreen> {
             left: 16,
             right: 16,
             bottom: MediaQuery.of(context).padding.bottom + 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.black.withValues(alpha: 0.05), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  )
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blueAccent.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
+            child: GestureDetector(
+              onVerticalDragEnd: (details) {
+                if (details.primaryVelocity! < -300) {
+                  _showMapDetailsSheet();
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B22),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    )
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white12,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                    child: Icon(
-                      speedKmh > 1.0 ? Icons.directions_run_rounded : Icons.accessibility_new_rounded,
-                      color: Colors.blueAccent,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              antiCheatService.getMovementStatus(speedKmh).toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.black87,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                            if (speedKmh >= 4.5 && speedKmh <= 7.0)
-                              Container(
-                                margin: const EdgeInsets.only(left: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  "FLOW STATE: 1.5x XP",
-                                  style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          "${speedKmh.toStringAsFixed(1)} KM/H",
-                          style: const TextStyle(
-                            color: Colors.black54,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8E2DE2).withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            speedKmh > 1.0 ? Icons.directions_run_rounded : Icons.accessibility_new_rounded,
+                            color: const Color(0xFF8E2DE2),
+                            size: 28,
                           ),
                         ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    antiCheatService.getMovementStatus(speedKmh).toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  if (speedKmh >= 4.5 && speedKmh <= 7.0)
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 8),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        "FLOW STATE",
+                                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                "${speedKmh.toStringAsFixed(1)} KM/H",
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _statMini(Icons.directions_walk_rounded, "${currentPlayer?.dailySteps ?? 0}"),
+                        const SizedBox(width: 16),
+                        _statMini(Icons.straighten_rounded, "${currentPlayer?.dailyDistance.toStringAsFixed(1)}"),
                       ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

@@ -28,7 +28,7 @@ class ActivityHeatmap extends StatelessWidget {
           barTouchData: BarTouchData(
             enabled: true,
             touchTooltipData: BarTouchTooltipData(
-              tooltipBgColor: Colors.blueGrey.darken(0.8).withValues(alpha: 0.9),
+              tooltipBgColor: const Color(0xFF161B22).withValues(alpha: 0.9),
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 return BarTooltipItem(
                   "ACTIVITY\n",
@@ -64,7 +64,7 @@ class ActivityHeatmap extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
                       "${value.toInt()}:00",
-                      style: const TextStyle(color: Colors.black38, fontWeight: FontWeight.bold, fontSize: 9),
+                      style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 9),
                     ),
                   );
                 },
@@ -84,6 +84,7 @@ class ActivityHeatmap extends StatelessWidget {
     for (int i = 0; i < 24; i++) {
       final String hourKey = i.toString().padLeft(2, '0');
       int steps = hourlySteps[hourKey] ?? 0;
+      int ghostSteps = ghostBaseline?[hourKey] ?? 0;
 
       bars.add(
         BarChartGroupData(
@@ -91,9 +92,14 @@ class ActivityHeatmap extends StatelessWidget {
           barRods: [
             BarChartRodData(
               toY: steps.toDouble(),
-              color: Colors.cyanAccent,
+              color: steps >= ghostSteps ? Colors.cyanAccent : Colors.cyanAccent.withValues(alpha: 0.4),
               width: 8,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+              backDrawRodData: BackgroundBarChartRodData(
+                show: true,
+                toY: ghostSteps.toDouble(),
+                color: Colors.white.withValues(alpha: 0.05),
+              ),
             ),
           ],
         ),

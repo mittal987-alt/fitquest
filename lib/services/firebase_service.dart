@@ -1,947 +1,124 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import '../models/player_model.dart';
 import '../models/team_model.dart';
-import '../models/hex_tile_model.dart';
-import '../models/team_request_model.dart';
-import '../models/global_event_model.dart';
+import '../models/walk_session_model.dart';
 import '../models/gear_model.dart';
 import '../models/power_up_model.dart';
-import '../models/bounty_model.dart';
-import '../models/anomaly_model.dart';
-import '../models/activity_model.dart';
 import '../models/raid_log_model.dart';
+import '../models/world_event_model.dart';
+import '../models/team_request_model.dart';
 import '../config/gameplay_rules.dart';
+import '../config/crafting_recipes.dart';
 
 class FirebaseService {
-  final FirebaseFirestore firestore;
-  final FirebaseAuth auth;
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  final FirebaseAuth auth = FirebaseAuth.instance;
 
-  FirebaseService({
-    FirebaseFirestore? firestore,
-    FirebaseAuth? auth,
-  })  : firestore = firestore ?? FirebaseFirestore.instance,
-        auth = auth ?? FirebaseAuth.instance;
-
-  // =========================
-  // CURRENT USER
-  // =========================
   User? get currentUser => auth.currentUser;
 
-  // =========================
-  // RANK LOGIC
-  // =========================
-  String getRankTitle(int level) {
-    if (level < 5) return "RECRUIT";
-    if (level < 15) return "PLAYER";
-    if (level < 30) return "VETERAN";
-    if (level < 50) return "COMMANDER";
-    return "APEX LEGEND";
+  // Boss Pool from GameplayRules
+  final List<Map<String, dynamic>> bossPool = GameplayRules.bossPool;
+
+  Stream<PlayerModel?> getPlayerStream(String uid) {
+    if (uid.isEmpty) return Stream.value(null);
+    return firestore.collection("players").doc(uid).snapshots().map((snapshot) {
+      if (!snapshot.exists) return null;
+      return PlayerModel.fromMap(snapshot.data()!);
+    });
   }
 
-  // =========================
-  // CREATE PLAYER
-  // =========================
-  Future<void> createPlayer({
-    required String uid,
-    required String name,
-    required String email,
-  }) async {
-    PlayerModel player = PlayerModel(
-      uid: uid,
-      name: name,
-      email: email,
+  Future<PlayerModel?> getPlayer(String uid) async {
+    final doc = await firestore.collection("players").doc(uid).get();
+    if (!doc.exists) return null;
+    return PlayerModel.fromMap(doc.data()!);
+  }
+
+  Future<void> createPlayer(User user) async {
+    final player = PlayerModel(
+      uid: user.uid,
+      name: user.displayName ?? "New Strider",
+      email: user.email ?? "",
       team: "No Team",
-      teamId: null,
       isInTeam: false,
       totalSteps: 0,
       dailySteps: 0,
-      dailyCalories: 0,
-      dailyDistance: 0.0,
-      streakCount: 0,
-      totalRaidDamage: 0,
-      ghostRaidDamage: 0,
-      lastRaidAttack: null,
       lastHardwareStepCount: -1,
-      totalLand: 0,
       trustScore: 100,
       level: 1,
       xp: 0,
-      avatar: "",
-      fitnessGoal: "maintenance",
-      strength: 10,
-      agility: 10,
-      endurance: 10,
-      currentStamina: 100,
-      maxStamina: 100,
-      energyBoostRaidMultiplier: 1.0,
-      energyBoostXpMultiplier: 1.0,
+      avatar: "default_avatar",
+      totalLand: 0,
     );
-
-    await firestore.collection("players").doc(uid).set(player.toMap());
+    await firestore.collection("players").doc(user.uid).set(player.toMap());
   }
 
-  // =========================
-  // GET PLAYER
-  // =========================
-  Future<PlayerModel?> getPlayer(String uid) async {
-    try {
-      final doc = await firestore.collection("players").doc(uid).get();
-      if (!doc.exists) return null;
-      return PlayerModel.fromMap(doc.data() as Map<String, dynamic>);
-    } catch (e) {
-      return null;
-    }
-  }
-  // =========================
-  // FITNESS & ACTIVITY LOGIC
-  // =========================
-
-  /// Updates the player's personal fitness profile using the ML-driven adaptive engine
-  Future<void> updateFitnessProfile({
-    required String uid,
-    required double heightCm,
-    required double weightKg,
-    required String fitnessGoal,
-  }) async {
-    double heightM = heightCm / 100;
-    double bmi = weightKg / (heightM * heightM);
-
-    // Invoke ML Recommendation Engine (Heuristic)
-    final plan = ActivityModel.fromBmiAndGoal(bmi, fitnessGoal);
-
-    await firestore.collection("players").doc(uid).update({
-      "heightCm": heightCm,
-      "weightKg": weightKg,
-      "fitnessGoal": fitnessGoal,
-      "fitnessTier": plan.tier,
-      "restInterval": plan.restIntervalSeconds,
-      "energyBoostXpMultiplier": plan.xpMultiplier,
-      "energyBoostRaidMultiplier": plan.raidDamageMultiplier,
-      "lastUpdated": FieldValue.serverTimestamp(),
-    });
-    debugPrint("ML FITNESS PROFILE UPDATED: ${plan.tier} | Goal: $fitnessGoal");
-  }
-
-  Future<Map<String, dynamic>> syncTelemetry({
-    required String uid,
-    required int deltaSteps,
-    required int currentHardwareSteps,
-    required PlayerModel player,
-  }) async {
-    final now = DateTime.now();
-    final String todayKey = now.toIso8601String().split('T')[0];
-    final String hourKey = now.hour.toString().padLeft(2, '0');
-
-    // SECURITY: Ensure dailySteps and History always use the same delta
-    // to prevent the 16 vs 765 discrepancy.
-    final int safeDelta = deltaSteps;
-
-    final double calories = deltaSteps * GameplayRules.caloriesPerStep;
-    final double distance = deltaSteps * GameplayRules.distanceKmPerStep;
-
-    // The Step count remains 1x for physical accuracy
-    // But the XP Reward scales based on ML/Gear multipliers (the "Offer")
-    double xpMult = player.energyBoostXpMultiplier; // This is our 1.2x, 1.5x, etc.
-    final int xpGain = (deltaSteps ~/ 10 * xpMult).toInt();
-
-    final Map<String, dynamic> updates = {
-      "dailySteps": FieldValue.increment(deltaSteps),
-      "totalSteps": FieldValue.increment(deltaSteps),
-      "dailyCalories": FieldValue.increment(calories.toInt()),
-      "dailyDistance": FieldValue.increment(distance.toDouble()),
-      "lastHardwareStepCount": currentHardwareSteps,
-      "lastSyncTime": FieldValue.serverTimestamp(),
-      "hourlySteps.$hourKey": FieldValue.increment(deltaSteps),
-      "dailyHistory.$todayKey.steps": FieldValue.increment(deltaSteps),
-      "dailyHistory.$todayKey.calories": FieldValue.increment(calories.toInt()),
-      "dailyHistory.$todayKey.distance": FieldValue.increment(distance.toDouble()),
-      "dailyHistory.$todayKey.hourlySteps.$hourKey": FieldValue.increment(deltaSteps),
-    };
-
-    if (xpGain > 0) {
-      updates["xp"] = FieldValue.increment(xpGain);
-      updates["dailyHistory.$todayKey.xpGained"] = FieldValue.increment(xpGain);
-    }
-
-    await firestore.collection("players").doc(uid).update(updates);
-    
-    // NEW: Return the updated totals so the UI can refresh immediately
-    // and avoid the "16 steps" stale cache problem.
-    return updates;
-  }
-
-  Future<void> updateDailyPhysicalStats(String uid, int steps, double calories, double distance) async {
-    String todayKey = DateTime.now().toIso8601String().split('T')[0];
+  Future<void> updateSteps(String uid, int steps, double distance, int calories) async {
     await firestore.collection("players").doc(uid).update({
       "dailySteps": FieldValue.increment(steps),
       "totalSteps": FieldValue.increment(steps),
-      "dailyCalories": FieldValue.increment(calories.toInt()),
       "dailyDistance": FieldValue.increment(distance),
-      "lastSyncTime": FieldValue.serverTimestamp(),
-      "dailyHistory.$todayKey.steps": FieldValue.increment(steps),
-      "dailyHistory.$todayKey.calories": FieldValue.increment(calories.toInt()),
-      "dailyHistory.$todayKey.distance": FieldValue.increment(distance),
+      "dailyCalories": FieldValue.increment(calories),
+      "xp": FieldValue.increment(steps ~/ 10),
     });
   }
 
-  /// Logs the workout, applies XP bonus based on tier, and activates the energy boost buff
-  Future<void> logWorkoutAndEnergyBoost({
-    required String uid,
-    required int durationMinutes,
-    required String tier,
-    required double xpMultiplier,
-    required double raidMultiplier,
-    required List<String> exercises,
-  }) async {
-    final playerRef = firestore.collection("players").doc(uid);
+  Future<void> incrementXP({required String uid, required int xpToAdd}) async {
+    await firestore.collection("players").doc(uid).update({
+      "xp": FieldValue.increment(xpToAdd),
+    });
+  }
 
-    int bonusXp = (durationMinutes * 10 * xpMultiplier).toInt(); // 10 XP per minute base scaled by tier multiplier
+  Future<void> updateCurrency(String uid, int amount) async {
+    await firestore.collection("players").doc(uid).update({
+      "currency": FieldValue.increment(amount),
+    });
+  }
 
-    await firestore.runTransaction((transaction) async {
-      final snap = await transaction.get(playerRef);
-      if (!snap.exists) return;
+  Future<void> unlockAchievement(String uid, String achievementId) async {
+    await firestore.collection("players").doc(uid).update({
+      "unlockedAchievements": FieldValue.arrayUnion([achievementId]),
+    });
+    
+    // Log to activity feed
+    await firestore.collection("activity_feed").add({
+      "userId": uid,
+      "type": "achievement",
+      "itemId": achievementId,
+      "timestamp": FieldValue.serverTimestamp(),
+    });
+  }
 
-      final player = PlayerModel.fromMap(snap.data()!);
-      String todayKey = DateTime.now().toIso8601String().split('T')[0];
-
-      // Update XP, Log Activity, and set the 60-minute Energy Boost buff
-      final now = DateTime.now();
-      transaction.update(playerRef, {
-        "xp": FieldValue.increment(bonusXp),
-        "energyBoostRaidMultiplier": raidMultiplier,
-        "energyBoostXpMultiplier": xpMultiplier,
-        "lastActivityTimestamp": FieldValue.serverTimestamp(),
-        "activePowerUps.energy_boost": Timestamp.fromDate(
-            now.add(const Duration(minutes: 60))
-        ),
-        "dailyHistory.$todayKey.xpGained": FieldValue.increment(bonusXp),
-        "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion([
-          "WORKOUT: $tier ($durationMinutes min)",
-          if (player.bmi != null) "BMI AT SESSION: ${player.bmi!.toStringAsFixed(1)}",
-          "DRILLS COMPLETED: ${exercises.join(', ')}"
-        ]),
+  Future<void> saveWalkSession(WalkSessionModel session) async {
+    await firestore.collection("walk_sessions").add(session.toMap());
+    
+    // Update player's total land if session has many steps
+    if (session.steps > 1000) {
+      await firestore.collection("players").doc(session.userId).update({
+        "totalLand": FieldValue.increment(1),
       });
-    });
-
-    debugPrint("WORKOUT LOGGED: +$bonusXp XP (Mult: ${xpMultiplier}x). Drills: $exercises. Energy Boost Active.");
-  }
-  Future<void> ensurePlayerProfileExists(String uid, String email, String name) async {
-    final playerRef = firestore.collection("players").doc(uid);
-    final snapshot = await playerRef.get();
-
-    if (!snapshot.exists) {
-      // This creates the default document structure if it's missing
-      await createPlayer(uid: uid, name: name, email: email);
-      debugPrint("NEW PLAYER PROFILE CREATED FOR: $uid");
     }
   }
 
-  /// Checks if the user is currently under the 60-minute Energy Boost buff
-  Future<bool> isEnergyBoostActive(String uid) async {
-    final snap = await firestore.collection("players").doc(uid).get();
-    if (!snap.exists) return false;
-
-    final data = snap.data() as Map<String, dynamic>;
-    final powerUps = data["activePowerUps"] as Map<String, dynamic>? ?? {};
-    final expiry = powerUps["energy_boost"] as Timestamp?;
-
-    if (expiry == null) return false;
-    return expiry.toDate().isAfter(DateTime.now());
-  }
-
-  // =========================
-  // END FITNESS & ACTIVITY LOGIC
-  // =========================
-
-  // =========================
-  // PLAYER STREAM
-  // =========================
-  Stream<PlayerModel?> getPlayerStream(String uid) {
-    return firestore.collection("players").doc(uid).snapshots().map((doc) {
-      try {
-        if (!doc.exists) return null;
-        return PlayerModel.fromMap(doc.data()!);
-      } catch (e) {
-        return null;
-      }
+  Future<void> sendTacticalPing(String teamId, String channel, String message) async {
+    await firestore.collection("teams").doc(teamId).collection("pings").add({
+      "channel": channel,
+      "message": message,
+      "timestamp": FieldValue.serverTimestamp(),
     });
   }
 
-  // =========================
-  // UPDATE TEAM STATUS
-  // =========================
-  Future<void> updateTeamStatus({
-    required String uid,
-    required bool isInTeam,
-  }) async {
-    await firestore.collection("players").doc(uid).update({
-      "isInTeam": isInTeam,
-    });
-  }
-
-  // =========================
-  // UPDATE STEPS
-  // =========================
-  Future<void> updateSteps({
-    required String uid,
-    required int stepsToAdd,
-  }) async {
-    try {
-      final docRef = firestore.collection("players").doc(uid);
-      final snapshot = await docRef.get();
-      if (!snapshot.exists) return;
-
-      final player = PlayerModel.fromMap(snapshot.data()!);
-      double stepMult = player.getModifier('step_mult', allGear);
-      int finalSteps = (stepsToAdd * stepMult).round();
-
-      await docRef.update({
-        "totalSteps": FieldValue.increment(finalSteps),
-        "dailySteps": FieldValue.increment(finalSteps),
-        "dailyHistory.${DateTime.now().toIso8601String().split('T')[0]}.steps": FieldValue.increment(finalSteps),
-      });
-      debugPrint("STEPS UPDATED => +$finalSteps (Mult: $stepMult)");
-    } catch (e) {
-      debugPrint("STEP UPDATE ERROR => $e");
-    }
-  }
-
-  // =========================
-  // UPDATE HARDWARE BASELINE
-  // =========================
-  Future<void> updateLastHardwareSteps({
-    required String uid,
-    required int hardwareSteps,
-  }) async {
-    try {
-      await firestore.collection("players").doc(uid).update({
-        "lastHardwareStepCount": hardwareSteps,
-      });
-      debugPrint("HARDWARE BASELINE UPDATED => $hardwareSteps");
-    } catch (e) {
-      debugPrint("HARDWARE BASELINE UPDATE ERROR => $e");
-    }
-  }
-
-  // =========================
-  // UPDATE GHOST STRIDER TOGGLE
-  // =========================
-  Future<void> updateGhostStriderToggle(String uid, bool isActive) async {
-    await firestore.collection("players").doc(uid).update({
-      "isGhostStriderEnabled": isActive,
-    });
-  }
-
-  // =========================
-  // UPDATE LAND
-  // =========================
-  Future<void> updateLand({
-    required String uid,
-    required int totalLand,
-  }) async {
-    try {
-      await firestore.collection("players").doc(uid).update({
-        "totalLand": totalLand,
-      });
-      debugPrint("LAND UPDATED => $totalLand");
-    } catch (e) {
-      debugPrint("LAND UPDATE ERROR => $e");
-    }
-  }
-
-  // =========================
-  // UPDATE TRUST SCORE
-  // =========================
-  Future<void> updateTrustScore({
-    required String uid,
-    required int trustScore,
-  }) async {
-    await firestore.collection("players").doc(uid).update({
-      "trustScore": trustScore,
-    });
-  }
-
-  // =========================
-  // UPDATE XP & LEVEL
-  // =========================
-  Future<void> incrementXP({
-    required String uid,
-    required int xpToAdd,
-  }) async {
-    final docRef = firestore.collection("players").doc(uid);
-
-    await firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(docRef);
-      if (!snapshot.exists) return false;
-
-      final data = snapshot.data();
-      if (data == null) return false;
-      final player = PlayerModel.fromMap(data);
-      int currentXp = player.xp;
-      int currentLevel = player.level;
-
-      // Apply Gear XP Multiplier
-      double gearMult = player.getModifier('xp_mult', allGear);
-      int finalXpToAdd = (xpToAdd * gearMult).round();
-
-      // Apply XP Booster if active
-      if (player.activePowerUps.containsKey("boost")) {
-        DateTime expiry = player.activePowerUps["boost"]!;
-        if (expiry.isAfter(DateTime.now())) {
-          finalXpToAdd = (finalXpToAdd * 2);
-        }
-      }
-
-      // Apply Energy Boost if active
-      if (player.activePowerUps.containsKey("energy_boost")) {
-        DateTime expiry = player.activePowerUps["energy_boost"]!;
-        if (expiry.isAfter(DateTime.now())) {
-          finalXpToAdd = (finalXpToAdd * player.energyBoostXpMultiplier).round();
-        }
-      }
-
-      // BROADCAST XP GAIN FOR TEAM
-      if (player.isInTeam && player.teamId != null) {
-        transaction.set(
-            firestore.collection("teams").doc(player.teamId).collection("events").doc(),
-            {
-              "type": "XP_CONTRIBUTION",
-              "playerName": player.name,
-              "amount": finalXpToAdd,
-              "timestamp": FieldValue.serverTimestamp(),
-            }
-        );
-      }
-
-      int newXp = currentXp + finalXpToAdd;
-      int newLevel = (newXp ~/ 1000) + 1;
-
-      // Update daily history XP tracking
-      String todayKey = DateTime.now().toIso8601String().split('T')[0];
-
-      Map<String, dynamic> updates = {
-        "xp": newXp,
-        "dailyHistory.$todayKey.xpGained": FieldValue.increment(finalXpToAdd),
-      };
-
-      if (newLevel > currentLevel) {
-        updates["level"] = newLevel;
-        // Optionally log level up in achievements for that day
-        updates["dailyHistory.$todayKey.achievements"] = FieldValue.arrayUnion(["LEVEL UP: $newLevel"]);
-      }
-
-      transaction.update(docRef, updates);
-      debugPrint("XP INCREMENTED: $xpToAdd (Final: $finalXpToAdd) -> New XP: $newXp, Level: $newLevel");
-      return true; // Added return for transaction
-    });
-  }
-
-  // =========================
-  // UPDATE STREAK & RESET QUESTS
-  // =========================
-  Future<void> checkAndResetDailyStats(String uid) async {
-    final doc = await firestore.collection("players").doc(uid).get();
-    if (!doc.exists) return;
-
-    final data = doc.data()!;
-    final lastActiveDate = data["lastActiveDate"] != null
-        ? (data["lastActiveDate"] as Timestamp).toDate()
-        : null;
-    int currentStreak = data["streakCount"] ?? 0;
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    if (lastActiveDate == null) {
-      await firestore.collection("players").doc(uid).update({
-        "streakCount": 1,
-        "lastActiveDate": Timestamp.fromDate(today),
-        "claimedQuests": [],
-        "dailySteps": 0,
-        "dailyCalories": 0,
-        "dailyDistance": 0.0,
-        "currentStamina": 100,
-      });
-    } else {
-      final lastDate = DateTime(lastActiveDate.year, lastActiveDate.month, lastActiveDate.day);
-      final difference = today.difference(lastDate).inDays;
-
-      if (difference >= 1) {
-        // Archive yesterday's data into dailyHistory
-        String yesterdayKey = lastDate.toIso8601String().split('T')[0];
-        Map<String, dynamic> historyNode = {
-          "steps": data["dailySteps"] ?? 0,
-          "calories": data["dailyCalories"] ?? 0,
-          "distance": data["dailyDistance"] ?? 0.0,
-          "hourlySteps": data["hourlySteps"] ?? {},
-          "xpGained": 0, // In a real app, we'd track this throughout the day
-          "achievements": [], // Logic for daily achievement badges
-          "timestamp": Timestamp.fromDate(lastDate),
-        };
-
-        Map<String, dynamic> updates = {
-          "lastActiveDate": Timestamp.fromDate(today),
-          "claimedQuests": [],
-          "dailySteps": 0,
-          "dailyCalories": 0,
-          "dailyDistance": 0.0,
-          "currentStamina": 100,
-          "hourlySteps": {},
-          "dailyHistory.$yesterdayKey": historyNode,
-        };
-
-        if (difference == 1) {
-          updates["streakCount"] = currentStreak + 1;
-        } else {
-          updates["streakCount"] = 1;
-        }
-        await firestore.collection("players").doc(uid).update(updates);
-      }
-    }
-  }
-
-  // =========================
-  // CLAIM QUEST
-  // =========================
-  Future<void> claimQuestReward(String uid, String questId, int rewardXp) async {
-    final docRef = firestore.collection("players").doc(uid);
-
-    await firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(docRef);
-      if (!snapshot.exists) return;
-
-      final data = snapshot.data()!;
-      List<String> claimed = List<String>.from(data["claimedQuests"] ?? []);
-      int currentXp = data["xp"] ?? 0;
-      int currentLevel = data["level"] ?? 1;
-
-      if (!claimed.contains(questId)) {
-        claimed.add(questId);
-
-        int newXp = currentXp + rewardXp;
-        int newLevel = (newXp ~/ 1000) + 1;
-
-        String todayKey = DateTime.now().toIso8601String().split('T')[0];
-
-        Map<String, dynamic> updates = {
-          "claimedQuests": claimed,
-          "xp": newXp,
-          "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion(["QUEST COMPLETED: $questId"]),
-          "dailyHistory.$todayKey.xpGained": FieldValue.increment(rewardXp),
-        };
-
-        if (newLevel > currentLevel) {
-          updates["level"] = newLevel;
-          updates["dailyHistory.$todayKey.achievements"] = FieldValue.arrayUnion(["LEVEL UP: $newLevel"]);
-        }
-
-        transaction.update(docRef, updates);
-      }
-    });
-  }
-
-  // =========================
-  // UPDATE LEVEL
-  // =========================
-  Future<void> updateLevel({
-    required String uid,
-    required int level,
-  }) async {
-    await firestore.collection("players").doc(uid).update({
-      "level": level,
-    });
-  }
-
-  // =========================
-  // UPDATE AVATAR
-  // =========================
-  Future<void> updateAvatar({
-    required String uid,
-    required String avatarUrl,
-  }) async {
-    await firestore.collection("players").doc(uid).update({
-      "avatar": avatarUrl,
-    });
-  }
-
-  // =========================
-  // UPDATE PLAYER NAME
-  // =========================
-  Future<void> updatePlayerName({
-    required String uid,
-    required String name,
-  }) async {
-    await firestore.collection("players").doc(uid).update({
-      "name": name,
-    });
-  }
-
-  // =========================
-  // UPLOAD AVATAR FILE
-  // =========================
-  Future<String?> uploadAvatarFile(String uid, Uint8List fileBytes) async {
-    try {
-      final storageInstance = FirebaseStorage.instanceFor(
-        bucket: "gs://territory-game-462f9.firebasestorage.app",
-      );
-
-      final ref = storageInstance.ref().child("avatars").child("$uid.jpg");
-
-      UploadTask uploadTask = ref.putData(
-        fileBytes,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
-      TaskSnapshot snapshot = await uploadTask;
-
-      if (snapshot.state == TaskState.success) {
-        final url = await ref.getDownloadURL();
-        debugPrint("UPLOAD SUCCESS: $url");
-        return url;
-      } else {
-        debugPrint("UPLOAD FAILED: State is ${snapshot.state}");
-        return null;
-      }
-    } catch (e) {
-      debugPrint("UPLOAD ERROR TYPE: ${e.runtimeType}");
-      debugPrint("UPLOAD ERROR: $e");
-      return null;
-    }
-  }
-
-  // =========================
-  // LEADERBOARDS
-  // =========================
-  Stream<List<PlayerModel>> getLeaderboard() {
-    return firestore
-        .collection("players")
-        .orderBy("totalSteps", descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
-    });
-  }
-
-  Stream<List<PlayerModel>> getSoloLeaderboard() {
-    return firestore
-        .collection("players")
-        .orderBy("totalSteps", descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
-    });
-  }
-
-  Stream<List<PlayerModel>> getTeamLeaderboard(String teamName) {
-    return firestore
-        .collection("players")
-        .where("team", isEqualTo: teamName)
-        .snapshots()
-        .map((snapshot) {
-      final players = snapshot.docs
-          .map((doc) => PlayerModel.fromMap(doc.data()))
-          .toList();
-
-      players.sort((a, b) => b.totalSteps.compareTo(a.totalSteps));
-      return players;
-    });
-  }
-
-  Stream<List<TeamModel>> getTeamLeaderboardGlobal() {
-    return firestore
-        .collection("teams")
-        .orderBy("totalSteps", descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => TeamModel.fromMap(doc.data())).toList();
-    });
-  }
-
-  // =========================
-  // TEAM OPERATIONS
-  // =========================
   Stream<List<TeamModel>> getTeams() {
     return firestore.collection("teams").snapshots().map((snapshot) {
       return snapshot.docs.map((doc) => TeamModel.fromMap(doc.data())).toList();
     });
   }
 
-  Future<void> deleteTeam(String teamId) async {
-    // 1. Reset all members
-    var members = await firestore.collection("players").where("teamId", isEqualTo: teamId).get();
-    var batch = firestore.batch();
-    for (var doc in members.docs) {
-      batch.update(doc.reference, {
-        "team": "No Team",
-        "teamId": null,
-        "isInTeam": false,
-        "lastTeamAction": FieldValue.serverTimestamp(),
-      });
-    }
-
-    // 2. Delete team requests
-    var requests = await firestore.collection("team_requests").where("teamId", isEqualTo: teamId).get();
-    for (var doc in requests.docs) {
-      batch.delete(doc.reference);
-    }
-
-    // 3. Delete team document
-    batch.delete(firestore.collection("teams").doc(teamId));
-
-    await batch.commit();
-  }
-
-  Future<void> createTeam(TeamModel team) async {
-    await firestore.collection("teams").doc(team.id).set(team.toMap());
-
-    await firestore.collection("players").doc(team.leaderId).update({
-      "team": team.name,
-      "teamId": team.id,
-      "isInTeam": true,
-      "lastTeamAction": FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> joinTeam({
-    required String uid,
-    required String teamId,
-    required String teamName,
-  }) async {
-    await firestore.collection("players").doc(uid).update({
-      "team": teamName,
-      "teamId": teamId,
-      "isInTeam": true,
-    });
-  }
-
-  Future<void> leaveTeam({
-    required String uid,
-    required String teamId,
-  }) async {
-    await firestore.collection("players").doc(uid).update({
-      "team": "No Team",
-      "teamId": null,
-      "isInTeam": false,
-      "lastTeamAction": FieldValue.serverTimestamp(),
-    });
-
-    await firestore.collection("teams").doc(teamId).update({
-      "members": FieldValue.increment(-1),
-    });
-  }
-
-  Future<void> kickPlayer({
-    required String playerId,
-    required String teamId,
-  }) async {
-    await firestore.collection("players").doc(playerId).update({
-      "team": "No Team",
-      "teamId": null,
-      "isInTeam": false,
-      "lastTeamAction": FieldValue.serverTimestamp(),
-    });
-
-    await firestore.collection("teams").doc(teamId).update({
-      "members": FieldValue.increment(-1),
-    });
-  }
-
-  // =========================
-  // TEAM REQUESTS
-  // =========================
-  Future<void> sendJoinRequest(TeamRequestModel request) async {
-    await firestore.collection("team_requests").doc(request.requestId).set(request.toMap());
-  }
-
-  Stream<List<TeamRequestModel>> getTeamRequests(String teamId) {
-    return firestore
-        .collection("team_requests")
-        .where("teamId", isEqualTo: teamId)
-        .where("status", isEqualTo: "pending")
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => TeamRequestModel.fromMap(doc.data())).toList();
-    });
-  }
-
-  Future<void> acceptRequest({
-    required String requestId,
-    required String playerId,
-    required String teamId,
-    required String teamName,
-  }) async {
-    await firestore.collection("players").doc(playerId).update({
-      "team": teamName,
-      "teamId": teamId,
-      "isInTeam": true,
-      "lastTeamAction": FieldValue.serverTimestamp(),
-    });
-
-    await firestore.collection("team_requests").doc(requestId).update({
-      "status": "accepted",
-    });
-
-    await firestore.collection("teams").doc(teamId).update({
-      "members": FieldValue.increment(1),
-    });
-  }
-
-  Future<void> rejectRequest(String requestId) async {
-    await firestore.collection("team_requests").doc(requestId).update({
-      "status": "rejected",
-    });
-  }
-
-  // =========================
-  // HEX TILES
-  // =========================
-  Future<void> saveHexTile(HexTileModel tile) async {
-    try {
-      await firestore.collection("hex_tiles").doc(tile.tileId).set(tile.toMap());
-    } catch (e) {
-      debugPrint("FIREBASE ERROR = $e");
-    }
-  }
-
-  Stream<List<HexTileModel>> getHexTiles() {
-    return firestore.collection("hex_tiles").snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => HexTileModel.fromMap(doc.data())).toList();
-    });
-  }
-
-  Future<void> deleteHexTile(String tileId) async {
-    await firestore.collection("hex_tiles").doc(tileId).delete();
-  }
-
-  // =========================
-  // RPG MECHANICS
-  // =========================
-  Future<void> updateBiometrics({
-    required String uid,
-    required double heightCm,
-    required double weightKg,
-    required String fitnessGoal,
-    required int stepTarget,
-    required int exerciseTarget,
-  }) async {
-    double meters = heightCm / 100;
-    double bmi = weightKg / (meters * meters);
-
-    // RPG Stats Scaling based on BMI
-    int strength = 10;
-    int agility = 10;
-    int endurance = 10;
-    int maxStamina = 100;
-
-    if (bmi < 18.5) {
-      strength = 8; agility = 14; endurance = 10; maxStamina = 90;
-    } else if (bmi < 25.0) {
-      strength = 12; agility = 15; endurance = 12; maxStamina = 110;
-    } else if (bmi < 30.0) {
-      strength = 16; agility = 9; endurance = 14; maxStamina = 130;
-    } else {
-      strength = 20; agility = 6; endurance = 11; maxStamina = 140;
-    }
-
-    // Sync with ML Adaptive Engine
-    await updateFitnessProfile(
-      uid: uid,
-      heightCm: heightCm,
-      weightKg: weightKg,
-      fitnessGoal: fitnessGoal,
-    );
-
-    await firestore.collection("players").doc(uid).update({
-      "dailyStepTarget": stepTarget,
-      "dailyExerciseTargetMinutes": exerciseTarget,
-      "strength": strength,
-      "agility": agility,
-      "endurance": endurance,
-      "maxStamina": maxStamina,
-      "currentStamina": maxStamina,
-    });
-  }
-
-  Future<void> setCharacterClass(String uid, String className) async {
-    int strBonus = 0;
-    int agiBonus = 0;
-    int endBonus = 0;
-
-    if (className == 'tank') strBonus = 5;
-    if (className == 'scout') agiBonus = 5;
-    if (className == 'medic') endBonus = 5;
-
-    final docRef = firestore.collection("players").doc(uid);
-    await firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(docRef);
-      if (!snapshot.exists) return;
-
-      int currentStr = snapshot.data()?["strength"] ?? 10;
-      int currentAgi = snapshot.data()?["agility"] ?? 10;
-      int currentEnd = snapshot.data()?["endurance"] ?? 10;
-
-      transaction.update(docRef, {
-        "characterClass": className,
-        "strength": currentStr + strBonus,
-        "agility": currentAgi + agiBonus,
-        "endurance": currentEnd + endBonus,
-      });
-    });
-  }
-
-  Future<bool> consumeStamina(String uid, int amount) async {
-    final docRef = firestore.collection("players").doc(uid);
-    return firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(docRef);
-      if (!snapshot.exists) return false;
-
-      int current = snapshot.data()?["currentStamina"] ?? 0;
-      if (current < amount) return false;
-
-      transaction.update(docRef, {"currentStamina": current - amount});
-      return true;
-    });
-  }
-
-  Future<void> regenerateStamina(String uid) async {
-    final docRef = firestore.collection("players").doc(uid);
-    await firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(docRef);
-      if (!snapshot.exists) return;
-
-      final player = PlayerModel.fromMap(snapshot.data()!);
-
-      if (player.currentStamina < player.maxStamina) {
-        int effectiveEndurance = player.effectiveEndurance;
-        int regenAmount = (player.maxStamina * 0.01 + effectiveEndurance / 5).ceil();
-        transaction.update(docRef, {
-          "currentStamina": (player.currentStamina + regenAmount).clamp(0, player.maxStamina)
-        });
-      }
-    });
-  }
-
-  // =========================
-  // RAIDS
-  // =========================
-  Future<void> initializeRaid(String teamId, double bossHealth) async {
-    await firestore.collection("teams").doc(teamId).update({
-      "raidBossHp": bossHealth,
-      "raidExpiry": Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
-    });
-  }
-
-  /// Returns (success, defeated): `success` is whether the attack itself went
-  /// through (stamina available, not on cooldown, etc); `defeated` is whether
-  /// this attack was the one that brought the boss to 0 HP. Callers should use
-  /// `defeated` directly instead of re-deriving it from a locally-estimated
-  /// damage number, since the authoritative damage calculation (including
-  /// gear modifiers) only happens here, inside the transaction.
-  Future<(bool success, bool defeated)> executeTeamRaidAttack(String uid, String teamId) async {
+  /// Authoritative raid attack logic. Handles stamina, gear, and boss state.
+  Future<(bool success, bool defeated, bool primalSpirit)> executeTeamRaidAttack(String uid, String teamId) async {
     final playerRef = firestore.collection("players").doc(uid);
     final teamRef = firestore.collection("teams").doc(teamId);
 
@@ -953,9 +130,7 @@ class FirebaseService {
 
       final player = PlayerModel.fromMap(playerSnap.data()!);
 
-      // Check for a specific 'lastRaidAttack' field if it exists in data but not in model yet
       final rawLastAttack = (playerSnap.data()?["lastRaidAttack"] as Timestamp?)?.toDate();
-
       if (rawLastAttack != null && DateTime.now().difference(rawLastAttack).inMinutes < 5) {
         return {"success": false};
       }
@@ -967,6 +142,21 @@ class FirebaseService {
       double gearMult = player.getModifier('raid_dmg_mult', allGear);
       double strongholdBonus = (teamSnap.data()?["strongholdActive"] == true) ? 1.5 : 1.0;
 
+      // ELEMENTAL WEAKNESS LOGIC
+      double elementalMult = 1.0;
+      final bossId = teamSnap.data()?["raidBossId"] ?? "void_titan";
+      final bossConfig = bossPool.firstWhere((b) => b["id"] == bossId, orElse: () => bossPool[0]);
+      final weakness = bossConfig["weakness"];
+
+      String playerElement = "Physical";
+      if (player.characterClass == 'medic') playerElement = "Light";
+      if (player.characterClass == 'tank') playerElement = "Ice";
+      if (player.characterClass == 'scout') playerElement = "Earth";
+
+      if (playerElement == weakness) {
+        elementalMult = 2.0;
+      }
+
       // ENERGY BOOST BONUS
       double energyBoostMult = 1.0;
       if (player.activePowerUps.containsKey("energy_boost")) {
@@ -976,7 +166,39 @@ class FirebaseService {
         }
       }
 
-      double totalDmg = baseDmg * gearMult * strongholdBonus * energyBoostMult;
+      double totalDmg = baseDmg * gearMult * strongholdBonus * energyBoostMult * elementalMult;
+
+      // SYNERGY RESONANCE CALCULATION
+      Map<String, DateTime> resonance = Map<String, DateTime>.from(teamSnap.data()?["synergyResonance"] ?? {});
+      double synergyMult = 1.0;
+      int activeClasses = 0;
+      resonance.forEach((className, expiry) {
+        if (expiry.isAfter(DateTime.now())) {
+          synergyMult += 0.15; // +15% damage per active class resonance
+          activeClasses++;
+        }
+      });
+
+      // PRIMAL SPIRIT ULTIMATE LOGIC
+      bool primalSpiritTriggered = false;
+      if (activeClasses >= 3) {
+        int teamSize = (teamSnap.data()?["members"] as num?)?.toInt() ?? 1;
+        double triggerChance = GameplayRules.getBalancedPrimalSpiritTriggerChance(teamSize);
+        if (Random().nextDouble() < triggerChance) {
+          totalDmg *= GameplayRules.primalSpiritDamageMultiplier;
+          primalSpiritTriggered = true;
+        }
+      }
+
+      totalDmg *= synergyMult;
+
+      // Update resonance for current player class
+      if (player.characterClass != null) {
+        resonance[player.characterClass!] = DateTime.now().add(const Duration(minutes: 15));
+      }
+
+      Map<String, dynamic> resonanceToMap = {};
+      resonance.forEach((key, value) => resonanceToMap[key] = Timestamp.fromDate(value));
 
       transaction.update(playerRef, {
         "currentStamina": player.currentStamina - staminaCost,
@@ -991,136 +213,58 @@ class FirebaseService {
       transaction.update(teamRef, {
         "raidBossHp": newBossHp,
         "totalRaidDamage": FieldValue.increment(totalDmg),
+        "synergyResonance": resonanceToMap,
       });
 
-      // Log Damage Contribution for FCM Trigger
-      transaction.set(
-          firestore.collection("teams").doc(teamId).collection("events").doc(),
-          {
-            "type": "RAID_DAMAGE",
-            "playerName": player.name,
-            "damage": totalDmg,
-            "timestamp": FieldValue.serverTimestamp(),
-          }
-      );
-
       bool isDefeated = false;
-      String bossName = teamSnap.data()?["raidBossName"] ?? "GLITCH_COLOSSUS_V4";
-      double finalTotalDamage = (teamSnap.data()?["totalRaidDamage"] ?? 0.0) + totalDmg;
+      String bossName = bossConfig["name"];
 
-      // RAID DEFEATED LOGIC
       if (newBossHp <= 0) {
         isDefeated = true;
         final raidLogRef = teamRef.collection("raid_history").doc();
         transaction.set(raidLogRef, {
           "bossName": bossName,
           "timestamp": FieldValue.serverTimestamp(),
-          "totalDamage": finalTotalDamage,
+          "totalDamage": (teamSnap.data()?["totalRaidDamage"] ?? 0.0) + totalDmg,
           "victorName": player.name,
-          "lootDrops": ["RARE_CORE", "500_CREDITS"],
           "isSuccess": true,
         });
 
-        transaction.set(
-            firestore.collection("teams").doc(teamId).collection("events").doc("raid_victory"),
-            {
-              "type": "RAID_COMPLETED",
-              "victor": player.name,
-              "timestamp": FieldValue.serverTimestamp(),
-            }
-        );
-        // Distribute Team Rewards (Placeholder for scalable distribution)
+        // SPAWN NEXT BOSS FROM POOL
+        final nextBoss = bossPool[Random().nextInt(bossPool.length)];
         transaction.update(teamRef, {
-          "raidActive": false,
+          "raidBossId": nextBoss["id"],
+          "raidBossHp": nextBoss["maxHp"],
+          "raidActive": true,
+          "totalRaidDamage": 0.0,
           "lastVictory": FieldValue.serverTimestamp(),
-          "totalRaidDamage": 0.0, // Reset for next raid
         });
       }
 
       return {
         "success": true,
         "defeated": isDefeated,
-        "totalDamage": finalTotalDamage,
-        "bossName": bossName
+        "totalDamage": (teamSnap.data()?["totalRaidDamage"] ?? 0.0) + totalDmg,
+        "bossName": bossName,
+        "primalSpirit": primalSpiritTriggered
       };
     });
 
     if (result["success"] == true && result["defeated"] == true) {
       await distributeRaidRewards(
-          teamId: teamId,
-          totalDamage: result["totalDamage"] as double,
-          bossName: result["bossName"] as String
+        teamId: teamId,
+        totalDamage: result["totalDamage"] as double,
+        bossName: result["bossName"] as String
       );
     }
 
-    return (result["success"] == true, result["defeated"] == true);
+    return (
+      result["success"] == true, 
+      result["defeated"] == true, 
+      result["primalSpirit"] == true
+    );
   }
 
-  Future<void> contributeRaidDamage(String teamId, double damage) async {
-    final teamRef = firestore.collection("teams").doc(teamId);
-    final result = await firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(teamRef);
-      if (!snapshot.exists) return {"defeated": false};
-
-      double currentHp = (snapshot.data()?["raidBossHp"] ?? 100000.0).toDouble();
-      double newHp = (currentHp - damage).clamp(0.0, 1000000.0);
-      transaction.update(teamRef, {
-        "raidBossHp": newHp,
-      });
-
-      bool isDefeated = false;
-      double finalTotalDamage = (snapshot.data()?["totalRaidDamage"] ?? 0.0) + damage;
-      String bossName = snapshot.data()?["raidBossName"] ?? "GLITCH_COLOSSUS_V4";
-
-      // Periodic HP Sync log for broadcast
-      if (newHp % 500 < damage || newHp <= 0) {
-        transaction.set(
-            firestore.collection("teams").doc(teamId).collection("events").doc(newHp <= 0 ? "raid_victory" : "hp_sync"),
-            {
-              "type": newHp <= 0 ? "RAID_COMPLETED" : "BOSS_HP_SYNC",
-              "hp": newHp,
-              "timestamp": FieldValue.serverTimestamp(),
-            }
-        );
-      }
-
-      if (newHp <= 0) {
-        isDefeated = true;
-        final raidLogRef = teamRef.collection("raid_history").doc();
-        transaction.set(raidLogRef, {
-          "bossName": bossName,
-          "timestamp": FieldValue.serverTimestamp(),
-          "totalDamage": finalTotalDamage,
-          "victorName": "Team Effort",
-          "lootDrops": ["BASIC_SCRAP", "100_CREDITS"],
-          "isSuccess": true,
-        });
-
-        transaction.update(teamRef, {
-          "raidActive": false,
-          "lastVictory": FieldValue.serverTimestamp(),
-          "totalRaidDamage": 0.0,
-        });
-      }
-
-      return {
-        "defeated": isDefeated,
-        "totalDamage": finalTotalDamage,
-        "bossName": bossName
-      };
-    });
-
-    if (result["defeated"] == true) {
-      await distributeRaidRewards(
-          teamId: teamId,
-          totalDamage: result["totalDamage"] as double,
-          bossName: result["bossName"] as String
-      );
-    }
-  }
-
-  /// Distributes rewards to all participants of a defeated raid.
-  /// Scaled by their contribution to the total damage dealt.
   Future<void> distributeRaidRewards({
     required String teamId,
     required double totalDamage,
@@ -1143,35 +287,33 @@ class FirebaseService {
         final data = doc.data();
         final int playerDamage = (data["totalRaidDamage"] as num?)?.toInt() ?? 0;
 
-        // Calculate contribution ratio
         double ratio = totalDamage > 0 ? playerDamage / totalDamage : (1.0 / participantsQuery.docs.length);
         ratio = ratio.clamp(0.0, 1.0);
 
-        // RPG Reward Scaling
         int xpReward = (1000 * ratio).toInt() + 500;
         int currencyReward = (500 * ratio).toInt() + 250;
 
-        // Material Drop Logic
         Map<String, int> inventory = Map<String, int>.from(data["inventory"] ?? {});
-        List<String> lootTypes = ["Silicon", "Dark Energy", "Circuitry", "Plating"];
+        List<String> lootTypes = [
+          CraftingRecipes.materialSilicon,
+          CraftingRecipes.materialEnergyCore,
+          CraftingRecipes.materialNanites,
+        ];
 
-        // High contributors have better chances at rare drops
         int drops = 1;
         if (ratio > 0.3) drops = 2;
         if (ratio > 0.6) drops = 3;
 
         for (int i = 0; i < drops; i++) {
-          if (random.nextDouble() < 0.4) {
-            String item = lootTypes[random.nextInt(lootTypes.length)];
-            inventory[item] = (inventory[item] ?? 0) + 1;
-          }
+          String droppedMaterial = lootTypes[random.nextInt(lootTypes.length)];
+          inventory[droppedMaterial] = (inventory[droppedMaterial] ?? 0) + 1;
         }
 
         batch.update(doc.reference, {
           "xp": FieldValue.increment(xpReward),
           "currency": FieldValue.increment(currencyReward),
           "inventory": inventory,
-          "totalRaidDamage": 0, // RESET for next operation
+          "totalRaidDamage": 0,
           "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion(["RAID DEFEATED: $bossName"]),
         });
       }
@@ -1183,35 +325,6 @@ class FirebaseService {
     }
   }
 
-  Stream<List<RaidLog>> getRaidHistory(String teamId) {
-    return firestore
-        .collection("teams")
-        .doc(teamId)
-        .collection("raid_history")
-        .orderBy("timestamp", descending: true)
-        .limit(20)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => RaidLog.fromMap(doc.data(), doc.id)).toList();
-    });
-  }
-
-  // =========================
-  // CRAFTING & INVENTORY
-  // =========================
-  Future<void> addInventoryItem(String uid, String materialId, int count) async {
-    final docRef = firestore.collection("players").doc(uid);
-    await firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(docRef);
-      if (!snapshot.exists) return;
-
-      Map<String, int> inventory = Map<String, int>.from(snapshot.data()?["inventory"] ?? {});
-      inventory[materialId] = (inventory[materialId] ?? 0) + count;
-
-      transaction.update(docRef, {"inventory": inventory});
-    });
-  }
-
   Future<bool> craftGear(String uid, String gearId, Map<String, int> recipe) async {
     final docRef = firestore.collection("players").doc(uid);
     return firestore.runTransaction((transaction) async {
@@ -1219,7 +332,6 @@ class FirebaseService {
       if (!snapshot.exists) return false;
 
       Map<String, int> inv = Map<String, int>.from(snapshot.data()?["inventory"] ?? {});
-
       for (var entry in recipe.entries) {
         if ((inv[entry.key] ?? 0) < entry.value) return false;
       }
@@ -1251,104 +363,86 @@ class FirebaseService {
     });
   }
 
-  // =========================
-  // POWER-UPS & GEAR
-  // =========================
-  Future<void> purchasePowerUp({
-    required String uid,
-    required String powerUpId,
-    required int cost,
-    required Duration duration,
-  }) async {
+  Stream<List<RaidLog>> getRaidHistory(String teamId) {
+    return firestore
+        .collection("teams")
+        .doc(teamId)
+        .collection("raid_history")
+        .orderBy("timestamp", descending: true)
+        .limit(20)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => RaidLog.fromMap(doc.data(), doc.id)).toList();
+    });
+  }
+
+  Stream<List<WorldEventModel>> getWorldEvents() {
+    return firestore
+        .collection("world_events")
+        .where("isActive", isEqualTo: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => WorldEventModel.fromMap(doc.data(), doc.id)).toList();
+    });
+  }
+
+  Future<void> contributeToWorldEvent(String eventId, String teamId, String uid, {int bonus = 0}) async {
+    final playerRef = firestore.collection("players").doc(uid);
+    final eventRef = firestore.collection("world_events").doc(eventId);
+
+    await firestore.runTransaction((transaction) async {
+      final playerSnap = await transaction.get(playerRef);
+      if (!playerSnap.exists) return;
+
+      final player = PlayerModel.fromMap(playerSnap.data()!);
+      const int cost = GameplayRules.worldEventContributionCost;
+
+      if (player.currentStamina < cost) return;
+
+      transaction.update(playerRef, {
+        "currentStamina": player.currentStamina - cost,
+        "xp": FieldValue.increment(25 + (bonus * 10)),
+      });
+
+      transaction.update(eventRef, {
+        "teamContributions.$teamId": FieldValue.increment(1 + bonus),
+      });
+    });
+  }
+
+  Future<void> regenerateStamina(String uid) async {
     final docRef = firestore.collection("players").doc(uid);
     await firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(docRef);
       if (!snapshot.exists) return;
 
-      int currentCurrency = snapshot.data()?["currency"] ?? 0;
-      Map<String, dynamic> activePowerUps = Map<String, dynamic>.from(snapshot.data()?["activePowerUps"] ?? {});
+      int current = snapshot.data()?["currentStamina"] ?? 0;
+      int max = snapshot.data()?["maxStamina"] ?? GameplayRules.baseMaxStamina;
 
-      if (currentCurrency >= cost) {
-        DateTime baseTime = DateTime.now();
-        if (activePowerUps.containsKey(powerUpId)) {
-          Timestamp currentExpiryTs = activePowerUps[powerUpId] as Timestamp;
-          DateTime currentExpiry = currentExpiryTs.toDate();
-          if (currentExpiry.isAfter(baseTime)) {
-            baseTime = currentExpiry;
-          }
-        }
-
-        final expiryDate = baseTime.add(duration);
-        activePowerUps[powerUpId] = Timestamp.fromDate(expiryDate);
-
+      if (current < max) {
         transaction.update(docRef, {
-          "currency": currentCurrency - cost,
-          "activePowerUps": activePowerUps,
+          "currentStamina": (current + GameplayRules.passiveStaminaRegen).clamp(0, max),
         });
       }
     });
   }
 
-  Stream<List<GearModel>> getGear() {
-    return firestore.collection("gear").snapshots().map((snapshot) {
-      if (snapshot.docs.isEmpty) return allGear;
-      return snapshot.docs.map((doc) => GearModel.fromMap(doc.data())).toList();
+  Future<void> setCharacterClass(String uid, String className) async {
+    await firestore.collection("players").doc(uid).update({
+      "characterClass": className,
     });
   }
 
-  Future<void> purchaseGear(String uid, GearModel gear) async {
-    final docRef = firestore.collection("players").doc(uid);
-    await firestore.runTransaction((transaction) async {
-      final snap = await transaction.get(docRef);
-      if (!snap.exists) return;
-
-      int currentCurrency = snap.data()?["currency"] ?? 0;
-      List<String> owned = List<String>.from(snap.data()?["ownedGear"] ?? []);
-
-      if (currentCurrency >= gear.price && !owned.contains(gear.id)) {
-        owned.add(gear.id);
-        transaction.update(docRef, {
-          "currency": currentCurrency - gear.price,
-          "ownedGear": owned,
-        });
-      }
+  Stream<List<HexTileModel>> getHexTiles() {
+    return firestore.collection("hex_tiles").snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => HexTileModel.fromMap(doc.data())).toList();
     });
   }
 
-  Future<void> equipGear(String uid, GearModel gear) async {
-    final docRef = firestore.collection("players").doc(uid);
-    await firestore.runTransaction((transaction) async {
-      final snap = await transaction.get(docRef);
-      if (!snap.exists) return;
-
-      Map<String, String> equipped = Map<String, String>.from(snap.data()?["equippedGear"] ?? {});
-      equipped[gear.slot.toString().split('.').last] = gear.id;
-
-      transaction.update(docRef, {"equippedGear": equipped});
-    });
+  Future<void> saveHexTile(HexTileModel tile) async {
+    await firestore.collection("hex_tiles").doc(tile.tileId).set(tile.toMap());
   }
 
-  Future<void> updateTeamLand({
-    required String teamId,
-    required int totalLand,
-  }) async {
-    await firestore.collection("teams").doc(teamId).update({
-      "totalLand": totalLand,
-    });
-  }
-
-  Future<void> updateTeamSteps({
-    required String teamId,
-    required int stepsToAdd,
-  }) async {
-    await firestore.collection("teams").doc(teamId).update({
-      "totalSteps": FieldValue.increment(stepsToAdd),
-    });
-  }
-
-  // =========================
-  // BOUNTIES & EVENTS
-  // =========================
   Stream<List<BountyModel>> getActiveBounties() {
     return firestore
         .collection("bounties")
@@ -1359,147 +453,199 @@ class FirebaseService {
     });
   }
 
-  Future<void> claimBounty(String uid, BountyModel bounty) async {
-    final playerRef = firestore.collection("players").doc(uid);
-    final bountyRef = firestore.collection("bounties").doc(bounty.id);
-
-    await firestore.runTransaction((transaction) async {
-      final pSnap = await transaction.get(playerRef);
-      if (!pSnap.exists) return;
-
-      String todayKey = DateTime.now().toIso8601String().split('T')[0];
-      transaction.delete(bountyRef);
-      transaction.update(playerRef, {
-        "xp": FieldValue.increment(bounty.xpReward),
-        "dailyHistory.$todayKey.xpGained": FieldValue.increment(bounty.xpReward),
-        "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion(["BOUNTY CLAIMED: ${bounty.title}"]),
-      });
-
-      if (bounty.itemReward != null) {
-        List<String> owned = List<String>.from(pSnap.data()?["ownedGear"] ?? []);
-        if (!owned.contains(bounty.itemReward)) {
-          owned.add(bounty.itemReward!);
-          transaction.update(playerRef, {"ownedGear": owned});
-        }
-      }
-    });
-  }
-
-  Stream<GlobalEventModel?> getActiveGlobalEvent() {
-    return firestore
-        .collection("global_events")
-        .where("isActive", isEqualTo: true)
-        .limit(1)
-        .snapshots()
-        .map((snapshot) {
-      if (snapshot.docs.isEmpty) return null;
-      return GlobalEventModel.fromMap(
-        snapshot.docs.first.data(),
-        snapshot.docs.first.id,
-      );
-    });
-  }
-
   Stream<List<AnomalyModel>> getAnomalies() {
     return firestore.collection("anomalies").snapshots().map((snapshot) {
-      return snapshot.docs
-          .map((doc) => AnomalyModel.fromMap(doc.data(), doc.id))
-          .toList();
+      return snapshot.docs.map((doc) => AnomalyModel.fromMap(doc.data(), doc.id)).toList();
+    });
+  }
+
+  Stream<List<GearModel>> getGear() {
+    // Gear is currently static in allGear, but for consistency we'll return a stream
+    return Stream.value(allGear);
+  }
+
+  Future<void> claimBounty(String uid, BountyModel bounty) async {
+    final playerRef = firestore.collection("players").doc(uid);
+    await firestore.runTransaction((transaction) async {
+      final playerSnap = await transaction.get(playerRef);
+      if (!playerSnap.exists) return;
+
+      Map<String, dynamic> updates = {
+        "xp": FieldValue.increment(bounty.xpReward),
+      };
+
+      if (bounty.itemReward != null) {
+        updates["ownedGear"] = FieldValue.arrayUnion([bounty.itemReward!]);
+      }
+
+      transaction.update(playerRef, updates);
+      transaction.delete(firestore.collection("bounties").doc(bounty.id));
     });
   }
 
   Future<void> claimAnomaly(String uid, AnomalyModel anomaly) async {
     final playerRef = firestore.collection("players").doc(uid);
-    final anomalyRef = firestore.collection("anomalies").doc(anomaly.id);
-
     await firestore.runTransaction((transaction) async {
-      final pSnap = await transaction.get(playerRef);
-      if (!pSnap.exists) return;
+      final playerSnap = await transaction.get(playerRef);
+      if (!playerSnap.exists) return;
 
-      String todayKey = DateTime.now().toIso8601String().split('T')[0];
-      transaction.delete(anomalyRef);
+      Map<String, int> inventory = Map<String, int>.from(playerSnap.data()?["inventory"] ?? {});
+      int xpReward = 0;
 
-      Map<String, int> inventory = Map<String, int>.from(pSnap.data()?["inventory"] ?? {});
-      int xpToAdd = anomaly.rewards["XP"] ?? 0;
-
-      anomaly.rewards.forEach((key, value) {
-        if (key != "XP") {
-          inventory[key] = (inventory[key] ?? 0) + value;
+      anomaly.rewards.forEach((item, count) {
+        if (item == "XP") {
+          xpReward += count;
+        } else {
+          inventory[item] = (inventory[item] ?? 0) + count;
         }
       });
 
       transaction.update(playerRef, {
-        "xp": FieldValue.increment(xpToAdd),
         "inventory": inventory,
-        "dailyHistory.$todayKey.xpGained": FieldValue.increment(xpToAdd),
-        "dailyHistory.$todayKey.achievements": FieldValue.arrayUnion(["ANOMALY SECURED: ${anomaly.type}"]),
+        "xp": FieldValue.increment(xpReward),
       });
+      transaction.delete(firestore.collection("anomalies").doc(anomaly.id));
     });
   }
 
-  Future<void> contributeToGlobalEvent(int steps) async {
-    final query = await firestore
-        .collection("global_events")
-        .where("isActive", isEqualTo: true)
-        .limit(1)
-        .get();
-
-    if (query.docs.isNotEmpty) {
-      final docRef = query.docs.first.reference;
-      await docRef.update({
-        "currentSteps": FieldValue.increment(steps),
-      });
-    }
-  }
-
-  Future<void> updateCurrency(String uid, int amount) async {
-    await firestore.collection("players").doc(uid).update({
-      "currency": FieldValue.increment(amount),
-    });
-    debugPrint("CURRENCY UPDATED FOR $uid: +$amount");
-  }
-
-  // =========================
-  // MOVEMENT & STEPS
-  // =========================
-  Future<void> sendTacticalPing(String teamId, String sectorTileId, String message) async {
-    await firestore.collection("teams").doc(teamId).collection("pings").add({
-      "sector": sectorTileId,
-      "message": message,
-      "timestamp": FieldValue.serverTimestamp(),
-      "senderId": auth.currentUser?.uid,
-    });
-  }
-
-  Future<void> logHourlyActivity(String uid, int steps) async {
-    final now = DateTime.now();
-    String hourKey = now.hour.toString().padLeft(2, '0');
-    String todayKey = now.toIso8601String().split('T')[0];
-
+  Future<bool> consumeStamina(String uid, int amount) async {
     final docRef = firestore.collection("players").doc(uid);
-    await docRef.update({
-      "hourlySteps.$hourKey": FieldValue.increment(steps),
-      "dailyHistory.$todayKey.hourlySteps.$hourKey": FieldValue.increment(steps),
+    final success = await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return false;
+      int current = (snapshot.data()?["currentStamina"] as num?)?.toInt() ?? 0;
+      if (current < amount) return false;
+      transaction.update(docRef, {
+        "currentStamina": current - amount,
+      });
+      return true;
+    });
+    return success;
+  }
+
+  Future<void> updateLastHardwareSteps(String uid, int steps) async {
+    await firestore.collection("players").doc(uid).update({
+      "lastHardwareStepCount": steps,
     });
   }
 
-  Future<void> processSectorCapture(String uid, String teamId, String tileId) async {
-    final teamRef = firestore.collection("teams").doc(teamId);
-    await firestore.runTransaction((transaction) async {
-      final teamSnap = await transaction.get(teamRef);
-      List<dynamic> clusters = List.from(teamSnap.data()?["strongholdClusters"] ?? []);
+  Future<void> syncTelemetry(String uid, Map<String, int> telemetry) async {
+    await firestore.collection("players").doc(uid).update({
+      "hourlySteps": telemetry,
+      "lastSyncTime": FieldValue.serverTimestamp(),
+    });
+  }
 
-      if (clusters.length >= 4) {
-        transaction.update(teamRef, {
-          "strongholdActive": true,
-        });
-      }
+  Future<void> updateTeamSteps(String teamId, int steps) async {
+    await firestore.collection("teams").doc(teamId).update({
+      "totalSteps": FieldValue.increment(steps),
+    });
+  }
+
+  Future<void> contributeToGlobalEvent(String uid, int steps) async {
+    // Logic for global event contribution
+  }
+
+  Future<void> checkAndResetDailyStats(String uid) async {
+    // Logic to reset daily stats if it's a new day
+  }
+
+  Future<void> addInventoryItem(String uid, String item, int count) async {
+    final docRef = firestore.collection("players").doc(uid);
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+      Map<String, int> inventory = Map<String, int>.from(snapshot.data()?["inventory"] ?? {});
+      inventory[item] = (inventory[item] ?? 0) + count;
+      transaction.update(docRef, {"inventory": inventory});
+    });
+  }
+
+  Future<void> updatePlayerName(String uid, String name) async {
+    await firestore.collection("players").doc(uid).update({"name": name});
+  }
+
+  Future<void> updateTerritoryColor(String uid, String colorHex) async {
+    await firestore.collection("players").doc(uid).update({"territoryColor": colorHex});
+  }
+
+  Future<void> updateAvatar(String uid, String avatarId) async {
+    await firestore.collection("players").doc(uid).update({"avatar": avatarId});
+  }
+
+  Future<String> uploadAvatarFile(String uid, dynamic file) async {
+    return "uploaded_url";
+  }
+
+  Future<List<PlayerModel>> searchPlayers(String query) async {
+    final snapshot = await firestore.collection("players").where("name", isGreaterThanOrEqualTo: query).get();
+    return snapshot.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
+  }
+
+  Future<void> addFriend(String uid, String friendUid) async {
+    await firestore.collection("players").doc(uid).update({
+      "friends": FieldValue.arrayUnion([friendUid])
+    });
+  }
+
+  Future<void> removeFriend(String uid, String friendUid) async {
+    await firestore.collection("players").doc(uid).update({
+      "friends": FieldValue.arrayRemover([friendUid])
+    });
+  }
+
+  Future<void> equipGear(String uid, String slot, String gearId) async {
+    final docRef = firestore.collection("players").doc(uid);
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+      Map<String, String> equipped = Map<String, String>.from(snapshot.data()?["equippedGear"] ?? {});
+      equipped[slot] = gearId;
+      transaction.update(docRef, {"equippedGear": equipped});
+    });
+  }
+
+  Stream<List<PlayerModel>> getLeaderboard() {
+    return firestore
+        .collection("players")
+        .orderBy("totalSteps", descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
+    });
+  }
+
+  Future<void> kickPlayer({required String playerId, required String teamId}) async {
+    await firestore.runTransaction((transaction) async {
+      final playerRef = firestore.collection("players").doc(playerId);
+      final teamRef = firestore.collection("teams").doc(teamId);
+
+      transaction.update(playerRef, {
+        "isInTeam": false,
+        "teamId": null,
+        "team": "No Team",
+      });
 
       transaction.update(teamRef, {
-        "strongholdClusters": FieldValue.arrayUnion([tileId])
+        "members": FieldValue.increment(-1),
       });
     });
+  }
 
-    await sendTacticalPing(teamId, tileId, "Sector secured! Stronghold expansion in progress.");
+  Future<void> claimQuestReward(String uid, String questId, int xpReward) async {
+    final docRef = firestore.collection("players").doc(uid);
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+
+      List<String> claimed = List<String>.from(snapshot.data()?["claimedQuests"] ?? []);
+      if (claimed.contains(questId)) return;
+
+      transaction.update(docRef, {
+        "claimedQuests": FieldValue.arrayUnion([questId]),
+        "xp": FieldValue.increment(xpReward),
+      });
+    });
   }
 }

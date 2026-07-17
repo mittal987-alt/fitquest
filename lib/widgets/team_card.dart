@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
-
 import '../models/team_model.dart';
 
 class TeamCard extends StatelessWidget {
-
   final TeamModel team;
-
   final bool joined;
-
   final VoidCallback? onJoin;
   final VoidCallback? onTap;
 
@@ -21,96 +17,122 @@ class TeamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color teamColor = team.getTeamColor();
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(18),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.black.withValues(alpha: 0.05),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161B22),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: joined ? teamColor.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
+            width: joined ? 2 : 1,
+          ),
+          boxShadow: [
+            if (joined)
+              BoxShadow(
+                color: teamColor.withValues(alpha: 0.1),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // =====================
-          // TEAM ICON
-          // =====================
-          CircleAvatar(
-            radius: 30,
-            backgroundColor: team.getTeamColor().withValues(alpha: 0.1),
-            child: Icon(
-              Icons.groups,
-              color: team.getTeamColor(),
-              size: 30,
-            ),
-          ),
-          const SizedBox(width: 16),
-          // =====================
-          // TEAM INFO
-          // =====================
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  team.name,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "👥 ${team.members} Members",
-                  style: const TextStyle(
-                    color: Colors.black54,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  "👣 ${team.totalSteps} Steps",
-                  style: const TextStyle(
-                    color: Colors.black54,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // =====================
-          // JOIN BUTTON
-          // =====================
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: joined ? Colors.black.withValues(alpha: 0.05) : team.getTeamColor(),
-              foregroundColor: joined ? Colors.black54 : Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: teamColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.groups_rounded,
+                color: teamColor,
+                size: 28,
               ),
             ),
-            onPressed: joined ? null : onJoin,
-            child: Text(
-              joined ? "Joined" : "Join",
-              style: const TextStyle(fontWeight: FontWeight.w900),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    team.name.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: 12, color: Colors.white.withValues(alpha: 0.5)),
+                      const SizedBox(width: 4),
+                      Text(
+                        "${team.members}/${team.maxMembers}",
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(Icons.bolt_rounded, size: 12, color: Colors.white.withValues(alpha: 0.5)),
+                      const SizedBox(width: 4),
+                      Text(
+                        "${team.totalSteps} XP",
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+            if (!joined)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: teamColor.withValues(alpha: 0.1),
+                  foregroundColor: teamColor,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: teamColor.withValues(alpha: 0.3)),
+                  ),
+                ),
+                onPressed: onJoin,
+                child: const Text(
+                  "JOIN",
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: teamColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  "ACTIVE",
+                  style: TextStyle(
+                    color: teamColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

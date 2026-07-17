@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/firebase_service.dart';
-import '../services/notification_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'walk_summary_screen.dart';
+import '../models/walk_session_model.dart';
 import '../models/player_model.dart';
-import '../models/activity_model.dart';
-import '../widgets/rest_timer.dart';
+import '../services/firebase_service.dart';
+import '../services/pedometer_service.dart';
+import '../features/tactical/widgets/activity_heatmap.dart';
 
 class ActivityScreen extends StatefulWidget {
   final PlayerModel? player;
@@ -16,401 +20,425 @@ class ActivityScreen extends StatefulWidget {
 
 class _ActivityScreenState extends State<ActivityScreen> {
   final FirebaseService _service = FirebaseService();
-  final NotificationService _notifications = NotificationService();
-  ActivityModel? _activityModel;
-  bool isResting = false;
-  int currentLap = 1;
-  final int totalLaps = 3;
+  
+  // Timer state
+  Timer? _timer;
+  int _seconds = 0;
+  bool _isActive = true;
 
-  // NEW FEATURE: per-set exercise checklist. Tapping an exercise card marks
-  // it done; the set resets when the player moves on to the next set.
-  final Set<int> _completedExerciseIndices = {};
+  // Telemetry state
+  int _steps = 0;
+  double _distanceKm = 0.0;
+  double _calories = 0.0;
+  double _speedKmh = 0.0;
+  double _areaCapturedKm2 = 0.0;
+  final List<WalkMemory> _memories = [];
+  final ImagePicker _picker = ImagePicker();
+
+  // Map state
+  GoogleMapController? _mapController;
+  LatLng _currentPosition = const LatLng(0, 0);
+  final Set<Polygon> _hexPolygons = {};
+
+  static const Color _kPrimaryPurple = Color(0xFF8E2DE2);
+  static const Color _kSecondaryPurple = Color(0xFF4A00E0);
+  static const Color _kBgColor = Color(0xFF0D1117);
+  static const Color _kSurfaceColor = Color(0xFF161B22);
 
   @override
   void initState() {
     super.initState();
-    if (widget.player != null) {
-      _activityModel = ActivityModel.fromBmiAndGoal(widget.player?.bmi, widget.player?.fitnessGoal);
-    }
-  }
-
-  void _toggleExerciseComplete(int index) {
-    setState(() {
-      if (_completedExerciseIndices.contains(index)) {
-        _completedExerciseIndices.remove(index);
-      } else {
-        _completedExerciseIndices.add(index);
+    _startTimer();
+    _initLocation();
+    // Simulated initial data increment
+    _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (_isActive) {
+        setState(() {
+          _steps += 5 + (timer.tick % 3);
+          _distanceKm += 0.005;
+          _calories += 0.3;
+          _speedKmh = 5.0 + (timer.tick % 2 == 0 ? 0.2 : -0.2);
+          _areaCapturedKm2 += 0.0001;
+        });
       }
     });
   }
 
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_isActive) {
+        setState(() {
+          _seconds++;
+        });
+      }
+    });
+  }
+
+  Future<void> _initLocation() async {
+    final pos = await Geolocator.getCurrentPosition();
+    setState(() {
+      _currentPosition = LatLng(pos.latitude, pos.longitude);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _formatTime(int seconds) {
+    int h = seconds ~/ 3600;
+    int m = (seconds % 3600) ~/ 60;
+    int s = seconds % 60;
+    return "${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (widget.player != null) {
-      return _buildContent(widget.player!, _activityModel!);
-    }
-
-    // If player not provided, fetch it using StreamBuilder
-    final uid = _service.auth.currentUser?.uid;
-    if (uid == null) {
-      return const Scaffold(body: Center(child: Text("NOT LOGGED IN")));
-    }
-
-    return StreamBuilder<PlayerModel?>(
-      stream: _service.getPlayerStream(uid),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0D1117),
-            body: Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
-          );
-        }
-        final player = snapshot.data!;
-        _activityModel ??= ActivityModel.fromBmiAndGoal(player.bmi, player.fitnessGoal);
-        return _buildContent(player, _activityModel!);
-      },
-    );
-  }
-
-  Widget _buildContent(PlayerModel player, ActivityModel activityModel) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          "SESSION: ${activityModel.tier}",
-          style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 16),
-        ),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            _buildProgressIndicator(),
-            const SizedBox(height: 32),
-            _buildStatusHeader(player, activityModel),
-            const SizedBox(height: 32),
-            _buildTimerSection(activityModel),
-            const SizedBox(height: 24),
-            _buildInstructionList(activityModel),
-            const SizedBox(height: 48),
-            _buildActionButtons(player, activityModel),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProgressIndicator() {
-    double progress = currentLap / totalLaps;
-    return Column(
-      children: [
-        Text("LAP $currentLap / $totalLaps", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        // NOTE: this was previously built but never placed in the widget
-        // tree at all — wired it in here instead of leaving it as dead code.
-        _buildLapCounter(),
-        const SizedBox(height: 12),
-        LinearProgressIndicator(value: progress, color: Colors.blueAccent, backgroundColor: Colors.white10),
-      ],
-    );
-  }
-
-  // NEW FEATURE: tappable exercise checklist with a live completion count.
-  Widget _buildInstructionList(ActivityModel model) {
-    final int completedCount = _completedExerciseIndices.length;
-    final int totalCount = model.exerciseGuide.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              "EXERCISE CHECKLIST",
-              style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1),
-            ),
-            Text(
-              "$completedCount / $totalCount DONE",
-              style: TextStyle(
-                color: completedCount == totalCount ? Colors.greenAccent : Colors.white54,
-                fontWeight: FontWeight.bold,
-                fontSize: 11,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: model.exerciseGuide.length,
-          itemBuilder: (context, index) {
-            final ex = model.exerciseGuide[index];
-            final bool isDone = _completedExerciseIndices.contains(index);
-
-            return Card(
-              color: isDone ? Colors.greenAccent.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.05),
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: ListTile(
-                onTap: () => _toggleExerciseComplete(index),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                leading: Icon(
-                  isDone ? Icons.check_circle_rounded : Icons.check_circle_outline,
-                  color: isDone ? Colors.greenAccent : Colors.blueAccent,
-                ),
-                title: Text(
-                  ex['name']!,
-                  style: TextStyle(
-                    color: isDone ? Colors.white38 : Colors.white,
-                    fontWeight: FontWeight.bold,
-                    decoration: isDone ? TextDecoration.lineThrough : TextDecoration.none,
-                  ),
-                ),
-                subtitle: Text(
-                  ex['tip']!,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusHeader(PlayerModel player, ActivityModel model) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection("players").doc(player.uid).snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-        final powerUps = data["activePowerUps"] as Map<String, dynamic>? ?? {};
-        final expiry = powerUps["energy_boost"] as Timestamp?;
-        final bool isRecharging = expiry != null && expiry.toDate().isAfter(DateTime.now());
-
-        return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: isRecharging ? Colors.blueAccent.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: isRecharging ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.white10,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.bolt_rounded,
-                color: isRecharging ? Colors.blueAccent : Colors.white24,
-                size: 32,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isRecharging ? "ENERGY BOOST ACTIVE" : "BOOST INACTIVE",
-                      style: TextStyle(
-                        color: isRecharging ? Colors.blueAccent : Colors.orangeAccent,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      isRecharging
-                          ? "BOOST ACTIVE: ${model.xpMultiplier}x XP Multiplier + ${model.raidDamageMultiplier}x Raid Bonus."
-                          : "Complete session to activate the ${model.tier} Energy Boost bonus.",
-                      style: const TextStyle(color: Colors.white70, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLapCounter() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(totalLaps, (index) {
-        final bool isDone = index < currentLap - 1;
-        final bool isCurrent = index == currentLap - 1;
-        return Container(
-          width: 60,
-          height: 4,
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: isDone
-                ? Colors.greenAccent
-                : (isCurrent ? Colors.blueAccent : Colors.white10),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildTimerSection(ActivityModel model) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      child: Column(
+      backgroundColor: _kBgColor,
+      body: Stack(
         children: [
-          Text(
-            isResting ? "REST BREAK" : "ACTIVE EXERCISE",
-            style: TextStyle(
-              color: isResting ? Colors.amberAccent : Colors.greenAccent,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 2,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (isResting)
-            Column(
+          SafeArea(
+            child: Column(
               children: [
-                RestTimer(
-                  initialSeconds: model.restIntervalSeconds,
-                  onTimerFinished: () {
-                    _notifications.showLocalNotification(
-                      title: "REST BREAK COMPLETE",
-                      body: "Start next set immediately. Stay focused.",
-                    );
-                    setState(() {
-                      isResting = false;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                // NEW FEATURE: lets the player end the rest break early
-                // instead of being forced to wait out the full timer.
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      isResting = false;
-                    });
-                  },
-                  child: const Text(
-                    "SKIP REST →",
-                    style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 1, fontSize: 12),
+                _buildHeader(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        _buildTimerDisplay(),
+                        const SizedBox(height: 32),
+                        _buildMainStats(),
+                        const SizedBox(height: 24),
+                        if (widget.player != null) ...[
+                          _buildHeatmapCard(widget.player!),
+                          const SizedBox(height: 24),
+                        ],
+                        _buildSecondaryStatsGrid(),
+                        const SizedBox(height: 40),
+                        _buildActionButtons(),
+                        const SizedBox(height: 100), // Space for mini map
+                      ],
+                    ),
                   ),
                 ),
               ],
-            )
-          else
-            Column(
-              children: [
-                const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 64),
-                const SizedBox(height: 16),
-                Text(
-                  "${model.durationMinutes ~/ totalLaps} MIN PER SET",
-                  style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
-                ),
-                Text(
-                  "TIER: ${model.tier}",
-                  style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, letterSpacing: 1),
-                ),
-              ],
             ),
+          ),
+          _buildMiniMap(),
         ],
       ),
     );
   }
 
-  Widget _buildActionButtons(PlayerModel player, ActivityModel model) {
+  Widget _buildHeatmapCard(PlayerModel player) {
+    final pedometerService = PedometerService();
+    final Map<String, int> historicalBaseline = pedometerService.generateHistoricalBaseline(player.dailyHistory);
+    // Use historical baseline if available, fallback to hardcoded map or service defaults
+    final Map<String, int> baseline = (historicalBaseline.isNotEmpty) ? historicalBaseline : player.hourlySteps;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _kSurfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "ACTIVITY INTENSITY",
+            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1),
+          ),
+          const SizedBox(height: 16),
+          ActivityHeatmap(
+            hourlySteps: player.hourlySteps,
+            ghostBaseline: pedometerService.compileGhostBaseline(baseline),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+          ),
+          const Text(
+            "SESSION IN PROGRESS",
+            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2),
+          ),
+          const SizedBox(width: 48), // Spacer
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimerDisplay() {
     return Column(
       children: [
-        if (!isResting && currentLap < totalLaps)
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => setState(() {
-                isResting = true;
-                currentLap++;
-                _completedExerciseIndices.clear();
-              }),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              child: const Text(
-                "NEXT SET",
-                style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
-              ),
-            ),
+        Text(
+          _formatTime(_seconds),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 64,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -2,
+            fontFamily: 'monospace',
           ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: TextButton(
-            onPressed: () => _completeSession(player, model),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Colors.greenAccent, width: 2),
-              ),
-            ),
-            child: const Text(
-              "COMPLETE SESSION",
-              style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w900, letterSpacing: 1),
-            ),
-          ),
+        ),
+        const Text(
+          "ELAPSED MISSION TIME",
+          style: TextStyle(color: _kPrimaryPurple, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 2),
         ),
       ],
     );
   }
 
-  Future<void> _completeSession(PlayerModel player, ActivityModel model) async {
-    try {
-      // Clear previous expiry notification if re-upping the buff
-      await _notifications.cancelNotification(101);
-
-      await _service.logWorkoutAndEnergyBoost(
-        uid: player.uid,
-        durationMinutes: model.durationMinutes,
-        tier: model.tier,
-        xpMultiplier: model.xpMultiplier,
-        raidMultiplier: model.raidDamageMultiplier,
-        exercises: const ["Fitness Training"],
-      );
-
-      // Schedule notification for boost expiry (60 mins)
-      await _notifications.scheduleNotification(
-        id: 101,
-        title: "ENERGY BOOST EXPIRED",
-        body: "Your ${model.tier} multiplier (${model.xpMultiplier}x XP / ${model.raidDamageMultiplier}x Damage) has faded. Start a new session to reactivate.",
-        scheduledDate: DateTime.now().add(const Duration(minutes: 60)),
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("ENERGY BOOST ACTIVATED. XP GAINS INCREASED."),
-            backgroundColor: Colors.blueAccent,
+  Widget _buildMainStats() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
+      decoration: BoxDecoration(
+        color: _kSurfaceColor,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        boxShadow: [
+          BoxShadow(color: _kPrimaryPurple.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.directions_walk_rounded, color: _kPrimaryPurple, size: 32),
+          const SizedBox(height: 12),
+          Text(
+            "👣 $_steps",
+            style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w900),
           ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent),
-        );
-      }
+          const Text(
+            "TOTAL STEPS CAPTURED",
+            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSecondaryStatsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 1.5,
+      children: [
+        _secondaryStatTile("📏 DISTANCE", "${_distanceKm.toStringAsFixed(1)} KM", Colors.blueAccent),
+        _secondaryStatTile("🔥 CALORIES", "${_calories.toInt()} KCAL", Colors.orangeAccent),
+        _secondaryStatTile("🚶 SPEED", "${_speedKmh.toStringAsFixed(1)} KM/H", Colors.cyanAccent),
+        _secondaryStatTile("🟩 CAPTURED", "${_areaCapturedKm2.toStringAsFixed(3)} KM²", Colors.greenAccent),
+      ],
+    );
+  }
+
+  Widget _secondaryStatTile(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _kSurfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _actionButton(
+                "SNAP MEMORY",
+                Icons.camera_alt_rounded,
+                Colors.cyanAccent.withValues(alpha: 0.1),
+                _takePhoto,
+                textColor: Colors.cyanAccent,
+                borderColor: Colors.cyanAccent,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _isActive
+                  ? _actionButton(
+                      "PAUSE",
+                      Icons.pause_rounded,
+                      Colors.white10,
+                      () => setState(() => _isActive = false),
+                    )
+                  : _actionButton(
+                      "RESUME",
+                      Icons.play_arrow_rounded,
+                      _kPrimaryPurple,
+                      () => setState(() => _isActive = true),
+                    ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _actionButton(
+                "FINISH WALK",
+                Icons.stop_rounded,
+                Colors.redAccent.withValues(alpha: 0.1),
+                _finishWalk,
+                textColor: Colors.redAccent,
+                borderColor: Colors.redAccent,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _takePhoto() async {
+    final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
+    if (photo != null) {
+      // In a real app, you'd upload this to Firebase Storage first
+      // For now, we'll just track it locally for the summary
+      final pos = await Geolocator.getCurrentPosition();
+      setState(() {
+        _memories.add(WalkMemory(
+          imageUrl: photo.path, // Local path for preview
+          caption: "Captured at ${_formatTime(_seconds)}",
+          timestamp: DateTime.now(),
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+        ));
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("MEMORY CAPTURED!"), backgroundColor: Colors.cyan),
+      );
     }
   }
+
+  Widget _actionButton(String label, IconData icon, Color bgColor, VoidCallback onTap, {Color textColor = Colors.white, Color? borderColor}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor ?? Colors.white.withValues(alpha: 0.1), width: 2),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: textColor, size: 20),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniMap() {
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        height: 180,
+        width: double.infinity,
+        margin: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: _kSurfaceColor,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: _kPrimaryPurple.withValues(alpha: 0.3), width: 2),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: Stack(
+            children: [
+              GoogleMap(
+                initialCameraPosition: CameraPosition(target: _currentPosition, zoom: 15),
+                onMapCreated: (c) => _mapController = c,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                mapToolbarEnabled: false,
+                polygons: _hexPolygons,
+                style: _mapStyle, // Use a dark map style string
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.gps_fixed_rounded, color: _kPrimaryPurple, size: 14),
+                    SizedBox(width: 8),
+                    Text("LIVE TELEMETRY FEED", style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _finishWalk() async {
+    _timer?.cancel();
+    
+    final session = WalkSessionModel(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      userId: _service.auth.currentUser?.uid ?? "",
+      startTime: DateTime.now().subtract(Duration(seconds: _seconds)),
+      endTime: DateTime.now(),
+      steps: _steps,
+      distanceKm: _distanceKm,
+      memories: _memories,
+    );
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WalkSummaryScreen(session: session),
+      ),
+    );
+  }
+
+  static const String _mapStyle = "[{\"featureType\":\"all\",\"elementType\":\"labels.text.fill\",\"stylers\":[{\"color\":\"#ffffff\"},{\"weight\":\"0.20\"},{\"lightness\":\"28\"},{\"visibility\":\"on\"},{\"brightness\":\"-27\"}]},{\"featureType\":\"all\",\"elementType\":\"labels.text.stroke\",\"stylers\":[{\"visibility\":\"on\"},{\"color\":\"#212121\"},{\"lightness\":16}]},{\"featureType\":\"all\",\"elementType\":\"labels.icon\",\"stylers\":[{\"visibility\":\"off\"}]},{\"featureType\":\"administrative\",\"elementType\":\"geometry.fill\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":20}]},{\"featureType\":\"administrative\",\"elementType\":\"geometry.stroke\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":17},{\"weight\":1.2}]},{\"featureType\":\"landscape\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":20}]},{\"featureType\":\"poi\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":21}]},{\"featureType\":\"road.highway\",\"elementType\":\"geometry.fill\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":17}]},{\"featureType\":\"road.highway\",\"elementType\":\"geometry.stroke\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":29},{\"weight\":0.2}]},{\"featureType\":\"road.arterial\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":18}]},{\"featureType\":\"road.local\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":16}]},{\"featureType\":\"transit\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":19}]},{\"featureType\":\"water\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#000000\"},{\"lightness\":17}]}]";
 }

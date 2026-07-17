@@ -83,6 +83,7 @@ class PedometerService {
   Timer? _simulationTimer;
   StreamSubscription<StepCount>? _hardwareSubscription;
   DateTime _lastStepTime = DateTime.now().subtract(const Duration(minutes: 5));
+  bool _isPaused = false;
 
   // Public streams exposed to the application architecture
   Stream<int> get stepStream => _stepStreamController.stream;
@@ -91,6 +92,12 @@ class PedometerService {
 
   int get todayCumulativeSteps => _todayCumulativeSteps;
   int get steps => _todayCumulativeSteps;
+  bool get isPaused => _isPaused;
+
+  void setPaused(bool paused) {
+    _isPaused = paused;
+    debugPrint("[PEDOMETER] Tracking ${paused ? 'PAUSED (Anti-Cheat)' : 'RESUMED'}");
+  }
 
   /// Computes the live GhostStatus relative to a baseline.
   /// Interpolates the current hour's target steps based on minutes elapsed.
@@ -239,6 +246,8 @@ class PedometerService {
 
   /// Safely records newly registered walking steps into live cumulative pools.
   void registerSteps(int stepsCount, {PlayerModel? playerContext}) {
+    if (_isPaused) return; // Anti-Cheat Block
+
     _todayCumulativeSteps += stepsCount;
     _lastStepTime = DateTime.now();
     _stepStreamController.add(_todayCumulativeSteps);

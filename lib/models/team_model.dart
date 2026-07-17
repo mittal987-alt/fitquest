@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TeamModel {
   final String id;
@@ -13,6 +14,8 @@ class TeamModel {
   final String logo;
   final List<String> strongholdClusters;
   final double raidBossHp;
+  final String? raidBossId;
+  final Map<String, DateTime> synergyResonance; // Class -> Expiry
 
   TeamModel({
     required this.id,
@@ -27,23 +30,25 @@ class TeamModel {
     required this.logo,
     this.strongholdClusters = const [],
     this.raidBossHp = 100000.0,
+    this.raidBossId,
+    this.synergyResonance = const {},
   });
 
   // =========================
   // FROM FIREBASE
   // =========================
   factory TeamModel.fromMap(Map<String, dynamic> map) {
+    Map<String, DateTime> resonance = {};
+    if (map["synergyResonance"] != null) {
+      (map["synergyResonance"] as Map<String, dynamic>).forEach((key, value) {
+        if (value is Timestamp) resonance[key] = value.toDate();
+      });
+    }
+
     return TeamModel(
       id: map["id"] ?? "",
       name: map["name"] ?? "",
       color: map["color"] ?? "blue",
-      // FIX: was `map["members"] ?? 0` etc, assuming Firestore always hands
-      // back an int. leaderboard_screen.dart's efficiency calc
-      // (team.totalSteps / team.members) and firebase_service.dart's
-      // FieldValue.increment(-1)/(1) calls on "members" make a stray double
-      // unlikely in practice, but this matches the safe-cast pattern already
-      // applied to hex_tile_model.dart and daily_history_screen.dart for the
-      // same class of risk.
       members: (map["members"] as num?)?.toInt() ?? 0,
       maxMembers: (map["maxMembers"] as num?)?.toInt() ?? 50,
       totalSteps: (map["totalSteps"] as num?)?.toInt() ?? 0,
@@ -55,6 +60,8 @@ class TeamModel {
           ? List<String>.from(map["strongholdClusters"])
           : const [],
       raidBossHp: (map["raidBossHp"] ?? 100000.0).toDouble(),
+      raidBossId: map["raidBossId"]?.toString(),
+      synergyResonance: resonance,
     );
   }
 
@@ -62,6 +69,11 @@ class TeamModel {
   // TO FIREBASE
   // =========================
   Map<String, dynamic> toMap() {
+    Map<String, Timestamp> resonance = {};
+    synergyResonance.forEach((key, value) {
+      resonance[key] = Timestamp.fromDate(value);
+    });
+
     return {
       "id": id,
       "name": name,
@@ -75,6 +87,8 @@ class TeamModel {
       "strongholdActive": strongholdActive,
       "strongholdClusters": strongholdClusters,
       "raidBossHp": raidBossHp,
+      "raidBossId": raidBossId,
+      "synergyResonance": resonance,
     };
   }
 

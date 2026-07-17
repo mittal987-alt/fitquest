@@ -56,6 +56,42 @@ class CraftingRecipes {
       apCraftingCost: 20,
       activeDuration: Duration(hours: 1),
     ),
+    CraftingRecipe(
+      recipeId: "recipe_titan_greaves",
+      resultItemId: "titan_greaves",
+      resultName: "TITAN GREAVES",
+      requiredMaterials: {
+        materialSilicon: 15,
+        materialEnergyCore: 5,
+        materialNanites: 5,
+      },
+      apCraftingCost: 50,
+      activeDuration: Duration.zero,
+    ),
+    CraftingRecipe(
+      recipeId: "recipe_overseer_eye",
+      resultItemId: "overseer_eye",
+      resultName: "OVERSEER EYE",
+      requiredMaterials: {
+        materialSilicon: 10,
+        materialEnergyCore: 10,
+        materialNanites: 5,
+      },
+      apCraftingCost: 60,
+      activeDuration: Duration.zero,
+    ),
+    CraftingRecipe(
+      recipeId: "recipe_quantum_comm",
+      resultItemId: "quantum_comm",
+      resultName: "QUANTUM COMM",
+      requiredMaterials: {
+        materialSilicon: 5,
+        materialEnergyCore: 8,
+        materialNanites: 12,
+      },
+      apCraftingCost: 70,
+      activeDuration: Duration.zero,
+    ),
   ];
 
   /// Checks if a player has the required inventory components to craft a recipe

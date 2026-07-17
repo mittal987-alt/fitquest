@@ -69,7 +69,7 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFF0D1117),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -78,12 +78,12 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
             children: [
               const Text(
                 "CHOOSE YOUR CLASS",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: Colors.black87),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: Colors.white),
               ),
               const SizedBox(height: 8),
               const Text(
                 "Pick the role that fits your playstyle. This sets your starting stats and special perks.",
-                style: TextStyle(color: Colors.black45, fontSize: 13),
+                style: TextStyle(color: Colors.white54, fontSize: 13),
               ),
               const SizedBox(height: 32),
               Expanded(
@@ -99,10 +99,10 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: const Color(0xFF161B22),
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: isSelected ? item['color'] : Colors.black.withValues(alpha: 0.05),
+                            color: isSelected ? item['color'] : Colors.white.withValues(alpha: 0.05),
                             width: 2,
                           ),
                           boxShadow: [
@@ -131,12 +131,12 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
                                 children: [
                                   Text(
                                     item['name'],
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 1),
+                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 1, color: Colors.white),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     item['description'],
-                                    style: const TextStyle(fontSize: 11, color: Colors.black54, height: 1.4),
+                                    style: const TextStyle(fontSize: 11, color: Colors.white54, height: 1.4),
                                   ),
                                   const SizedBox(height: 12),
                                   Row(
@@ -165,12 +165,20 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              SizedBox(
+              Container(
                 width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: selectedClass == null || loading 
+                      ? null 
+                      : const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
+                  borderRadius: BorderRadius.circular(20),
+                  color: selectedClass == null || loading ? Colors.white10 : null,
+                ),
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black87,
+                    backgroundColor: Colors.transparent,
                     foregroundColor: Colors.white,
+                    shadowColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     elevation: 0,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/player_model.dart';
@@ -22,7 +23,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
     if (user == null) {
       return const Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Color(0xFF0D1117),
         body: Center(
           child: Text(
             "User Not Logged In",
@@ -37,15 +38,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       builder: (context, playerSnapshot) {
         if (playerSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(child: CircularProgressIndicator(color: Colors.cyanAccent)),
+            backgroundColor: Color(0xFF0D1117),
+            body: Center(child: CircularProgressIndicator(color: Color(0xFF8E2DE2))),
           );
         }
 
         final currentPlayer = playerSnapshot.data;
         if (currentPlayer == null) {
           return const Scaffold(
-            backgroundColor: Colors.white,
+            backgroundColor: Color(0xFF0D1117),
             body: Center(
               child: Text("Player Profiles Inaccessible", style: TextStyle(color: Colors.redAccent)),
             ),
@@ -55,16 +56,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         final String userTeam = currentPlayer.team;
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF5F7FA),
+          backgroundColor: const Color(0xFF0D1117),
           appBar: AppBar(
-            backgroundColor: Colors.white,
+            backgroundColor: Colors.transparent,
             elevation: 0,
             title: const Text(
               "LEADERBOARDS",
-              style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 1.5, fontSize: 18),
+              style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5, fontSize: 18),
             ),
             centerTitle: true,
-            iconTheme: const IconThemeData(color: Colors.black87),
+            iconTheme: const IconThemeData(color: Colors.white),
           ),
           body: Column(
             children: [
@@ -74,26 +75,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color(0xFF161B22),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.01),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      )
-                    ],
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                   child: Row(
                     children: [
-                      _buildFilterButton("SOLO", "SOLO", Colors.orangeAccent),
+                      _buildFilterButton("SOLO", "SOLO", const Color(0xFF8E2DE2)),
                       if (currentPlayer.isInTeam) ...[
                         const SizedBox(width: 4),
                         _buildFilterButton("MY_TEAM", "MY TEAM", Colors.greenAccent),
                       ],
                       const SizedBox(width: 4),
-                      _buildFilterButton("ALL_TEAMS", "TEAMS", Colors.cyan.shade700),
+                      _buildFilterButton("ALL_TEAMS", "TEAMS", Colors.cyanAccent),
                     ],
                   ),
                 ),
@@ -118,6 +112,42 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   // ==========================================
   // HELPER WIDGET FILTERS & STREAM SWITCHERS
   // ==========================================
+
+  /// Throttles a stream to emit at most once every [duration].
+  /// Prevents UI jitter during high-frequency Firestore updates.
+  Stream<T> _throttleStream<T>(Stream<T> source, {Duration duration = const Duration(seconds: 15)}) {
+    late StreamController<T> controller;
+    StreamSubscription<T>? subscription;
+    Timer? timer;
+    T? latestValue;
+    bool hasValue = false;
+
+    controller = StreamController<T>.broadcast(
+      onListen: () {
+        subscription = source.listen((value) {
+          latestValue = value;
+          hasValue = true;
+
+          if (timer == null) {
+            controller.add(value);
+            timer = Timer(duration, () {
+              timer = null;
+              if (hasValue && latestValue != null) {
+                controller.add(latestValue!);
+              }
+            });
+          }
+        }, onDone: () => controller.close(), onError: (e) => controller.addError(e));
+      },
+      onCancel: () {
+        subscription?.cancel();
+        timer?.cancel();
+      },
+    );
+
+    return controller.stream;
+  }
+
   Widget _buildFilterButton(String filterTarget, String label, Color activeNeonColor) {
     final bool isActive = currentFilter == filterTarget;
     return Expanded(
@@ -127,15 +157,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isActive ? activeNeonColor.withValues(alpha: 0.15) : Colors.transparent,
+            gradient: isActive
+                ? LinearGradient(
+                    colors: [activeNeonColor, activeNeonColor.withValues(alpha: 0.7)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isActive ? null : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isActive ? activeNeonColor.withValues(alpha: 0.4) : Colors.transparent),
           ),
           child: Center(
             child: Text(
               label,
               style: TextStyle(
-                color: isActive ? activeNeonColor : Colors.black45,
+                color: isActive ? Colors.white : Colors.white60,
                 fontWeight: FontWeight.w900,
                 fontSize: 12,
                 letterSpacing: 1,
@@ -150,11 +186,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget _buildSoloStream() {
     return StreamBuilder<List<PlayerModel>>(
       key: const ValueKey("SoloStream"),
-      stream: firebaseService.getLeaderboard(),
+      stream: _throttleStream(firebaseService.getLeaderboard()),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.orangeAccent));
-        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.black45)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Players Found", style: TextStyle(color: Colors.black26)));
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Color(0xFF8E2DE2)));
+        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.white60)));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Players Found", style: TextStyle(color: Colors.white24)));
 
         final players = snapshot.data!;
         return Column(
@@ -164,7 +200,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               name: players[0].name,
               value: "${players[0].totalSteps} Steps Logged",
               icon: Icons.emoji_events_rounded,
-              neonColor: Colors.orangeAccent,
+              neonColor: const Color(0xFF8E2DE2),
             ),
             Expanded(
               child: ListView.builder(
@@ -182,10 +218,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget _buildTeamMembersStream(String teamName) {
     return StreamBuilder<List<PlayerModel>>(
       key: const ValueKey("TeamMembersStream"),
-      stream: firebaseService.getTeamLeaderboard(teamName),
+      stream: _throttleStream(firebaseService.getTeamLeaderboard(teamName)),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
-        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.black45)));
+        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.white60)));
         if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Team Members Found", style: TextStyle(color: Colors.white24)));
 
         final players = snapshot.data!;
@@ -214,11 +250,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget _buildGlobalTeamsStream() {
     return StreamBuilder<List<TeamModel>>(
       key: const ValueKey("GlobalTeamsStream"),
-      stream: firebaseService.getTeamLeaderboardGlobal(),
+      stream: _throttleStream(firebaseService.getTeamLeaderboardGlobal()),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.cyan));
-        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.black45)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Teams Found", style: TextStyle(color: Colors.black26)));
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
+        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.white60)));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Teams Found", style: TextStyle(color: Colors.white24)));
 
         final teams = snapshot.data!;
         return Column(
@@ -241,16 +277,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: const Color(0xFF161B22),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        )
-                      ],
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -260,10 +289,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         decoration: BoxDecoration(
                           color: index == 0
                               ? Colors.amber.withValues(alpha: 0.1)
-                              : const Color(0xFFF5F7FA),
+                              : const Color(0xFF0D1117),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: index == 0 ? Colors.amberAccent : Colors.black.withValues(alpha: 0.05),
+                            color: index == 0 ? Colors.amberAccent : Colors.white.withValues(alpha: 0.1),
                             width: index == 0 ? 1.5 : 1,
                           ),
                         ),
@@ -272,16 +301,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                               ? const Icon(Icons.emoji_events_rounded, color: Colors.amberAccent, size: 20)
                               : Text(
                             "${index + 1}",
-                            style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.w900),
+                            style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w900),
                           ),
                         ),
                       ),
-                      title: Text(team.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.black87)),
+                      title: Text(team.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 4.0),
                         child: Text(
                           "👥 ${team.members} members  •  ⚡ Efficiency: ${avgEfficiency.toStringAsFixed(0)} steps/member",
-                          style: const TextStyle(color: Colors.black54, fontSize: 11, height: 1.4),
+                          style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.4),
                         ),
                       ),
                       trailing: Column(
@@ -290,9 +319,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         children: [
                           Text(
                             "${team.totalSteps}",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.cyan.shade700),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.cyanAccent),
                           ),
-                          const Text("STEPS", style: TextStyle(fontSize: 9, color: Colors.black26, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                          const Text("STEPS", style: TextStyle(fontSize: 9, color: Colors.white24, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                         ],
                       ),
                     ),
@@ -318,16 +347,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF161B22),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: neonColor.withValues(alpha: 0.15), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          )
-        ],
+        border: Border.all(color: neonColor.withValues(alpha: 0.2), width: 1.5),
       ),
       child: Column(
         children: [
@@ -344,10 +366,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.black87, fontSize: 24, fontWeight: FontWeight.w900),
+            style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.black45, fontSize: 13, fontWeight: FontWeight.w500)),
+          Text(value, style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500)),
         ],
       ),
     );

@@ -47,18 +47,11 @@ class PlayerTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF161B22),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: Colors.black.withValues(alpha: 0.05),
+          color: Colors.white.withValues(alpha: 0.1),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Row(
         children: [
@@ -95,7 +88,7 @@ class PlayerTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: rankColor,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white, width: 2),
+                    border: Border.all(color: const Color(0xFF161B22), width: 2),
                   ),
                   child: Text(
                     "#$rank",
@@ -122,21 +115,21 @@ class PlayerTile extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
-                    color: Colors.black87,
+                    color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   "👣 ${player.totalSteps} Steps",
-                  style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 Text(
                   "👥 ${player.team}",
-                  style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 Text(
                   "⭐ Level ${player.level}",
-                  style: const TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 if (player.streakCount > 0)
                   Padding(
@@ -144,7 +137,7 @@ class PlayerTile extends StatelessWidget {
                     child: Text(
                       "🔥 ${player.streakCount} Day Streak",
                       style: const TextStyle(
-                        color: Colors.orange,
+                        color: Colors.orangeAccent,
                         fontWeight: FontWeight.w900,
                         fontSize: 13,
                       ),

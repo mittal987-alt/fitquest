@@ -53,9 +53,21 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: const Text(
-          "RAID BOSS: THE COLOSSUS",
-          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 15),
+        title: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance.collection("teams").doc(widget.teamId).snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData || !snapshot.data!.exists) return const Text("RAID BOSS");
+            final data = snapshot.data!.data() as Map<String, dynamic>;
+            final team = TeamModel.fromMap(data);
+            final bossConfig = GameplayRules.bossPool.firstWhere(
+              (b) => b["id"] == team.raidBossId,
+              orElse: () => GameplayRules.bossPool[0],
+            );
+            return Text(
+              "RAID BOSS: ${bossConfig["name"]}",
+              style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 15),
+            );
+          },
         ),
         backgroundColor: Colors.white,
         elevation: 0,
@@ -81,22 +93,92 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final team = TeamModel.fromMap(data);
 
-          // FIX: was a hardcoded local `maxHp = 100000.0` that would silently
-          // desync from the real boss health pool the moment GameplayRules
-          // changed. Now sourced from the same constant every other raid
-          // screen uses (RaidController, firebase_service.dart).
-          final double maxHp = GameplayRules.colossusMaxHp;
+          final activeSynergies = team.synergyResonance.entries
+              .where((e) => e.value.isAfter(DateTime.now()))
+              .toList();
+
+          final bossConfig = GameplayRules.bossPool.firstWhere(
+            (b) => b["id"] == team.raidBossId,
+            orElse: () => GameplayRules.bossPool[0],
+          );
+
+          final double maxHp = (bossConfig["maxHp"] as num).toDouble();
           final double hp = team.raidBossHp.clamp(0.0, maxHp);
           final double hpPercent = maxHp > 0 ? (hp / maxHp).clamp(0.0, 1.0) : 0.0;
+          final Color bossColor = Color(bossConfig["color"] as int);
 
           return Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  team.name.toUpperCase(),
-                  style: const TextStyle(color: Colors.black45, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      team.name.toUpperCase(),
+                      style: const TextStyle(color: Colors.black45, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: bossColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        bossConfig["element"].toUpperCase(),
+                        style: TextStyle(color: bossColor, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: Column(
+                    children: [
+                      Text(
+                        bossConfig["name"],
+                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: bossColor, letterSpacing: -1),
+                      ),
+                      Text(
+                        "WEAKNESS: ${bossConfig["weakness"]}",
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38, letterSpacing: 1),
+                      ),
+                      if (activeSynergies.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          children: activeSynergies.map((e) {
+                            final className = e.key;
+                            Color synergyColor = Colors.grey;
+                            if (className == 'medic') synergyColor = Colors.greenAccent;
+                            if (className == 'tank') synergyColor = Colors.blueAccent;
+                            if (className == 'scout') synergyColor = Colors.orangeAccent;
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: synergyColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: synergyColor.withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.auto_awesome_rounded, size: 10, color: synergyColor),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "${className.toUpperCase()} RESONANCE",
+                                    style: TextStyle(color: synergyColor, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
                 ClipRRect(
@@ -104,7 +186,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                   child: LinearProgressIndicator(
                     value: hpPercent,
                     minHeight: 22,
-                    color: Colors.redAccent,
+                    color: bossColor,
                     backgroundColor: Colors.black.withValues(alpha: 0.06),
                   ),
                 ),
@@ -113,6 +195,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                   "${hp.toInt()} / ${maxHp.toInt()} HP",
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.black87),
                 ),
+
                 if (team.strongholdActive) ...[
                   const SizedBox(height: 8),
                   Row(
@@ -146,7 +229,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                       setState(() => _attacking = true);
                       final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-                      final (success, defeated) =
+                      final (success, defeated, primalSpirit) =
                       await _service.executeTeamRaidAttack(currentUid, widget.teamId);
 
                       if (!mounted) return;
@@ -162,12 +245,22 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                         return;
                       }
 
-                      scaffoldMessenger.showSnackBar(
-                        const SnackBar(
-                          content: Text("ATTACK LANDED"),
-                          backgroundColor: Colors.greenAccent,
-                        ),
-                      );
+                      if (primalSpirit) {
+                        scaffoldMessenger.showSnackBar(
+                          const SnackBar(
+                            content: Text("✨ PRIMAL SPIRIT ULTIMATE TRIGGERED! 3.0x DAMAGE! ✨"),
+                            backgroundColor: Colors.deepPurpleAccent,
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      } else {
+                        scaffoldMessenger.showSnackBar(
+                          const SnackBar(
+                            content: Text("ATTACK LANDED"),
+                            backgroundColor: Colors.greenAccent,
+                          ),
+                        );
+                      }
 
                       if (defeated && mounted) {
                         _showVictoryDialog(team);

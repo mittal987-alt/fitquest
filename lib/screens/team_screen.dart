@@ -1,18 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../models/team_model.dart';
+import '../models/player_model.dart';
 import '../models/team_request_model.dart';
 import '../services/firebase_service.dart';
-import '../widgets/team_card.dart';
-import 'team_request_screen.dart';
-import '../models/player_model.dart';
-import 'team_members_screen.dart';
-import 'tactical_relay_screen.dart';
-
-import 'package:provider/provider.dart';
 import '../controller/raid_controller.dart';
-import '../widgets/tactical_ping_feed.dart';
-import '../features/raid/raid_result_screen.dart';
+import '../widgets/team_card.dart';
+import 'team_members_screen.dart';
 
 class TeamScreen extends StatefulWidget {
   const TeamScreen({super.key});
@@ -23,506 +19,100 @@ class TeamScreen extends StatefulWidget {
 
 class _TeamScreenState extends State<TeamScreen> {
   final FirebaseService firebaseService = FirebaseService();
+  Stream<PlayerModel?>? _playerStream;
+  Stream<List<TeamModel>>? _teamsStream;
+
+  static const Color _kPrimaryPurple = Color(0xFF8E2DE2);
+  static const Color _kSecondaryPurple = Color(0xFF4A00E0);
+  static const Color _kBgColor = Color(0xFF0D1117);
+  static const Color _kSurfaceColor = Color(0xFF161B22);
 
   @override
   void initState() {
     super.initState();
-    _initializeRaidSync();
+    _initStreams();
   }
 
-  void _initializeRaidSync() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final player = await firebaseService.getPlayer(user.uid);
-      if (player != null && player.teamId != null && mounted) {
-        context.read<RaidController>().initTeamRaid(player.teamId!);
-      }
+  void _initStreams() {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid != null) {
+      _playerStream = firebaseService.getPlayerStream(currentUid);
     }
-  }
-
-  void _showVictoryDialog(BuildContext context, String teamName) {
-    final raidController = context.read<RaidController>();
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RaidResultScreen(
-          participants: raidController.participants,
-          teamName: teamName,
-          totalDamage: raidController.bossMaxHp - raidController.bossCurrentHp,
-          bossName: raidController.bossName,
-        ),
-      ),
-    );
-  }
-
-  Widget _rewardItem(IconData icon, String label, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-        ],
-      ),
-    );
+    _teamsStream = firebaseService.getTeams();
   }
 
   @override
   Widget build(BuildContext context) {
-    // FIX: was `FirebaseAuth.instance.currentUser!.uid` — force-unwrap that
-    // throws if this screen is ever reached with no signed-in user.
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (currentUid == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFF5F7FA),
-        body: Center(
-          child: Text(
-            "NOT LOGGED IN",
-            style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
+      return const Scaffold(backgroundColor: _kBgColor, body: Center(child: Text("NOT LOGGED IN", style: TextStyle(color: Colors.white))));
     }
 
     return StreamBuilder<PlayerModel?>(
-      stream: firebaseService.getPlayerStream(currentUid),
+      stream: _playerStream,
       builder: (context, playerSnapshot) {
         final currentPlayer = playerSnapshot.data;
-        final String selectedTeam = currentPlayer?.team ?? "No Team";
-        final bool alreadyInTeam = currentPlayer?.isInTeam ?? false;
+        if (currentPlayer == null) return const Scaffold(backgroundColor: _kBgColor, body: Center(child: CircularProgressIndicator(color: _kPrimaryPurple)));
+
+        final bool alreadyInTeam = currentPlayer.isInTeam;
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF5F7FA),
+          backgroundColor: _kBgColor,
           appBar: AppBar(
-            backgroundColor: Colors.white,
+            backgroundColor: Colors.transparent,
             elevation: 0,
-            title: const Text(
-              "TEAMS",
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.5,
-                fontSize: 16,
-                color: Colors.black87,
-              ),
-            ),
+            title: const Text("TEAM OPERATIONS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 18, color: Colors.white)),
             centerTitle: true,
-            iconTheme: const IconThemeData(color: Colors.black87),
-          ),
-          floatingActionButton: alreadyInTeam
-              ? null
-              : FloatingActionButton.extended(
-            backgroundColor: Colors.blueAccent,
-            elevation: 2,
-            onPressed: () => showCreateTeamDialog(currentPlayer),
-            icon: const Icon(Icons.add_moderator_rounded, color: Colors.white),
-            label: const Text("CREATE NEW TEAM", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5, color: Colors.white)),
           ),
           body: StreamBuilder<List<TeamModel>>(
-            stream: firebaseService.getTeams(),
+            stream: _teamsStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
+                return const Center(child: CircularProgressIndicator(color: _kPrimaryPurple));
               }
-              if (snapshot.hasError) {
-                return Center(child: Text(snapshot.error.toString(), style: const TextStyle(color: Colors.redAccent)));
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(
-                  child: Text(
-                    "NO NETWORK SQUADS INSTANTIATED",
-                    style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold),
+              final teams = snapshot.data ?? [];
+
+              return CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  if (!alreadyInTeam)
+                    SliverToBoxAdapter(child: _buildNoTeamState(currentPlayer))
+                  else
+                    SliverToBoxAdapter(
+                      child: _buildInsideTeamDashboard(
+                        teams.firstWhere((t) => t.id == currentPlayer.teamId, orElse: () => TeamModel(id: "", name: "Unknown", color: "purple", members: 1, maxMembers: 5, totalSteps: 0, leaderId: "", strongholdActive: false, logo: "")),
+                        currentPlayer,
+                      ),
+                    ),
+                  
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
+                    sliver: SliverToBoxAdapter(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("AVAILABLE TEAMS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white38, letterSpacing: 1.5)),
+                          Text("${teams.length} OPERATIONAL", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _kPrimaryPurple)),
+                        ],
+                      ),
+                    ),
                   ),
-                );
-              }
 
-              final teams = snapshot.data!;
-              final currentTeam = teams.firstWhere(
-                    (t) => t.id == currentPlayer?.teamId,
-                orElse: () => TeamModel(id: "", name: "No Team", color: "blue", members: 0, maxMembers: 50, totalSteps: 0, leaderId: "", strongholdActive: false, logo: ""),
-              );
-
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // TOP PROFILE NODE SQUAD BANNER
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "CURRENT TEAM",
-                            style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            selectedTeam.toUpperCase(),
-                            style: const TextStyle(color: Colors.black87, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                          ),
-                          if (alreadyInTeam && currentTeam.id.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.shield_rounded,
-                                  size: 16,
-                                  color: currentTeam.strongholdActive ? Colors.amber : Colors.black26,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  currentTeam.strongholdActive ? "TEAM BUFF ACTIVE (1.5x BOSS DMG)" : "TEAM BUFF INACTIVE",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: currentTeam.strongholdActive ? Colors.amber : Colors.black38,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                TeamStat(title: "Steps", value: currentTeam.totalSteps.toString()),
-                                TeamStat(title: "Boss Dmg", value: currentTeam.totalRaidDamage.toInt().toString()),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              "BOSS HEALTH",
-                              style: TextStyle(color: Colors.black45, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1),
-                            ),
-                            const SizedBox(height: 6),
-                            Consumer<RaidController>(
-                              builder: (context, raidController, child) {
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: LinearProgressIndicator(
-                                        value: raidController.bossHpPercentage,
-                                        backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                                        color: Colors.redAccent,
-                                        minHeight: 8,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      "${raidController.bossCurrentHp.toInt()} / ${raidController.bossMaxHp.toInt()} HP",
-                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orangeAccent,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              ),
-                              onPressed: () async {
-                                final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-                                // FIX: this used to re-compute an *estimated*
-                                // damage number client-side (missing the
-                                // 'raid_dmg_mult' gear multiplier entirely,
-                                // and using potentially-stale currentTeam/
-                                // currentPlayer snapshots) just to guess
-                                // whether the attack was lethal, via
-                                // `currentTeam.raidBossHp - totalDmg <= 0`.
-                                // The real, authoritative damage calculation
-                                // (with gear included) only happens inside
-                                // executeTeamRaidAttack's Firestore
-                                // transaction — so that estimate could easily
-                                // undershoot and silently skip showing the
-                                // victory screen for a kill the player
-                                // actually landed (rewards still got
-                                // distributed correctly server-side either
-                                // way, but the celebratory popup wouldn't
-                                // show). Now uses the transaction's own
-                                // "defeated" result directly instead.
-                                final (success, defeated) = await firebaseService.executeTeamRaidAttack(currentUid, currentTeam.id);
-
-                                if (!success) {
-                                  scaffoldMessenger.showSnackBar(
-                                    const SnackBar(
-                                      content: Text("INSUFFICIENT STAMINA OR ON COOLDOWN"),
-                                      backgroundColor: Colors.redAccent,
-                                    ),
-                                  );
-                                } else {
-                                  scaffoldMessenger.showSnackBar(
-                                    const SnackBar(
-                                      content: Text("BOSS ATTACK SUCCESSFUL"),
-                                      backgroundColor: Colors.greenAccent,
-                                    ),
-                                  );
-
-                                  // TRIGGER TACTICAL PING FOR DAMAGE
-                                  await firebaseService.sendTacticalPing(
-                                      currentTeam.id,
-                                      "FRONT_LINE",
-                                      "${currentPlayer?.name.toUpperCase()} ATTACKED THE BOSS"
-                                  );
-
-                                  if (context.mounted && defeated) {
-                                    _showVictoryDialog(context, currentTeam.name);
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.bolt_rounded, size: 18),
-                              label: const Text("ATTACK BOSS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                            ),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blueAccent,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              ),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => TacticalRelayScreen(
-                                      teamId: currentTeam.id,
-                                      teamName: currentTeam.name,
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.sync_alt_rounded, size: 18),
-                              label: const Text("TACTICAL RELAY", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                            ),
-                            const SizedBox(height: 12),
-                            const TacticalPingFeed(),
-                            const SizedBox(height: 12),
-                            if (currentUid == currentTeam.leaderId) ...[
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.black.withValues(alpha: 0.1),
-                                  foregroundColor: Colors.black87,
-                                  elevation: 0,
-                                  side: BorderSide(color: Colors.black.withValues(alpha: 0.1)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                ),
-                                onPressed: () async {
-                                  bool confirm = await showDialog(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      backgroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                      title: const Text("DISBAND TEAM", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 18)),
-                                      content: const Text("Permanently dissolve this team? This action is irreversible."),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
-                                          child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
-                                        ),
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
-                                          child: const Text("DISBAND", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                                        ),
-                                      ],
-                                    ),
-                                  ) ?? false;
-
-                                  if (confirm) {
-                                    await firebaseService.deleteTeam(currentTeam.id);
-                                  }
-                                },
-                                icon: const Icon(Icons.delete_forever_rounded, size: 16),
-                                label: const Text("DISBAND TEAM", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                              ),
-                            ] else ...[
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                                  foregroundColor: Colors.redAccent,
-                                  elevation: 0,
-                                  side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                ),
-                                onPressed: () async {
-                                  if (currentPlayer?.lastTeamAction != null) {
-                                    final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);
-                                    if (diff.inHours < 24) {
-                                      final hoursLeft = 24 - diff.inHours;
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text("PLEASE WAIT $hoursLeft HOURS TO LEAVE"),
-                                          backgroundColor: Colors.orangeAccent,
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                  }
-
-                                  bool confirm = await showDialog(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      backgroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                      title: const Text("LEAVE TEAM", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 18)),
-                                      content: Text("Leave ${currentTeam.name.toUpperCase()}?", style: const TextStyle(color: Colors.black54)),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
-                                          child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
-                                        ),
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
-                                          child: const Text("LEAVE", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                                        ),
-                                      ],
-                                    ),
-                                  ) ?? false;
-
-                                  if (confirm) {
-                                    await firebaseService.leaveTeam(uid: currentUid, teamId: currentTeam.id);
-                                  }
-                                },
-                                icon: const Icon(Icons.link_off_rounded, size: 16),
-                                label: const Text("LEAVE TEAM", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                              ),
-                            ],
-                          ],
-                        ],
-                      ),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final team = teams[index];
+                        final isCurrent = team.id == currentPlayer.teamId;
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                          child: _buildEnhancedTeamCard(team, isCurrent, currentPlayer),
+                        );
+                      },
+                      childCount: teams.length,
                     ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "AVAILABLE TEAMS",
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black45, letterSpacing: 1),
-                    ),
-                    const SizedBox(height: 12),
-                    ...teams.map((team) {
-                      final isLeader = currentUid == team.leaderId;
-                      final isCurrentTeam = currentPlayer?.teamId == team.id;
-
-                      return Column(
-                        children: [
-                          TeamCard(
-                            team: team,
-                            joined: isCurrentTeam,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => TeamMembersScreen(
-                                    teamName: team.name,
-                                    teamId: team.id,
-                                    leaderId: team.leaderId,
-                                  ),
-                                ),
-                              );
-                            },
-                            onJoin: () async {
-                              final scaffoldMessenger = ScaffoldMessenger.of(context);
-                              if (currentPlayer?.lastTeamAction != null) {
-                                final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);
-                                if (diff.inHours < 24) {
-                                  final hoursLeft = 24 - diff.inHours;
-                                  scaffoldMessenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text("WAIT $hoursLeft HOURS BEFORE JOINING A NEW TEAM"),
-                                      backgroundColor: Colors.orangeAccent,
-                                    ),
-                                  );
-                                  return;
-                                }
-                              }
-
-                              if (team.members >= team.maxMembers) {
-                                scaffoldMessenger.showSnackBar(
-                                  const SnackBar(
-                                    backgroundColor: Colors.redAccent,
-                                    content: Text("TEAM IS FULL"),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              TeamRequestModel request = TeamRequestModel(
-                                requestId: DateTime.now().millisecondsSinceEpoch.toString(),
-                                playerId: currentUid,
-                                // FIX: was `user.email ?? "Anonymous Player"` —
-                                // this showed the applicant's EMAIL ADDRESS to
-                                // the team leader reviewing requests (see
-                                // team_requests_screen.dart, which displays
-                                // `request.playerName`), instead of their
-                                // actual in-game name, and leaked an email
-                                // address unnecessarily in the process.
-                                playerName: currentPlayer?.name ?? "Anonymous Player",
-                                teamId: team.id,
-                                teamName: team.name,
-                                status: "pending",
-                              );
-
-                              await firebaseService.sendJoinRequest(request);
-
-                              scaffoldMessenger.showSnackBar(
-                                SnackBar(
-                                  backgroundColor: Colors.greenAccent.withValues(alpha: 0.2),
-                                  content: Text("JOIN REQUEST SENT TO ${team.name.toUpperCase()}", style: const TextStyle(color: Colors.greenAccent)),
-                                ),
-                              );
-                            },
-                          ),
-                          if (isLeader)
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 4, bottom: 8),
-                                child: TextButton.icon(
-                                  style: TextButton.styleFrom(foregroundColor: Colors.orangeAccent),
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => TeamRequestsScreen(
-                                          teamId: team.id,
-                                          teamName: team.name,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.satellite_alt_rounded, size: 16),
-                                  label: const Text("VIEW JOIN REQUESTS", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                                ),
-                              ),
-                            ),
-                          const SizedBox(height: 8),
-                        ],
-                      );
-                    }),
-                  ],
-                ),
+                  ),
+                  const SliverPadding(padding: EdgeInsets.only(bottom: 40)),
+                ],
               );
             },
           ),
@@ -531,135 +121,265 @@ class _TeamScreenState extends State<TeamScreen> {
     );
   }
 
-  void showCreateTeamDialog(PlayerModel? currentPlayer) {
-    final TextEditingController controller = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text(
-            "CREATE NEW TEAM",
-            style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
+  Widget _buildNoTeamState(PlayerModel player) {
+    return Container(
+      margin: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: _kSurfaceColor,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: _kPrimaryPurple.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.groups_outlined, color: _kPrimaryPurple, size: 40),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 24),
+          const Text("YOU'RE NOT IN A TEAM", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          const Text(
+            "Join forces with other operators to capture more territory and dominate the leaderboards.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white38, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: 32),
+          Row(
             children: [
-              const Text("Assign a name for your team", style: TextStyle(color: Colors.black54, fontSize: 13)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                style: const TextStyle(color: Colors.black87),
-                decoration: InputDecoration(
-                  hintText: "TEAM NAME",
-                  hintStyle: const TextStyle(color: Colors.black26),
-                  filled: true,
-                  fillColor: const Color(0xFFF5F7FA),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
+              Expanded(child: _actionBtn("CREATE TEAM", _kPrimaryPurple, () => _showCreateTeamDialog(player))),
+              const SizedBox(width: 12),
+              Expanded(child: _actionBtn("JOIN BY CODE", Colors.white10, () => _showJoinCodeDialog(player))),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("CANCEL", style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () async {
-                final scaffoldMessenger = ScaffoldMessenger.of(context);
-                if (currentPlayer?.lastTeamAction != null) {
-                  final diff = DateTime.now().difference(currentPlayer!.lastTeamAction!);
-                  if (diff.inHours < 24) {
-                    final hoursLeft = 24 - diff.inHours;
-                    scaffoldMessenger.showSnackBar(
-                      SnackBar(
-                        content: Text("PLEASE WAIT $hoursLeft HOURS BEFORE CREATING A TEAM"),
-                        backgroundColor: Colors.orangeAccent,
-                      ),
-                    );
-                    return;
-                  }
-                }
-
-                if (controller.text.trim().isNotEmpty) {
-                  TeamModel team = TeamModel(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    name: controller.text.trim(),
-                    color: "purple",
-                    members: 1,
-                    maxMembers: 50,
-                    totalSteps: 0,
-                    leaderId: FirebaseAuth.instance.currentUser!.uid,
-                    strongholdActive: false,
-                    logo: "",
-                  );
-
-                  await firebaseService.createTeam(team);
-
-                  if (dialogContext.mounted) {
-                    Navigator.pop(dialogContext);
-                  }
-                  scaffoldMessenger.showSnackBar(
-                    SnackBar(
-                      content: Text("TEAM ${team.name.toUpperCase()} CREATED"),
-                      backgroundColor: Colors.greenAccent.withValues(alpha: 0.8),
-                    ),
-                  );
-                } else {
-                  scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text("PLEASE SPECIFY A TEAM NAME"),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                }
-              },
-              child: const Text("CREATE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
-}
 
-class TeamStat extends StatelessWidget {
-  final String title;
-  final String value;
+  Widget _actionBtn(String label, Color color, VoidCallback onTap) {
+    return ElevatedButton(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+      ),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
+    );
+  }
 
-  const TeamStat({
-    super.key,
-    required this.title,
-    required this.value,
-  });
+  Widget _buildInsideTeamDashboard(TeamModel team, PlayerModel player) {
+    return Container(
+      margin: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTeamBanner(team),
+          const SizedBox(height: 24),
+          const Text("MISSION PROGRESS", style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.5)),
+          const SizedBox(height: 16),
+          _buildTeamStatsGrid(team, player),
+          const SizedBox(height: 24),
+          _buildWeeklyChallenge(team),
+          const SizedBox(height: 32),
+          _buildTeamQuickActions(team),
+        ],
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
+  Widget _buildTeamBanner(TeamModel team) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [_kPrimaryPurple, _kSecondaryPurple], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
+            child: const Icon(Icons.shield_outlined, color: Colors.white, size: 32),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(team.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                Text("CAPTAIN ID: ${team.leaderId.substring(0, 8).toUpperCase()}", style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 10, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTeamStatsGrid(TeamModel team, PlayerModel player) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.6,
       children: [
-        Text(
-          value,
-          style: const TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title.toUpperCase(),
-          style: const TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
+        _miniStatCard("WEEKLY STEPS", team.totalSteps.toString(), Icons.directions_walk_rounded),
+        _miniStatCard("TERRITORY", "12.4 KM²", Icons.map_rounded),
+        _miniStatCard("CONTRIBUTION", "${player.dailySteps} TODAY", Icons.add_chart_rounded),
+        _miniStatCard("RANKING", "#4 GLOBAL", Icons.leaderboard_rounded),
       ],
     );
   }
+
+  Widget _miniStatCard(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: _kSurfaceColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _kPrimaryPurple, size: 16),
+          const Spacer(),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)),
+          Text(label, style: const TextStyle(color: Colors.white24, fontSize: 9, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeeklyChallenge(TeamModel team) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: _kSurfaceColor, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.1))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("WEEKLY CHALLENGE", style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              Text("3D 12H REMAINING", style: TextStyle(color: Colors.white24, fontSize: 9, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text("COLLECTIVE 500K STEPS", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: const LinearProgressIndicator(value: 0.65, minHeight: 6, backgroundColor: Colors.white10, valueColor: AlwaysStoppedAnimation(Colors.orangeAccent)),
+          ),
+          const SizedBox(height: 8),
+          const Text("325,412 / 500,000 STEPS", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTeamQuickActions(TeamModel team) {
+    return Column(
+      children: [
+        _quickActionTile("TEAM CHAT", Icons.chat_bubble_outline_rounded, "COMMUNICATION CHANNEL COMING SOON"),
+        const SizedBox(height: 12),
+        _quickActionTile("INVITE FRIENDS", Icons.person_add_outlined, "EXPAND YOUR OPERATIONAL UNIT"),
+        const SizedBox(height: 12),
+        _quickActionTile("LEAVE TEAM", Icons.logout_rounded, "EXIT CURRENT SQUADRON", color: Colors.redAccent),
+      ],
+    );
+  }
+
+  Widget _quickActionTile(String title, IconData icon, String subtitle, {Color color = _kPrimaryPurple}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.1))),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 14)),
+              Text(subtitle, style: TextStyle(color: color.withValues(alpha: 0.5), fontSize: 10, fontWeight: FontWeight.bold)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEnhancedTeamCard(TeamModel team, bool isJoined, PlayerModel player) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _kSurfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isJoined ? _kPrimaryPurple.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: _kPrimaryPurple.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)),
+            child: const Icon(Icons.motion_photos_on_rounded, color: _kPrimaryPurple, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(team.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    _cardMeta(Icons.people_outline, "${team.members}/5"),
+                    const SizedBox(width: 12),
+                    _cardMeta(Icons.directions_walk_rounded, "${(team.totalSteps / 1000).toStringAsFixed(1)}K"),
+                    const SizedBox(width: 12),
+                    _cardMeta(Icons.map_rounded, "8.2 KM²"),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (!isJoined)
+            ElevatedButton(
+              onPressed: () => _handleJoinTeam(team, player),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kPrimaryPurple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: const Text("JOIN", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+            )
+          else
+            const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _cardMeta(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white24, size: 12),
+        const SizedBox(width: 4),
+        Text(text, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  // Dialog placeholders
+  void _showCreateTeamDialog(PlayerModel player) { /* Implementation */ }
+  void _showJoinCodeDialog(PlayerModel player) { /* Implementation */ }
+  Future<void> _handleJoinTeam(TeamModel team, PlayerModel player) async { /* Implementation */ }
 }

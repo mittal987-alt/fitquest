@@ -26,12 +26,12 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
 
   BoxDecoration _cardDecoration({Color? borderColor, double borderWidth = 1}) {
     return BoxDecoration(
-      color: Colors.white,
+      color: const Color(0xFF161B22),
       borderRadius: BorderRadius.circular(_kCardRadius),
-      border: Border.all(color: borderColor ?? Colors.black.withValues(alpha: 0.05), width: borderWidth),
+      border: Border.all(color: borderColor ?? Colors.white.withValues(alpha: 0.05), width: borderWidth),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.03),
+          color: Colors.black.withValues(alpha: 0.2),
           blurRadius: 12,
           offset: const Offset(0, 4),
         ),
@@ -42,7 +42,7 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   Widget _sectionHeader(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1),
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white38, letterSpacing: 1),
     );
   }
 
@@ -96,17 +96,17 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
     final rec = _computeRecommendation();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0D1117),
         elevation: 0,
         title: const Text(
           "ADAPTIVE GOALS",
-          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 1.5, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5, fontSize: 18),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -138,14 +138,14 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1A237E), Color(0xFF283593)],
+          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(_kCardRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.indigo.withValues(alpha: 0.2),
+            color: const Color(0xFF4A00E0).withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
           )
@@ -219,7 +219,7 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("PRIMARY FITNESS GOAL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black45, letterSpacing: 0.5)),
+          const Text("PRIMARY FITNESS GOAL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -238,12 +238,13 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("HEIGHT: ${_height.toStringAsFixed(0)} CM", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black45, letterSpacing: 0.5)),
+                    Text("HEIGHT: ${_height.toStringAsFixed(0)} CM", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
                     Slider(
                       value: _height,
                       min: 120,
                       max: 220,
-                      activeColor: Colors.blueAccent,
+                      activeColor: Colors.cyanAccent,
+                      inactiveColor: Colors.white10,
                       onChanged: (v) => setState(() => _height = v),
                     ),
                   ],
@@ -258,12 +259,13 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("WEIGHT: ${_weight.toStringAsFixed(1)} KG", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black45, letterSpacing: 0.5)),
+                    Text("WEIGHT: ${_weight.toStringAsFixed(1)} KG", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
                     Slider(
                       value: _weight,
                       min: 40,
                       max: 150,
-                      activeColor: Colors.blueAccent,
+                      activeColor: Colors.cyanAccent,
+                      inactiveColor: Colors.white10,
                       onChanged: (v) => setState(() => _weight = v),
                     ),
                   ],
@@ -283,14 +285,14 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? Colors.blueAccent : const Color(0xFFF5F7FA),
+          color: selected ? Colors.cyanAccent : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(_kChipRadius),
-          border: Border.all(color: selected ? Colors.blueAccent : Colors.black.withValues(alpha: 0.05)),
+          border: Border.all(color: selected ? Colors.cyanAccent : Colors.white.withValues(alpha: 0.05)),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : Colors.black54,
+            color: selected ? Colors.black : Colors.white54,
             fontWeight: FontWeight.w900,
             fontSize: 10,
             letterSpacing: 0.5,
@@ -309,8 +311,8 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("DAILY STEP TARGET", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black45, letterSpacing: 0.5)),
-              Text(_stepTarget.toString(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.blueAccent)),
+              const Text("DAILY STEP TARGET", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
+              Text(_stepTarget.toString(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.cyanAccent)),
             ],
           ),
           Slider(
@@ -318,15 +320,16 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             min: 2000,
             max: 30000,
             divisions: 28,
-            activeColor: Colors.blueAccent,
+            activeColor: Colors.cyanAccent,
+            inactiveColor: Colors.white10,
             onChanged: (v) => setState(() => _stepTarget = v.toInt()),
           ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("EXERCISE GOAL (MINS)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.black45, letterSpacing: 0.5)),
-              Text("${_exerciseTarget}M", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.blueAccent)),
+              const Text("EXERCISE GOAL (MINS)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
+              Text("${_exerciseTarget}M", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.cyanAccent)),
             ],
           ),
           Slider(
@@ -334,7 +337,8 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             min: 10,
             max: 120,
             divisions: 11,
-            activeColor: Colors.blueAccent,
+            activeColor: Colors.cyanAccent,
+            inactiveColor: Colors.white10,
             onChanged: (v) => setState(() => _exerciseTarget = v.toInt()),
           ),
         ],
@@ -349,13 +353,13 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
           width: double.infinity,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.blueAccent,
+              backgroundColor: Colors.white.withValues(alpha: 0.05),
+              foregroundColor: Colors.cyanAccent,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Colors.blueAccent, width: 1.5),
+                side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
               ),
             ),
             onPressed: _applyRecommendation,
@@ -364,13 +368,19 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        SizedBox(
+        Container(
           width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: _isSaving ? null : const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
+            borderRadius: BorderRadius.circular(16),
+            color: _isSaving ? Colors.white10 : null,
+          ),
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
+              backgroundColor: Colors.transparent,
               foregroundColor: Colors.white,
               elevation: 0,
+              shadowColor: Colors.transparent,
               padding: const EdgeInsets.symmetric(vertical: 20),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),

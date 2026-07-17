@@ -44,12 +44,39 @@ class RaidParticipant {
 class RaidController extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  /// Throttles a stream to prevent rapid UI rebuilds and jitter.
+  Stream<T> _throttleStream<T>(Stream<T> source, {Duration duration = const Duration(seconds: 15)}) {
+    StreamController<T> controller = StreamController<T>.broadcast();
+    Timer? timer;
+    T? latestValue;
+    bool hasValue = false;
+
+    source.listen((value) {
+      latestValue = value;
+      hasValue = true;
+
+      if (timer == null) {
+        controller.add(value);
+        timer = Timer(duration, () {
+          timer = null;
+          if (hasValue && latestValue != null) {
+            controller.add(latestValue!);
+          }
+        });
+      }
+    }, onDone: () => controller.close(), onError: (e) => controller.addError(e));
+
+    return controller.stream;
+  }
+
   // --- STATE PROPERTIES ---
   String? _activeRaidId;
   String? _teamId;
-  String _bossName = "GLITCH_COLOSSUS_V4";
-  double _bossMaxHp = GameplayRules.colossusMaxHp;
-  double _bossCurrentHp = GameplayRules.colossusMaxHp;
+  String _bossName = "VOID TITAN";
+  String _bossElement = "Void";
+  String _bossWeakness = "Light";
+  double _bossMaxHp = 150000.0;
+  double _bossCurrentHp = 150000.0;
   bool _isSystemHackActive = true;
   DateTime? _raidExpiryTime;
 
@@ -93,10 +120,24 @@ class RaidController extends ChangeNotifier {
     _pingSubscription?.cancel();
 
     // 1. Listen to Team Document for Boss HP and Expiry
-    _teamSubscription = _firestore.collection("teams").doc(teamId).snapshots().listen((snap) {
+    _teamSubscription = _throttleStream(_firestore.collection("teams").doc(teamId).snapshots())
+        .listen((snap) {
       if (snap.exists) {
         final data = snap.data()!;
+        final bossId = data["raidBossId"] ?? "void_titan";
+        
+        // Find boss config
+        final bossConfig = GameplayRules.bossPool.firstWhere(
+          (b) => b["id"] == bossId,
+          orElse: () => GameplayRules.bossPool[0],
+        );
+
+        _bossName = bossConfig["name"];
+        _bossMaxHp = (bossConfig["maxHp"] as num).toDouble();
+        _bossElement = bossConfig["element"];
+        _bossWeakness = bossConfig["weakness"];
         _bossCurrentHp = (data["raidBossHp"] ?? _bossMaxHp).toDouble();
+
         final Timestamp? expiry = data["raidExpiry"] as Timestamp?;
         _raidExpiryTime = expiry?.toDate();
 
@@ -109,10 +150,10 @@ class RaidController extends ChangeNotifier {
     // NOTE: this is the single source of truth for RaidParticipant.stepsContributed
     // (total daily steps, not raid-specific steps) — confirmed intentional.
     // registerPlayerSteps() below no longer increments it separately.
-    _membersSubscription = _firestore
+    _membersSubscription = _throttleStream(_firestore
         .collection("players")
         .where("teamId", isEqualTo: teamId)
-        .snapshots()
+        .snapshots())
         .listen((snap) {
       for (var doc in snap.docs) {
         final data = doc.data();
@@ -153,13 +194,13 @@ class RaidController extends ChangeNotifier {
     });
 
     // 3. Listen to Tactical Pings
-    _pingSubscription = _firestore
+    _pingSubscription = _throttleStream(_firestore
         .collection("teams")
         .doc(teamId)
         .collection("pings")
         .orderBy("timestamp", descending: true)
         .limit(5)
-        .snapshots()
+        .snapshots())
         .listen((snap) {
       _tacticalPings.clear();
       for (var doc in snap.docs) {
@@ -220,13 +261,13 @@ class RaidController extends ChangeNotifier {
     });
 
     // 3. Listen to Tactical Pings
-    _pingSubscription = _firestore
+    _pingSubscription = _throttleStream(_firestore
         .collection("teams")
         .doc(teamId)
         .collection("pings")
         .orderBy("timestamp", descending: true)
         .limit(5)
-        .snapshots()
+        .snapshots())
         .listen((snap) {
       _tacticalPings.clear();
       for (var doc in snap.docs) {

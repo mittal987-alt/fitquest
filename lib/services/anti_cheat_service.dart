@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
+import '../services/pedometer_service.dart';
 import '../models/team_request_model.dart';
 
 /// TRACKING ENGINE
@@ -10,6 +11,9 @@ import '../models/team_request_model.dart';
 class MovementTrackingService {
   final FirebaseService _firebaseService = FirebaseService();
   final AntiCheatService _antiCheat = AntiCheatService();
+  final PedometerService _pedometerService;
+
+  MovementTrackingService(this._pedometerService);
 
   Position? _lastPosition;
   DateTime? _lastTimestamp;
@@ -72,11 +76,13 @@ class MovementTrackingService {
     if (_antiCheat.isVehicle(speedKmH)) {
       _antiCheat.applyVehicleWarning();
       operationalTrust = _antiCheat.getTrustLevel();
+      _pedometerService.setPaused(true);
       await _syncInfractionToCloud(uid);
     } else if (_antiCheat.isWalking(speedKmH)) {
       // If client was previously soft-blocked by vehicle speed, unlock them once they walk safely
       if (_antiCheat.isCaptureBlocked && speedKmH < 12.0) {
         _antiCheat.resetCaptureBlock();
+        _pedometerService.setPaused(false);
       }
       // Note: Step counting is now handled by StepSyncService using hardware pedometer delta.
       // We no longer accrue steps based on GPS speed to avoid double-counting and inaccuracy.
@@ -145,12 +151,12 @@ class AntiCheatService {
 
   bool get isCaptureBlocked => captureBlocked;
 
-  bool isVehicle(double speedKmH) => speedKmH > 15.0;
-  bool isWalking(double speedKmH) => speedKmH >= 0.1 && speedKmH < 15.0;
+  bool isVehicle(double speedKmH) => speedKmH > 12.0;
+  bool isWalking(double speedKmH) => speedKmH >= 0.1 && speedKmH <= 12.0;
 
   String getMovementStatus(double speedKmH) {
     if (speedKmH < 0.1) return "🧍 STANDING";
-    if (speedKmH >= 0.1 && speedKmH < 15.0) return "🚶 WALKING";
+    if (speedKmH >= 0.1 && speedKmH <= 12.0) return "🚶 WALKING";
     return "🚗 VEHICLE SPEED";
   }
 

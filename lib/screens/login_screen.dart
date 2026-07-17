@@ -93,14 +93,14 @@ class _LoginScreenState extends State<LoginScreen> {
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (builderContext, setDialogState) => AlertDialog(
-          backgroundColor: Colors.white,
+          backgroundColor: const Color(0xFF161B22),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: Colors.black.withValues(alpha: 0.1)),
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
           ),
           title: const Text(
             "SECURE PHONE LINK",
-            style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1),
+            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -111,15 +111,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     TextField(
                       controller: phoneController,
-                      style: const TextStyle(color: Colors.black87),
+                      style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         labelText: "Phone Number",
-                        labelStyle: const TextStyle(color: Colors.black54),
+                        labelStyle: const TextStyle(color: Colors.white54),
                         hintText: "+1234567890",
-                        hintStyle: const TextStyle(color: Colors.black26),
-                        prefixIcon: const Icon(Icons.phone_rounded, color: Colors.blueAccent),
-                        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black12)),
-                        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+                        hintStyle: const TextStyle(color: Colors.white24),
+                        prefixIcon: const Icon(Icons.phone_rounded, color: Colors.cyanAccent),
+                        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white12)),
+                        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
                       ),
                       keyboardType: TextInputType.phone,
                     ),
@@ -127,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: EdgeInsets.only(top: 8.0),
                       child: Text(
                         "Enter a valid phone number in E.164 format (e.g. +1234567890)",
-                        style: TextStyle(fontSize: 11, color: Colors.black38),
+                        style: TextStyle(fontSize: 11, color: Colors.white38),
                       ),
                     ),
                   ],
@@ -135,13 +135,13 @@ class _LoginScreenState extends State<LoginScreen> {
               else
                 TextField(
                   controller: codeController,
-                  style: const TextStyle(color: Colors.black87),
+                  style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(
                     labelText: "Verification Token",
-                    labelStyle: TextStyle(color: Colors.black54),
-                    prefixIcon: Icon(Icons.lock_clock_rounded, color: Colors.blueAccent),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.black12)),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.blueAccent)),
+                    labelStyle: TextStyle(color: Colors.white54),
+                    prefixIcon: Icon(Icons.lock_clock_rounded, color: Colors.cyanAccent),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white12)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
                   ),
                   keyboardType: TextInputType.number,
                 ),
@@ -150,101 +150,108 @@ class _LoginScreenState extends State<LoginScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("CANCEL", style: TextStyle(color: Colors.black38)),
+              child: const Text("CANCEL", style: TextStyle(color: Colors.white38)),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
+                borderRadius: BorderRadius.circular(12),
               ),
-              onPressed: () async {
-                if (vId == null) {
-                  final phone = phoneController.text.trim();
-                  if (!RegExp(r'^\+[1-9]\d{1,14}$').hasMatch(phone)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Enter a valid phone number in E.164 format (e.g. +1234567890)")),
-                    );
-                    return;
-                  }
-
-                  await authService.verifyPhone(
-                    phoneNumber: phone,
-                    verificationCompleted: (cred) async {
-                      try {
-                        UserCredential userCredential = await auth.signInWithCredential(cred);
-                        PedometerService().reset();
-                        bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
-                        if (isNew) {
-                          await firebaseService.createPlayer(
-                            uid: userCredential.user!.uid,
-                            name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
-                            email: userCredential.user!.phoneNumber ?? "Phone User",
-                          );
-                        }
-                        if (Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
-                        if (mounted) {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => isNew 
-                                ? ClassSelectionScreen(uid: userCredential.user!.uid) 
-                                : const MainNavigation()
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Auto-verification breakdown: $e")),
-                          );
-                        }
-                      }
-                    },
-                    verificationFailed: (e) {
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  if (vId == null) {
+                    final phone = phoneController.text.trim();
+                    if (!RegExp(r'^\+[1-9]\d{1,14}$').hasMatch(phone)) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.message ?? "Verification Fault")),
+                        const SnackBar(content: Text("Enter a valid phone number in E.164 format (e.g. +1234567890)")),
                       );
-                    },
-                    codeSent: (id, resendToken) {
-                      setDialogState(() => vId = id);
-                    },
-                    codeAutoRetrievalTimeout: (id) {
-                      setDialogState(() => vId = id);
-                    },
-                  );
-                } else {
-                  try {
-                    UserCredential userCredential = await authService.signInWithPhone(
-                      vId!,
-                      codeController.text.trim(),
+                      return;
+                    }
+
+                    await authService.verifyPhone(
+                      phoneNumber: phone,
+                      verificationCompleted: (cred) async {
+                        try {
+                          UserCredential userCredential = await auth.signInWithCredential(cred);
+                          PedometerService().reset();
+                          bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
+                          if (isNew) {
+                            await firebaseService.createPlayer(
+                              uid: userCredential.user!.uid,
+                              name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
+                              email: userCredential.user!.phoneNumber ?? "Phone User",
+                            );
+                          }
+                          if (Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
+                          if (mounted) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => isNew 
+                                  ? ClassSelectionScreen(uid: userCredential.user!.uid) 
+                                  : const MainNavigation()
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Auto-verification breakdown: $e")),
+                            );
+                          }
+                        }
+                      },
+                      verificationFailed: (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(e.message ?? "Verification Fault")),
+                        );
+                      },
+                      codeSent: (id, resendToken) {
+                        setDialogState(() => vId = id);
+                      },
+                      codeAutoRetrievalTimeout: (id) {
+                        setDialogState(() => vId = id);
+                      },
                     );
-                    PedometerService().reset();
-                    bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
-                    if (isNew) {
-                      await firebaseService.createPlayer(
-                        uid: userCredential.user!.uid,
-                        name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
-                        email: userCredential.user!.phoneNumber ?? "",
+                  } else {
+                    try {
+                      UserCredential userCredential = await authService.signInWithPhone(
+                        vId!,
+                        codeController.text.trim(),
                       );
+                      PedometerService().reset();
+                      bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
+                      if (isNew) {
+                        await firebaseService.createPlayer(
+                          uid: userCredential.user!.uid,
+                          name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
+                          email: userCredential.user!.phoneNumber ?? "",
+                        );
+                      }
+                      if (Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
+                      if (mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => isNew 
+                              ? ClassSelectionScreen(uid: userCredential.user!.uid) 
+                              : const MainNavigation()
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                     }
-                    if (Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
-                    if (mounted) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => isNew 
-                            ? ClassSelectionScreen(uid: userCredential.user!.uid) 
-                            : const MainNavigation()
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                   }
-                }
-              },
-              child: Text(vId == null ? "REQUEST CODE" : "VERIFY CODE", style: const TextStyle(fontWeight: FontWeight.bold)),
+                },
+                child: Text(vId == null ? "REQUEST CODE" : "VERIFY CODE", style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
             ),
           ],
         ),
@@ -255,19 +262,19 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFF0D1117),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: const Color(0xFF161B22),
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.black.withValues(alpha: 0.05), width: 1.5),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
+                  color: Colors.black.withValues(alpha: 0.2),
                   blurRadius: 16,
                   offset: const Offset(0, 8),
                 )
@@ -276,30 +283,30 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.public_rounded, size: 70, color: Colors.blueAccent),
+                const Icon(Icons.public_rounded, size: 70, color: Colors.cyanAccent),
                 const SizedBox(height: 16),
                 const Text(
                   "FITQUEST",
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 2),
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   isLogin ? "START PLAYER SESSION" : "CREATE PLAYER PROFILE",
-                  style: const TextStyle(color: Colors.black45, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                  style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 32),
 
                 if (!isLogin) ...[
                   TextField(
                     controller: nameController,
-                    style: const TextStyle(color: Colors.black87),
+                    style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: "Player Name",
-                      labelStyle: const TextStyle(color: Colors.black54),
-                      prefixIcon: const Icon(Icons.person_outline_rounded, color: Colors.black38),
+                      labelStyle: const TextStyle(color: Colors.white54),
+                      prefixIcon: const Icon(Icons.person_outline_rounded, color: Colors.white24),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.black12)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.blueAccent)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white12)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.cyanAccent)),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -307,40 +314,46 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 TextField(
                   controller: emailController,
-                  style: const TextStyle(color: Colors.black87),
+                  style: const TextStyle(color: Colors.white),
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: "Email Address",
-                    labelStyle: const TextStyle(color: Colors.black54),
-                    prefixIcon: const Icon(Icons.email_outlined, color: Colors.black38),
+                    labelStyle: const TextStyle(color: Colors.white54),
+                    prefixIcon: const Icon(Icons.email_outlined, color: Colors.white24),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.black12)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.blueAccent)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white12)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.cyanAccent)),
                   ),
                 ),
                 const SizedBox(height: 16),
 
                 TextField(
                   controller: passwordController,
-                  style: const TextStyle(color: Colors.black87),
+                  style: const TextStyle(color: Colors.white),
                   obscureText: true,
                   decoration: InputDecoration(
                     labelText: "Password",
-                    labelStyle: const TextStyle(color: Colors.black54),
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.black38),
+                    labelStyle: const TextStyle(color: Colors.white54),
+                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.white24),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.black12)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.blueAccent)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white12)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.cyanAccent)),
                   ),
                 ),
                 const SizedBox(height: 28),
 
-                SizedBox(
+                Container(
                   width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: loading ? null : const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
+                    borderRadius: BorderRadius.circular(16),
+                    color: loading ? Colors.white10 : null,
+                  ),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
+                      backgroundColor: Colors.transparent,
                       foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
@@ -354,9 +367,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
                 const Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.black12)),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("SOCIAL SIGN IN", style: TextStyle(color: Colors.black26, fontSize: 10, fontWeight: FontWeight.w900))),
-                    Expanded(child: Divider(color: Colors.black12)),
+                    Expanded(child: Divider(color: Colors.white12)),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("SOCIAL SIGN IN", style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w900))),
+                    Expanded(child: Divider(color: Colors.white12)),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -421,7 +434,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     _socialButton(
                       icon: Icons.phone_android_rounded,
-                      color: Colors.green,
+                      color: Colors.cyanAccent,
                       onTap: _showPhoneSignInDialog,
                     ),
                   ],
@@ -432,7 +445,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: () => setState(() => isLogin = !isLogin),
                   child: Text(
                     isLogin ? "CREATE AN ACCOUNT" : "ALREADY HAVE AN ACCOUNT?",
-                    style: const TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                    style: const TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                   ),
                 ),
               ],
@@ -450,12 +463,12 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFF161B22),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.01),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 8,
               offset: const Offset(0, 4),
             )

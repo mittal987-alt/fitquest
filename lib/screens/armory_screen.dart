@@ -7,52 +7,52 @@ import '../services/firebase_service.dart';
 class ArmoryScreen extends StatelessWidget {
   const ArmoryScreen({super.key});
 
+  static const Color _bgColor = Color(0xFF0D1117);
+  static const Color _cardColor = Color(0xFF161B22);
+  static const Color _accentColor = Color(0xFF8E2DE2);
+
   @override
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
-
-    // FIX: was `firebaseService.auth.currentUser!.uid` — a force-unwrap that
-    // throws immediately if this screen is ever reached with no signed-in
-    // user (e.g. mid sign-out navigation). Guarded the same way
-    // leaderboard_screen.dart already does, instead of letting it crash.
     final uid = firebaseService.auth.currentUser?.uid;
+
     if (uid == null) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF5F7FA),
+        backgroundColor: _bgColor,
         body: Center(
           child: Text(
             "NOT LOGGED IN",
-            style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold),
+            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold),
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: _bgColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text(
-          "EQUIPMENT ROOM",
+          "OPERATOR ARMORY",
           style: TextStyle(
             fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
+            letterSpacing: 2,
             fontSize: 18,
-            color: Colors.black87,
+            color: Colors.white,
           ),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black87),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: StreamBuilder<PlayerModel?>(
         stream: firebaseService.getPlayerStream(uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
+            return const Center(child: CircularProgressIndicator(color: _accentColor));
           }
           if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: Text("FAILED TO LOAD PLAYER DATA"));
+            return const Center(child: Text("FAILED TO LOAD DATA", style: TextStyle(color: Colors.redAccent)));
           }
 
           final player = snapshot.data!;
@@ -63,15 +63,16 @@ class ArmoryScreen extends StatelessWidget {
               children: [
                 // XP BALANCE
                 Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(20),
+                  margin: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: _cardColor,
                     borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 16,
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 15,
                         offset: const Offset(0, 8),
                       )
                     ],
@@ -83,17 +84,24 @@ class ArmoryScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            "XP BALANCE",
-                            style: TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                            "ACCUMULATED XP",
+                            style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Text(
                             "${player.xp} XP",
-                            style: const TextStyle(color: Colors.black87, fontSize: 24, fontWeight: FontWeight.w900),
+                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900),
                           ),
                         ],
                       ),
-                      const Icon(Icons.shield_rounded, color: Colors.blueAccent, size: 32),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _accentColor.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.shield_rounded, color: _accentColor, size: 32),
+                      ),
                     ],
                   ),
                 ),
@@ -103,10 +111,11 @@ class ArmoryScreen extends StatelessWidget {
                     Tab(text: "EQUIPMENT"),
                     Tab(text: "PURCHASE"),
                   ],
-                  labelColor: Colors.blueAccent,
-                  unselectedLabelColor: Colors.black38,
-                  indicatorColor: Colors.blueAccent,
-                  labelStyle: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white38,
+                  indicatorColor: _accentColor,
+                  indicatorWeight: 3,
+                  labelStyle: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
                 ),
 
                 Expanded(
@@ -131,11 +140,11 @@ class ArmoryScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inventory_2_outlined, size: 64, color: Colors.black12),
+            Icon(Icons.inventory_2_outlined, size: 64, color: Colors.white10),
             SizedBox(height: 16),
             Text(
               "NO GEAR OWNED",
-              style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold, letterSpacing: 1),
+              style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, letterSpacing: 1),
             ),
           ],
         ),
@@ -145,7 +154,7 @@ class ArmoryScreen extends StatelessWidget {
     final ownedItems = allGear.where((g) => player.ownedGear.contains(g.id)).toList();
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       itemCount: ownedItems.length,
       itemBuilder: (context, index) {
         final gear = ownedItems[index];
@@ -170,7 +179,7 @@ class ArmoryScreen extends StatelessWidget {
     final availableItems = allGear.where((g) => !player.ownedGear.contains(g.id)).toList();
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       itemCount: availableItems.length,
       itemBuilder: (context, index) {
         final gear = availableItems[index];
@@ -209,70 +218,80 @@ class _GearListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const cardColor = Color(0xFF161B22);
+    const accentColor = Color(0xFF8E2DE2);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isEquipped ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.05),
-          width: isEquipped ? 2 : 1,
+          color: isEquipped ? accentColor.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.05),
+          width: isEquipped ? 2 : 1.5,
         ),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: (isEquipped ? Colors.blueAccent : Colors.grey).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
+              color: (isEquipped ? accentColor : Colors.white10).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: (isEquipped ? accentColor : Colors.white10).withValues(alpha: 0.2)),
             ),
             child: Icon(
               _getIcon(gear.icon),
-              color: isEquipped ? Colors.blueAccent : Colors.black45,
+              color: isEquipped ? accentColor : Colors.white38,
+              size: 28,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   gear.name.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.5),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white, letterSpacing: 0.5),
                 ),
+                const SizedBox(height: 4),
                 Text(
                   gear.description,
-                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
                 ),
                 if (!isOwned) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
                   Text(
                     "${gear.price} XP",
                     style: TextStyle(
-                      color: canAfford ? Colors.blueAccent : Colors.redAccent,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      color: canAfford ? accentColor : Colors.redAccent,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
                     ),
                   ),
                 ],
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           ElevatedButton(
             onPressed: (isOwned && isEquipped) ? null : onAction,
             style: ElevatedButton.styleFrom(
-              backgroundColor: isEquipped ? Colors.green : (isOwned ? Colors.blueAccent : Colors.black87),
-              foregroundColor: Colors.white,
+              backgroundColor: isEquipped ? Colors.greenAccent.withValues(alpha: 0.2) : (isOwned ? accentColor.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05)),
+              foregroundColor: isEquipped ? Colors.greenAccent : (isOwned ? accentColor : Colors.white),
               elevation: 0,
+              side: BorderSide(
+                color: isEquipped ? Colors.greenAccent.withValues(alpha: 0.3) : (isOwned ? accentColor.withValues(alpha: 0.3) : Colors.white10),
+                width: 1.5,
+              ),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             child: Text(
-              isEquipped ? "EQUIPPED" : (isOwned ? "EQUIP" : "BUY"),
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+              isEquipped ? "READY" : (isOwned ? "EQUIP" : "BUY"),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1),
             ),
           ),
         ],
@@ -280,9 +299,6 @@ class _GearListItem extends StatelessWidget {
     );
   }
 
-  // FIX: was `Icons. construction_rounded` — a stray space after the dot.
-  // Dart tolerates whitespace around member access so this still compiled,
-  // but it's a clear typo left over from editing; cleaned up.
   IconData _getIcon(String iconName) {
     switch (iconName) {
       case 'boot_icon': return Icons.directions_walk_rounded;

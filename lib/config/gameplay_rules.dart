@@ -36,10 +36,59 @@ class GameplayRules {
   /// Step count required for an individual to patch active firewalls and lift penalties
   static const int firewallPatchStepRequirement = 3000;
 
+  // --- PRIMAL SPIRIT ULTIMATE ---
+  /// Damage multiplier when all 3 classes (Medic, Tank, Scout) have active synergy
+  static const double primalSpiritDamageMultiplier = 3.0;
+
+  /// Base probability of triggering Primal Spirit on attack when full resonance is active
+  static const double primalSpiritBaseTriggerChance = 0.25;
+
+  /// Calculates balanced trigger chance based on team size.
+  /// Smaller teams get a boost to reward tight coordination.
+  static double getBalancedPrimalSpiritTriggerChance(int teamSize) {
+    if (teamSize <= 5) return 0.35;  // Elite Squad Buff
+    if (teamSize <= 15) return 0.25; // Standard Rate
+    return 0.15; // Massive Raid Balancing
+  }
+
   // --- RECOVERY & AP POOLS ---
   /// Maximum stamina Action Points (AP) base limit
   static const int baseMaxStamina = 100;
 
   /// Stamina recovery multiplier per 1,000 steps completed
   static const int staminaRefillPerThousandSteps = 10;
+
+  /// Stamina recovery per 2 minutes during idle regen
+  static const int passiveStaminaRegen = 5;
+
+  /// Cost to participate in a World Event node (Mineral extraction, etc.)
+  static const int worldEventContributionCost = 15;
+
+  // --- ELEMENTAL BOSS SYSTEM ---
+  static const List<Map<String, dynamic>> bossPool = [
+    {
+      "id": "void_titan",
+      "name": "VOID TITAN",
+      "maxHp": 150000.0,
+      "element": "Void",
+      "weakness": "Light",
+      "color": 0xFF4A00E0,
+    },
+    {
+      "id": "magma_golem",
+      "name": "MAGMA GOLEM",
+      "maxHp": 120000.0,
+      "element": "Fire",
+      "weakness": "Ice",
+      "color": 0xFFFF4B2B,
+    },
+    {
+      "id": "storm_wraith",
+      "name": "STORM WRAITH",
+      "maxHp": 100000.0,
+      "element": "Electric",
+      "weakness": "Earth",
+      "color": 0xFF00D2FF,
+    },
+  ];
 }

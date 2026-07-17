@@ -54,9 +54,14 @@ class PlayerModel {
   final int ghostRaidDamage;
   final DateTime? lastActiveDate;
   final List<String> claimedQuests;
+  final List<String> unlockedAchievements;
+  final List<String> friends;
   final Map<String, DateTime> activePowerUps;
   final List<String> ownedGear;
   final Map<String, String> equippedGear;
+
+  /// Customization: Primary color for territories (e.g., "#FF0000")
+  final String? territoryColor;
 
   /// Crafting inventory mapping: Material Identifier -> Inventory Volume Count
   final Map<String, int> inventory;
@@ -86,6 +91,7 @@ class PlayerModel {
   final int endurance;
   final int currentStamina;
   final int maxStamina;
+  final int totalLand;
 
   double? get bmi {
     if (heightCm == null || weightKg == null || heightCm! <= 0) return null;
@@ -161,9 +167,11 @@ class PlayerModel {
     this.streakCount = 0,
     this.totalRaidDamage = 0,
     this.ghostRaidDamage = 0,
-    this.totalLand = 0,
+    required this.totalLand,
     this.lastActiveDate,
     this.claimedQuests = const [],
+    this.unlockedAchievements = const [],
+    this.friends = const [],
     this.activePowerUps = const {},
     this.ownedGear = const [],
     this.equippedGear = const {},
@@ -185,15 +193,8 @@ class PlayerModel {
     this.currentStamina = 100,
     this.maxStamina = 100,
     this.fitnessGoal,
+    this.territoryColor,
   });
-
-  // FIX: totalLand is used throughout home_screen.dart (player.totalLand /
-  // "AREAS VISITED" stat, the "territory_scout" quest) and passed in by
-  // firebase_service.dart's createPlayer(). The field itself was missing from
-  // this model entirely, which would fail to compile ("No named parameter
-  // 'totalLand'" / "getter 'totalLand' isn't defined"). Declared here and
-  // wired into the constructor, copyWith, fromMap, and toMap below.
-  final int totalLand;
 
   PlayerModel copyWith({
     String? uid,
@@ -220,12 +221,15 @@ class PlayerModel {
     int? totalLand,
     DateTime? lastActiveDate,
     List<String>? claimedQuests,
+    List<String>? unlockedAchievements,
+    List<String>? friends,
     Map<String, DateTime>? activePowerUps,
     List<String>? ownedGear,
     Map<String, String>? equippedGear,
     Map<String, int>? inventory,
     Map<String, int>? hourlySteps,
     Map<String, dynamic>? dailyHistory,
+    String? territoryColor,
     double? energyBoostRaidMultiplier,
     double? energyBoostXpMultiplier,
     bool? isGhostStriderEnabled,
@@ -267,12 +271,15 @@ class PlayerModel {
       totalLand: totalLand ?? this.totalLand,
       lastActiveDate: lastActiveDate ?? this.lastActiveDate,
       claimedQuests: claimedQuests ?? this.claimedQuests,
+      unlockedAchievements: unlockedAchievements ?? this.unlockedAchievements,
+      friends: friends ?? this.friends,
       activePowerUps: activePowerUps ?? this.activePowerUps,
       ownedGear: ownedGear ?? this.ownedGear,
       equippedGear: equippedGear ?? this.equippedGear,
       inventory: inventory ?? this.inventory,
       hourlySteps: hourlySteps ?? this.hourlySteps,
       dailyHistory: dailyHistory ?? this.dailyHistory,
+      territoryColor: territoryColor ?? this.territoryColor,
       energyBoostRaidMultiplier: energyBoostRaidMultiplier ?? this.energyBoostRaidMultiplier,
       energyBoostXpMultiplier: energyBoostXpMultiplier ?? this.energyBoostXpMultiplier,
       isGhostStriderEnabled: isGhostStriderEnabled ?? this.isGhostStriderEnabled,
@@ -328,9 +335,12 @@ class PlayerModel {
       totalLand: (map["totalLand"] as num?)?.toInt() ?? 0,
       lastActiveDate: map["lastActiveDate"] is Timestamp ? (map["lastActiveDate"] as Timestamp).toDate() : null,
       claimedQuests: map["claimedQuests"] != null ? List<String>.from(map["claimedQuests"]) : const [],
+      unlockedAchievements: map["unlockedAchievements"] != null ? List<String>.from(map["unlockedAchievements"]) : const [],
+      friends: map["friends"] != null ? List<String>.from(map["friends"]) : const [],
       activePowerUps: powerUps,
       ownedGear: map["ownedGear"] != null ? List<String>.from(map["ownedGear"]) : const [],
       equippedGear: Map<String, String>.from(map["equippedGear"] ?? {}),
+      territoryColor: map["territoryColor"]?.toString(),
       inventory: Map<String, int>.from(map['inventory'] ?? {}),
       hourlySteps: Map<String, int>.from(map['hourlySteps'] ?? map['hourlyTelemetry'] ?? {}),
       dailyHistory: Map<String, dynamic>.from(map['dailyHistory'] ?? {}),
@@ -383,9 +393,12 @@ class PlayerModel {
       "totalLand": totalLand,
       "lastActiveDate": lastActiveDate != null ? Timestamp.fromDate(lastActiveDate!) : null,
       "claimedQuests": claimedQuests,
+      "unlockedAchievements": unlockedAchievements,
+      "friends": friends,
       "activePowerUps": powerUps,
       "ownedGear": ownedGear,
       "equippedGear": equippedGear,
+      "territoryColor": territoryColor,
       "inventory": inventory,
       "hourlySteps": hourlySteps,
       "dailyHistory": dailyHistory,

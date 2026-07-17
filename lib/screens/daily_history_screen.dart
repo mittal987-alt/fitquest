@@ -63,17 +63,17 @@ class DailyHistoryScreen extends StatelessWidget {
     String reliabilityGrade = _getReliabilityGrade(complianceRate);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0D1117),
         elevation: 0,
         title: const Text(
           "OPERATIONAL LOGS",
-          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 1.5, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5, fontSize: 18),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -102,7 +102,7 @@ class DailyHistoryScreen extends StatelessWidget {
                       const SizedBox(height: kSectionGap),
                       const Text(
                         "HISTORICAL TELEMETRY",
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black38, letterSpacing: 1),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white38, letterSpacing: 1),
                       ),
                       const SizedBox(height: 12),
                     ],
@@ -139,14 +139,14 @@ class DailyHistoryScreen extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1A237E), Color(0xFF283593)],
+          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: Colors.indigo.withValues(alpha: 0.2),
+            color: const Color(0xFF4A00E0).withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
           )
@@ -250,16 +250,16 @@ class DailyHistoryScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.history_rounded, size: 80, color: Colors.black.withValues(alpha: 0.05)),
+          Icon(Icons.history_rounded, size: 80, color: Colors.white.withValues(alpha: 0.05)),
           const SizedBox(height: 16),
           const Text(
             "NO ARCHIVED TELEMETRY",
-            style: TextStyle(color: Colors.black38, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, letterSpacing: 1.2),
           ),
           const SizedBox(height: 8),
           const Text(
             "Complete a 24h cycle to log performance.",
-            style: TextStyle(color: Colors.black26, fontSize: 12),
+            style: TextStyle(color: Colors.white24, fontSize: 12),
           ),
         ],
       ),
@@ -289,12 +289,12 @@ class DailyHistoryScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF161B22),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 12,
             offset: const Offset(0, 4),
           )
@@ -314,13 +314,13 @@ class DailyHistoryScreen extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w900, 
                       fontSize: 10, 
-                      color: goalReached ? Colors.green : Colors.blueAccent, 
+                      color: goalReached ? Colors.greenAccent : Colors.blueAccent, 
                       letterSpacing: 1.5
                     ),
                   ),
                   Text(
                     DateFormat('MMM dd, yyyy').format(date).toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white),
                   ),
                   const SizedBox(height: 6),
                   Row(
@@ -332,7 +332,7 @@ class DailyHistoryScreen extends StatelessWidget {
                         style: TextStyle(
                           fontWeight: FontWeight.w900, 
                           fontSize: 9, 
-                          color: goalReached ? Colors.green : Colors.black26, 
+                          color: goalReached ? Colors.greenAccent : Colors.white24, 
                           letterSpacing: 0.5
                         ),
                       ),
@@ -342,7 +342,7 @@ class DailyHistoryScreen extends StatelessWidget {
               ),
               _statusBox(
                 goalReached ? "GOAL MET" : "GOAL NOT MET",
-                goalReached ? Colors.green : Colors.blueAccent,
+                goalReached ? Colors.greenAccent : Colors.blueAccent,
               ),
             ],
           ),
@@ -350,10 +350,10 @@ class DailyHistoryScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _statItem(Icons.directions_walk_rounded, "$steps", "STEPS", Colors.orange),
+              _statItem(Icons.directions_walk_rounded, "$steps", "STEPS", Colors.orangeAccent),
               _statItem(Icons.local_fire_department_rounded, calories.toStringAsFixed(0), "KCAL", Colors.redAccent),
-              _statItem(Icons.map_rounded, distance.toStringAsFixed(1), "KM", Colors.blue),
-              _statItem(Icons.bolt_rounded, "+$xp", "XP", Colors.amber),
+              _statItem(Icons.map_rounded, distance.toStringAsFixed(1), "KM", Colors.blueAccent),
+              _statItem(Icons.bolt_rounded, "+$xp", "XP", Colors.amberAccent),
             ],
           ),
           const SizedBox(height: 24),
@@ -363,7 +363,7 @@ class DailyHistoryScreen extends StatelessWidget {
                 height: 8,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: Colors.white.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -374,7 +374,7 @@ class DailyHistoryScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: goalReached 
-                        ? [Colors.greenAccent, Colors.green] 
+                        ? [Colors.greenAccent.withValues(alpha: 0.6), Colors.greenAccent] 
                         : [Colors.blueAccent.withValues(alpha: 0.6), Colors.blueAccent],
                     ),
                     borderRadius: BorderRadius.circular(4),
@@ -388,13 +388,13 @@ class DailyHistoryScreen extends StatelessWidget {
                padding: const EdgeInsets.only(top: 6),
                child: Text(
                  "SURPASSED TARGET BY ${(steps - player.dailyStepTarget)} STEPS!",
-                 style: const TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.bold),
+                 style: const TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold),
                ),
              ),
           const SizedBox(height: 24),
           const Text(
             "ACTIVITY INTENSITY",
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.black26, letterSpacing: 1),
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white24, letterSpacing: 1),
           ),
           const SizedBox(height: 12),
           ActivityHeatmap(
@@ -402,7 +402,7 @@ class DailyHistoryScreen extends StatelessWidget {
           ),
           if (achievements.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Divider(height: 1, color: Colors.black12),
+            const Divider(height: 1, color: Colors.white10),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -437,18 +437,18 @@ class DailyHistoryScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.indigo.withValues(alpha: 0.05),
+        color: Colors.cyanAccent.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.indigo.withValues(alpha: 0.1)),
+        border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.shield_rounded, size: 10, color: Colors.indigo),
+          const Icon(Icons.shield_rounded, size: 10, color: Colors.cyanAccent),
           const SizedBox(width: 4),
           Text(
             tier.toUpperCase(),
-            style: const TextStyle(color: Colors.indigo, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+            style: const TextStyle(color: Colors.cyanAccent, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
           ),
         ],
       ),
@@ -485,10 +485,10 @@ class DailyHistoryScreen extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 18),
             const SizedBox(width: 6),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87)),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white)),
           ],
         ),
-        Text(label, style: const TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
       ],
     );
   }

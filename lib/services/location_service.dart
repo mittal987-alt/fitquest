@@ -118,7 +118,7 @@ class LocationService {
   bool isWalking(double speed) {
 
     return speed > 1 &&
-        speed < 10;
+        speed <= 12;
   }
 
   // =========================

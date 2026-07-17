@@ -18,16 +18,16 @@ class TeamRequestsScreen extends StatelessWidget {
     final FirebaseService firebaseService = FirebaseService();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0D1117),
         elevation: 0,
         title: const Text(
           "INBOUND SQUAD REQUESTS",
-          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 16, color: Colors.black87),
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 16, color: Colors.white),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black87),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: StreamBuilder<List<TeamRequestModel>>(
         stream: firebaseService.getTeamRequests(teamId),
@@ -40,7 +40,7 @@ class TeamRequestsScreen extends StatelessWidget {
             return const Center(
               child: Text(
                 "NO PENDING TELEMETRY REQUESTS",
-                style: TextStyle(color: Colors.black38, fontWeight: FontWeight.bold, letterSpacing: 1, fontSize: 13),
+                style: TextStyle(color: Colors.white24, fontWeight: FontWeight.bold, letterSpacing: 1, fontSize: 13),
               ),
             );
           }
@@ -62,12 +62,12 @@ class TeamRequestsScreen extends StatelessWidget {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                      color: const Color(0xFF161B22),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
+                          color: Colors.black.withValues(alpha: 0.2),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         )
@@ -82,7 +82,7 @@ class TeamRequestsScreen extends StatelessWidget {
                               width: 48,
                               height: 48,
                               decoration: BoxDecoration(
-                                color: Colors.blueAccent.withValues(alpha: 0.05),
+                                color: Colors.blueAccent.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
                               ),
@@ -92,10 +92,6 @@ class TeamRequestsScreen extends StatelessWidget {
                                 child: Image.network(
                                   player.avatar,
                                   fit: BoxFit.cover,
-                                  // FIX: no fallback previously — a broken
-                                  // avatar URL would render Flutter's default
-                                  // broken-image glyph instead of degrading
-                                  // gracefully like the rest of the app does.
                                   errorBuilder: (context, error, stackTrace) =>
                                   const Icon(Icons.person_search_rounded, color: Colors.blueAccent, size: 22),
                                 ),
@@ -109,13 +105,13 @@ class TeamRequestsScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     request.playerName.toUpperCase(),
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.black87, letterSpacing: 0.5),
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     "REQUESTING LINK TO ${teamName.toUpperCase()}",
-                                    style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.2),
+                                    style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.2),
                                   ),
                                 ],
                               ),
@@ -156,32 +152,40 @@ class TeamRequestsScreen extends StatelessWidget {
 
                             // ACCEPT INBOUND REQUEST
                             Expanded(
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.greenAccent.withValues(alpha: 0.1),
-                                  foregroundColor: Colors.greenAccent,
-                                  elevation: 0,
-                                  side: BorderSide(color: Colors.greenAccent.withValues(alpha: 0.3)),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                onPressed: () async {
-                                  await firebaseService.acceptRequest(
-                                    requestId: request.requestId,
-                                    playerId: request.playerId,
-                                    teamId: request.teamId,
-                                    teamName: request.teamName,
-                                  );
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shadowColor: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  onPressed: () async {
+                                    await firebaseService.acceptRequest(
+                                      requestId: request.requestId,
+                                      playerId: request.playerId,
+                                      teamId: request.teamId,
+                                      teamName: request.teamName,
+                                    );
 
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      backgroundColor: Colors.greenAccent,
-                                      content: Text("ACCEPTED: ${request.playerName.toUpperCase()} ALLOCATED TO SQUAD"),
-                                    ),
-                                  );
-                                },
-                                child: const Text("GRANT ACCESS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFF4A00E0),
+                                        content: Text("ACCEPTED: ${request.playerName.toUpperCase()} ALLOCATED TO SQUAD"),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text("GRANT ACCESS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
+                                ),
                               ),
                             ),
                           ],
