@@ -35,6 +35,43 @@ class ActivityFeedWidget extends StatelessWidget {
         icon = Icons.directions_walk_rounded;
         color = Colors.greenAccent;
         break;
+      case ActivityType.challengeStarted:
+        icon = Icons.assignment_rounded;
+        color = Colors.blueAccent;
+        break;
+      case ActivityType.challengeCompleted:
+        icon = Icons.verified_rounded;
+        color = Colors.greenAccent;
+        break;
+      case ActivityType.rewardClaimed:
+      case ActivityType.teamChallengeReward:
+        icon = Icons.redeem_rounded;
+        color = Colors.purpleAccent;
+        break;
+      case ActivityType.teamBuffActivated:
+        icon = Icons.bolt_rounded;
+        color = Colors.yellowAccent;
+        break;
+    }
+
+    String displayMessage = activity.message;
+    if (displayMessage.isEmpty) {
+      switch (activity.type) {
+        case ActivityType.challengeStarted:
+          displayMessage = "started challenge: ${activity.itemId}";
+          break;
+        case ActivityType.challengeCompleted:
+          displayMessage = "completed challenge: ${activity.itemId}";
+          break;
+        case ActivityType.rewardClaimed:
+          displayMessage = "claimed rewards for: ${activity.itemId}";
+          break;
+        case ActivityType.teamBuffActivated:
+          displayMessage = "activated team buff: ${activity.itemId}";
+          break;
+        default:
+          displayMessage = "";
+      }
     }
 
     return Container(
@@ -64,19 +101,22 @@ class ActivityFeedWidget extends StatelessWidget {
                   text: TextSpan(
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                     children: [
-                      TextSpan(
-                        text: activity.playerName,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                      TextSpan(text: " ${activity.message}"),
+                      if (activity.playerName != null)
+                        TextSpan(
+                          text: activity.playerName,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      TextSpan(text: " $displayMessage"),
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatTimestamp(activity.timestamp),
-                  style: const TextStyle(color: Colors.white38, fontSize: 10),
-                ),
+                if (activity.timestamp != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatTimestamp(activity.timestamp!),
+                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+                  ),
+                ],
               ],
             ),
           ),

@@ -1,14 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/walk_session_model.dart';
+import '../models/player_model.dart';
+import '../services/firebase_service.dart';
 
 class WalkSummaryScreen extends StatelessWidget {
   final WalkSessionModel session;
+  final PlayerModel? player;
 
-  const WalkSummaryScreen({super.key, required this.session});
+  const WalkSummaryScreen({super.key, required this.session, this.player});
 
   static const Color _kBgColor = Color(0xFF0D1117);
-  static const Color _kSurfaceColor = Color(0xFF161B22);
   static const Color _kPrimaryPurple = Color(0xFF8E2DE2);
 
   @override
@@ -77,18 +79,39 @@ class WalkSummaryScreen extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(24.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _kPrimaryPurple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Column(
+                children: [
+                  if (player?.isInTeam ?? false) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _shareToTeam(context),
+                        icon: const Icon(Icons.share_rounded, size: 18),
+                        label: const Text("SHARE TO TEAM CHAT", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.cyanAccent,
+                          side: const BorderSide(color: Colors.cyanAccent, width: 2),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _kPrimaryPurple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text("RETURN TO BASE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+                    ),
                   ),
-                  child: const Text("RETURN TO BASE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
-                ),
+                ],
               ),
             ),
           ],
@@ -97,11 +120,46 @@ class WalkSummaryScreen extends StatelessWidget {
     );
   }
 
+  void _shareToTeam(BuildContext context) async {
+    if (player == null || !player!.isInTeam || player!.teamId == null) return;
+
+    final service = FirebaseService();
+    final kcal = (session.steps * 0.04).toInt();
+    final duration = session.endTime.difference(session.startTime).inMinutes;
+    
+    final message = "🚀 MISSION COMPLETE!\n"
+        "Captured ${session.steps} steps ($kcal kcal) over ${session.distanceKm.toStringAsFixed(2)} km.\n"
+        "Duration: $duration mins.";
+
+    try {
+      await service.sendTeamChatMessage(
+        player!.teamId!,
+        player!.uid,
+        player!.name,
+        message,
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("RESULTS SHARED TO TEAM CHAT!"),
+            backgroundColor: Colors.cyan,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to share: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Widget _buildStatsRow() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _statItem("${session.distanceKm.toStringAsFixed(2)}", "KM", Icons.straighten_rounded),
+        _statItem(session.distanceKm.toStringAsFixed(2), "KM", Icons.straighten_rounded),
         _statItem("${(session.steps * 0.04).toInt()}", "KCAL", Icons.local_fire_department_rounded),
         _statItem("${session.endTime.difference(session.startTime).inMinutes}", "MINS", Icons.timer_rounded),
       ],

@@ -18,6 +18,8 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   late String _goal;
   late int _stepTarget;
   late int _exerciseTarget;
+  late Map<String, int> _hourlySteps;
+  late Map<String, dynamic> _dailyHistory;
   bool _isSaving = false;
 
   static const double _kCardRadius = 24;
@@ -54,6 +56,8 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
     _goal = widget.player.fitnessGoal ?? "maintenance";
     _stepTarget = widget.player.dailyStepTarget;
     _exerciseTarget = widget.player.dailyExerciseTargetMinutes;
+    _hourlySteps = Map<String, int>.from(widget.player.hourlySteps);
+    _dailyHistory = Map<String, dynamic>.from(widget.player.dailyHistory);
   }
 
   ActivityModel _computeRecommendation() {
@@ -124,11 +128,200 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             _sectionHeader("TARGET ADJUSTMENT"),
             const SizedBox(height: 12),
             _buildTargetSliders(),
+            const SizedBox(height: _kSectionGap),
+            _sectionHeader("HISTORICAL TELEMETRY (DEBUG)"),
+            const SizedBox(height: 12),
+            _buildHistoricalTelemetrySection(),
             const SizedBox(height: 32),
             _buildActionButtons(),
             const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHistoricalTelemetrySection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "MANUAL TELEMETRY OVERRIDE",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Directly modify hourly baselines or daily logs for testing Ghost Strider performance.",
+            style: TextStyle(color: Colors.white24, fontSize: 10),
+          ),
+          const SizedBox(height: 20),
+          _telemetryActionTile(
+            "HOURLY STEP DISTRIBUTION",
+            Icons.access_time_filled_rounded,
+            () => _showHourlyEditor(),
+          ),
+          const Divider(height: 1, color: Colors.white10),
+          _telemetryActionTile(
+            "DAILY ARCHIVE LOGS",
+            Icons.calendar_month_rounded,
+            () => _showDailyHistoryEditor(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _telemetryActionTile(String title, IconData icon, VoidCallback onTap) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: Colors.cyanAccent, size: 20),
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white24),
+      onTap: onTap,
+    );
+  }
+
+  void _showHourlyEditor() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF161B22),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    "EDIT HOURLY DISTRIBUTION",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: 24,
+                    itemBuilder: (context, index) {
+                      final hour = index.toString().padLeft(2, '0');
+                      final steps = _hourlySteps[hour] ?? 0;
+                      return ListTile(
+                        title: Text("HOUR $hour:00", style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                        trailing: SizedBox(
+                          width: 100,
+                          child: TextField(
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+                            decoration: const InputDecoration(
+                              hintText: "Steps",
+                              hintStyle: TextStyle(color: Colors.white10),
+                              isDense: true,
+                            ),
+                            onChanged: (val) {
+                              final intValue = int.tryParse(val) ?? 0;
+                              setState(() => _hourlySteps[hour] = intValue);
+                            },
+                            controller: TextEditingController(text: steps.toString())..selection = TextSelection.fromPosition(TextPosition(offset: steps.toString().length)),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("CLOSE & PREVIEW", style: TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDailyHistoryEditor() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF161B22),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final sortedDates = _dailyHistory.keys.toList()..sort((a, b) => b.compareTo(a));
+          return Container(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    "DAILY HISTORY ARCHIVE",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: sortedDates.length,
+                    itemBuilder: (context, index) {
+                      final date = sortedDates[index];
+                      final data = _dailyHistory[date] as Map<String, dynamic>;
+                      final steps = data['steps'] ?? 0;
+                      return ListTile(
+                        title: Text(date, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                        subtitle: Text("${data['calories'] ?? 0} KCAL | ${data['distance'] ?? 0.0} KM", style: const TextStyle(color: Colors.white24, fontSize: 10)),
+                        trailing: SizedBox(
+                          width: 100,
+                          child: TextField(
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+                            decoration: const InputDecoration(isDense: true),
+                            onChanged: (val) {
+                              final intValue = int.tryParse(val) ?? 0;
+                              setState(() {
+                                final current = Map<String, dynamic>.from(_dailyHistory[date]);
+                                current['steps'] = intValue;
+                                _dailyHistory[date] = current;
+                              });
+                            },
+                            controller: TextEditingController(text: steps.toString())..selection = TextSelection.fromPosition(TextPosition(offset: steps.toString().length)),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("CLOSE & PREVIEW", style: TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -404,6 +597,8 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
         fitnessGoal: _goal,
         stepTarget: _stepTarget,
         exerciseTarget: _exerciseTarget,
+        hourlySteps: _hourlySteps,
+        dailyHistory: _dailyHistory,
       );
       if (mounted) {
         Navigator.pop(context);

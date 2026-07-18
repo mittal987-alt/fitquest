@@ -14,7 +14,8 @@
     <application
         android:label="untitled"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
 
         <!-- GOOGLE MAPS API -->
         <meta-data
@@ -49,12 +50,11 @@
     </application>
 
     <queries>
-
+        <package android:name="com.google.android.gms" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-
     </queries>
 
 </manifest>

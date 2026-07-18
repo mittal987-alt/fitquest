@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:pedometer/pedometer.dart';
 import '../models/player_model.dart';
 import '../config/gameplay_rules.dart';
@@ -168,7 +169,7 @@ class PedometerService {
 
   /// Bootstraps tracking streams. Connects to device sensors or initializes
   /// simulation routines in emulator scenarios.
-  void startTracking({bool useSimulator = true, PlayerModel? playerContext, int initialSteps = 0}) {
+  void startTracking({bool useSimulator = false, PlayerModel? playerContext, int initialSteps = 0}) {
     _playerContext = playerContext;
     _todayCumulativeSteps = initialSteps;
     _hourlyStepsBuffer.clear();
@@ -177,7 +178,7 @@ class PedometerService {
     if (useSimulator) {
       _startStepSimulator(playerContext);
     } else {
-      _bindHardwareSensors(); // Note: Hardware sensors will need context passed differently in real use
+      _bindHardwareSensors();
     }
   }
 
@@ -200,7 +201,7 @@ class PedometerService {
           (StepCount event) {
         _processRawHardwareSteps(event.steps);
       },
-      onError: (error) => print("[TELEMETRY] PEDOMETER FAULT: $error"),
+      onError: (error) => debugPrint("[TELEMETRY] PEDOMETER FAULT: $error"),
     );
   }
 
@@ -268,7 +269,7 @@ class PedometerService {
       DateTime expiry = player.activePowerUps["energy_boost"]!;
       if (expiry.isAfter(DateTime.now())) {
         // Use the profile-calculated multiplier from PlayerModel
-        bioDamageMult = player.energyBoostRaidMultiplier;
+        bioDamageMult = player.energyBoostRaidMultiplier.toDouble();
       }
     }
 
@@ -289,13 +290,16 @@ class PedometerService {
     }
 
     // RPG Logic: Strength increases Raid Damage, modified by Energy Boost and Ghost Velocity
-    double damage = steps * (player.effectiveStrength / 10.0) * bioDamageMult * velocityBonus;
+    double damage = (steps * (player.effectiveStrength / 10.0) * bioDamageMult * velocityBonus).toDouble();
 
     // RPG Logic: Agility increases Scanning Velocity, boosted by Ghost Strider velocity
-    double scan = steps * (player.effectiveAgility / 5000.0) * velocityBonus;
+    double scan = (steps * (player.effectiveAgility / 5000.0) * velocityBonus).toDouble();
 
     // RPG Logic: Endurance increases AP recovery frequency
-    int apGained = (steps / (200 - player.effectiveEndurance)).floor();
+    // BASE FORMULA: (steps / (200 - player.effectiveEndurance))
+    // We cap effective endurance at 100 for this calculation to avoid division by zero or negative results
+    double adjustedEndurance = player.effectiveEndurance.toDouble().clamp(0.0, 150.0);
+    int apGained = (steps / (200 - adjustedEndurance)).floor();
 
     // Loot Logic: 5% chance to find a material per pulse,
     // increased to 8% if Ghost Strider is active and ahead.
@@ -353,13 +357,10 @@ class PedometerService {
     final random = Random();
 
     _simulationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      // Simulate high-frequency or burst strides: 15 to 100 steps every tick
-      // Occasional burst simulation to test "Critical Hit" UI
-      final bool isBurst = random.nextDouble() < 0.2;
-      final int simulatedStrideDelta = isBurst
-          ? 60 + random.nextInt(60) // Higher delta for crit testing
-          : 15 + random.nextInt(20);
-
+      if (_isPaused) return;
+      // Walking speed: ~1.5 - 2.5 steps per second
+      // Every 2 seconds: 3 to 6 steps is realistic.
+      final int simulatedStrideDelta = 3 + random.nextInt(4);
       registerSteps(simulatedStrideDelta, playerContext: _playerContext);
     });
   }

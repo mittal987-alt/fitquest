@@ -186,7 +186,7 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
               margin: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
                 border: Border.all(color: isFilled ? Colors.cyanAccent : Colors.white10),
-                color: isFilled ? Colors.cyanAccent.withOpacity(0.1) : Colors.transparent,
+                color: isFilled ? Colors.cyanAccent.withValues(alpha: 0.1) : Colors.transparent,
               ),
               alignment: Alignment.center,
               child: Text(
@@ -209,7 +209,7 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.02),
+        color: Colors.white.withValues(alpha: 0.02),
         border: Border.all(color: Colors.white10),
       ),
       child: GridView.builder(
@@ -228,7 +228,7 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(color: isSelected ? Colors.cyanAccent : Colors.white10),
-                color: isSelected ? Colors.cyanAccent.withOpacity(0.2) : Colors.transparent,
+                color: isSelected ? Colors.cyanAccent.withValues(alpha: 0.2) : Colors.transparent,
               ),
               alignment: Alignment.center,
               child: Text(

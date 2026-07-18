@@ -39,6 +39,7 @@ class PlayerModel {
   final String? teamId;
   final int totalSteps;
   final int dailySteps;
+  final int weeklySteps;
   final int dailyCalories;
   final double dailyDistance;
   final int lastHardwareStepCount;
@@ -72,8 +73,23 @@ class PlayerModel {
 
   /// Daily logs for historical tracking. Key: "YYYY-MM-DD", Value: Map of stats
   final Map<String, dynamic> dailyHistory;
-  final double energyBoostRaidMultiplier;
-  final double energyBoostXpMultiplier;
+
+  int get energyBoostRaidMultiplier {
+    if (activePowerUps.containsKey('energy_boost')) {
+      final expiry = activePowerUps['energy_boost']!;
+      if (expiry.isAfter(DateTime.now())) return 2;
+    }
+    return 1;
+  }
+
+  int get energyBoostXpMultiplier {
+    if (activePowerUps.containsKey('energy_boost')) {
+      final expiry = activePowerUps['energy_boost']!;
+      if (expiry.isAfter(DateTime.now())) return 2;
+    }
+    return 1;
+  }
+
   final bool isGhostStriderEnabled;
 
   // Physical Telemetry Nodes
@@ -154,6 +170,7 @@ class PlayerModel {
     this.teamId,
     required this.totalSteps,
     required this.dailySteps,
+    this.weeklySteps = 0,
     this.dailyCalories = 0,
     this.dailyDistance = 0.0,
     required this.lastHardwareStepCount,
@@ -178,8 +195,6 @@ class PlayerModel {
     this.inventory = const {},
     this.hourlySteps = const {},
     this.dailyHistory = const {},
-    this.energyBoostRaidMultiplier = 1.0,
-    this.energyBoostXpMultiplier = 1.0,
     this.isGhostStriderEnabled = true,
     this.heightCm,
     this.weightKg,
@@ -205,6 +220,7 @@ class PlayerModel {
     String? teamId,
     int? totalSteps,
     int? dailySteps,
+    int? weeklySteps,
     int? dailyCalories,
     double? dailyDistance,
     int? lastHardwareStepCount,
@@ -230,8 +246,6 @@ class PlayerModel {
     Map<String, int>? hourlySteps,
     Map<String, dynamic>? dailyHistory,
     String? territoryColor,
-    double? energyBoostRaidMultiplier,
-    double? energyBoostXpMultiplier,
     bool? isGhostStriderEnabled,
     double? heightCm,
     double? weightKg,
@@ -255,6 +269,7 @@ class PlayerModel {
       teamId: teamId ?? this.teamId,
       totalSteps: totalSteps ?? this.totalSteps,
       dailySteps: dailySteps ?? this.dailySteps,
+      weeklySteps: weeklySteps ?? this.weeklySteps,
       dailyCalories: dailyCalories ?? this.dailyCalories,
       dailyDistance: dailyDistance ?? this.dailyDistance,
       lastHardwareStepCount: lastHardwareStepCount ?? this.lastHardwareStepCount,
@@ -280,8 +295,6 @@ class PlayerModel {
       hourlySteps: hourlySteps ?? this.hourlySteps,
       dailyHistory: dailyHistory ?? this.dailyHistory,
       territoryColor: territoryColor ?? this.territoryColor,
-      energyBoostRaidMultiplier: energyBoostRaidMultiplier ?? this.energyBoostRaidMultiplier,
-      energyBoostXpMultiplier: energyBoostXpMultiplier ?? this.energyBoostXpMultiplier,
       isGhostStriderEnabled: isGhostStriderEnabled ?? this.isGhostStriderEnabled,
       heightCm: heightCm ?? this.heightCm,
       weightKg: weightKg ?? this.weightKg,
@@ -319,6 +332,7 @@ class PlayerModel {
       isInTeam: map["isInTeam"] is bool ? map["isInTeam"] : false,
       totalSteps: (map["totalSteps"] as num?)?.toInt() ?? 0,
       dailySteps: (map["dailySteps"] as num?)?.toInt() ?? 0,
+      weeklySteps: (map["weeklySteps"] as num?)?.toInt() ?? 0,
       dailyCalories: (map["dailyCalories"] as num?)?.toInt() ?? 0,
       dailyDistance: (map["dailyDistance"] as num?)?.toDouble() ?? 0.0,
       lastHardwareStepCount: (map["lastHardwareStepCount"] as num?)?.toInt() ?? -1,
@@ -326,7 +340,7 @@ class PlayerModel {
       level: (map["level"] as num?)?.toInt() ?? 1,
       xp: (map["xp"] as num?)?.toInt() ?? 0,
       currency: (map["currency"] as num?)?.toInt() ?? 0,
-      avatar: map["avatar"]?.toString() ?? "",
+      avatar: (map["avatar"]?.toString() == "default_avatar") ? "" : (map["avatar"]?.toString() ?? ""),
       lastTeamAction: map["lastTeamAction"] is Timestamp ? (map["lastTeamAction"] as Timestamp).toDate() : null,
       lastRaidAttack: map["lastRaidAttack"] is Timestamp ? (map["lastRaidAttack"] as Timestamp).toDate() : null,
       streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
@@ -344,8 +358,6 @@ class PlayerModel {
       inventory: Map<String, int>.from(map['inventory'] ?? {}),
       hourlySteps: Map<String, int>.from(map['hourlySteps'] ?? map['hourlyTelemetry'] ?? {}),
       dailyHistory: Map<String, dynamic>.from(map['dailyHistory'] ?? {}),
-      energyBoostRaidMultiplier: (map["energyBoostRaidMultiplier"] as num?)?.toDouble() ?? (map["rechargeRaidMultiplier"] as num?)?.toDouble() ?? 1.0,
-      energyBoostXpMultiplier: (map["energyBoostXpMultiplier"] as num?)?.toDouble() ?? (map["rechargeXpMultiplier"] as num?)?.toDouble() ?? 1.0,
       isGhostStriderEnabled: map["isGhostStriderEnabled"] is bool ? map["isGhostStriderEnabled"] : true,
       heightCm: (map["heightCm"] as num?)?.toDouble(),
       weightKg: (map["weightKg"] as num?)?.toDouble(),
@@ -376,6 +388,7 @@ class PlayerModel {
       "teamId": teamId,
       "totalSteps": totalSteps,
       "dailySteps": dailySteps,
+      "weeklySteps": weeklySteps,
       "dailyCalories": dailyCalories,
       "dailyDistance": dailyDistance,
       "lastHardwareStepCount": lastHardwareStepCount,
@@ -402,8 +415,6 @@ class PlayerModel {
       "inventory": inventory,
       "hourlySteps": hourlySteps,
       "dailyHistory": dailyHistory,
-      "energyBoostRaidMultiplier": energyBoostRaidMultiplier,
-      "energyBoostXpMultiplier": energyBoostXpMultiplier,
       "isGhostStriderEnabled": isGhostStriderEnabled,
       "heightCm": heightCm,
       "weightKg": weightKg,

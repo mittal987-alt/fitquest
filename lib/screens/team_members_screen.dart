@@ -408,15 +408,33 @@ class TeamMembersScreen extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () async {
-                            await firebaseService.kickPlayer(playerId: player.uid, teamId: teamId);
-
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                backgroundColor: Color(0xFF161B22),
-                                content: Text("TERMINATED: OPERATOR PURGED FROM SQUAD", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                            final bool confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                backgroundColor: const Color(0xFF161B22),
+                                title: const Text("CONFIRM TERMINATION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                                content: Text("Are you sure you want to purge ${player.name.toUpperCase()} from the squadron?", style: const TextStyle(color: Colors.white70)),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL", style: TextStyle(color: Colors.white38))),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text("PURGE", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
                               ),
-                            );
+                            ) ?? false;
+
+                            if (confirmed) {
+                              await firebaseService.kickPlayer(playerId: player.uid, teamId: teamId);
+
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  backgroundColor: Color(0xFF161B22),
+                                  content: Text("TERMINATED: OPERATOR PURGED FROM SQUAD", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                ),
+                              );
+                            }
                           },
                           icon: const Icon(Icons.remove_circle_outline_rounded, size: 16),
                           label: const Text(

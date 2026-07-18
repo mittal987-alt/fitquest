@@ -191,7 +191,7 @@ class CraftingScreen extends StatelessWidget {
                         recipe.resultItemId,
                         recipe.requiredMaterials,
                       );
-                      if (success) {
+                      if (success && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text("CRAFTING SUCCESSFUL: ${recipe.resultName}"),

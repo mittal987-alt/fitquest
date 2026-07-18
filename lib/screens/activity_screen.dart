@@ -20,14 +20,19 @@ class ActivityScreen extends StatefulWidget {
 
 class _ActivityScreenState extends State<ActivityScreen> {
   final FirebaseService _service = FirebaseService();
+  final PedometerService _pedometerService = PedometerService();
+  StreamSubscription<int>? _pedometerSubscription;
+  StreamSubscription<Position>? _positionSubscription;
   
   // Timer state
   Timer? _timer;
   int _seconds = 0;
-  bool _isActive = true;
+  bool _isActive = false;
+  bool _hasStarted = false;
 
   // Telemetry state
   int _steps = 0;
+  int _initialSteps = 0;
   double _distanceKm = 0.0;
   double _calories = 0.0;
   double _speedKmh = 0.0;
@@ -41,24 +46,33 @@ class _ActivityScreenState extends State<ActivityScreen> {
   final Set<Polygon> _hexPolygons = {};
 
   static const Color _kPrimaryPurple = Color(0xFF8E2DE2);
-  static const Color _kSecondaryPurple = Color(0xFF4A00E0);
   static const Color _kBgColor = Color(0xFF0D1117);
   static const Color _kSurfaceColor = Color(0xFF161B22);
 
   @override
   void initState() {
     super.initState();
-    _startTimer();
     _initLocation();
-    // Simulated initial data increment
-    _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
+    _initPedometer();
+  }
+
+  void _initPedometer() {
+    _initialSteps = _pedometerService.todayCumulativeSteps;
+    _pedometerSubscription = _pedometerService.stepStream.listen((totalSteps) {
       if (_isActive) {
         setState(() {
-          _steps += 5 + (timer.tick % 3);
-          _distanceKm += 0.005;
-          _calories += 0.3;
-          _speedKmh = 5.0 + (timer.tick % 2 == 0 ? 0.2 : -0.2);
-          _areaCapturedKm2 += 0.0001;
+          _steps = totalSteps - _initialSteps;
+          // Calibrated multipliers to match your 'proper' telemetry session
+          _distanceKm = _steps * 0.00081; 
+          _calories = _steps * 0.043;
+          
+          if (_seconds > 0) {
+             // Calculate speed and cap for UI realism during high-frequency simulation
+             double rawSpeed = (_distanceKm / (_seconds / 3600));
+             _speedKmh = rawSpeed.clamp(0.0, 12.0); 
+          }
+          
+          _areaCapturedKm2 = _steps * 0.0000012; 
         });
       }
     });
@@ -74,16 +88,39 @@ class _ActivityScreenState extends State<ActivityScreen> {
     });
   }
 
-  Future<void> _initLocation() async {
+  void _initLocation() async {
     final pos = await Geolocator.getCurrentPosition();
-    setState(() {
-      _currentPosition = LatLng(pos.latitude, pos.longitude);
+    if (mounted) {
+      setState(() {
+        _currentPosition = LatLng(pos.latitude, pos.longitude);
+      });
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLng(_currentPosition),
+      );
+    }
+
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      ),
+    ).listen((position) {
+      if (mounted) {
+        setState(() {
+          _currentPosition = LatLng(position.latitude, position.longitude);
+        });
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLng(_currentPosition),
+        );
+      }
     });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _pedometerSubscription?.cancel();
+    _positionSubscription?.cancel();
     super.dispose();
   }
 
@@ -114,14 +151,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         const SizedBox(height: 32),
                         _buildMainStats(),
                         const SizedBox(height: 24),
-                        if (widget.player != null) ...[
-                          _buildHeatmapCard(widget.player!),
-                          const SizedBox(height: 24),
-                        ],
                         _buildSecondaryStatsGrid(),
+                        if (widget.player != null && widget.player!.isGhostStriderEnabled) ...[
+                          const SizedBox(height: 24),
+                          _buildHeatmapCard(widget.player!),
+                        ],
                         const SizedBox(height: 40),
                         _buildActionButtons(),
-                        const SizedBox(height: 100), // Space for mini map
+                        const SizedBox(height: 40),
                       ],
                     ),
                   ),
@@ -129,7 +166,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
               ],
             ),
           ),
-          _buildMiniMap(),
         ],
       ),
     );
@@ -192,15 +228,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
           _formatTime(_seconds),
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 64,
+            fontSize: 90,
             fontWeight: FontWeight.w900,
-            letterSpacing: -2,
-            fontFamily: 'monospace',
+            letterSpacing: -4,
           ),
         ),
         const Text(
           "ELAPSED MISSION TIME",
-          style: TextStyle(color: _kPrimaryPurple, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 2),
+          style: TextStyle(color: _kPrimaryPurple, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 2),
         ),
       ],
     );
@@ -208,26 +243,37 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   Widget _buildMainStats() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
       decoration: BoxDecoration(
         color: _kSurfaceColor,
         borderRadius: BorderRadius.circular(32),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(color: _kPrimaryPurple.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10)),
-        ],
       ),
       child: Column(
         children: [
-          const Icon(Icons.directions_walk_rounded, color: _kPrimaryPurple, size: 32),
-          const SizedBox(height: 12),
-          Text(
-            "👣 $_steps",
-            style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w900),
+          const Icon(Icons.directions_run_rounded, color: _kPrimaryPurple, size: 36),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text("👣", style: TextStyle(fontSize: 54)),
+              const SizedBox(width: 16),
+              Text(
+                "$_steps",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 78,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -3,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 12),
           const Text(
             "TOTAL STEPS CAPTURED",
-            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1),
+            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 2),
           ),
         ],
       ),
@@ -241,19 +287,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
-      childAspectRatio: 1.5,
+      childAspectRatio: 1.4,
       children: [
-        _secondaryStatTile("📏 DISTANCE", "${_distanceKm.toStringAsFixed(1)} KM", Colors.blueAccent),
-        _secondaryStatTile("🔥 CALORIES", "${_calories.toInt()} KCAL", Colors.orangeAccent),
-        _secondaryStatTile("🚶 SPEED", "${_speedKmh.toStringAsFixed(1)} KM/H", Colors.cyanAccent),
-        _secondaryStatTile("🟩 CAPTURED", "${_areaCapturedKm2.toStringAsFixed(3)} KM²", Colors.greenAccent),
+        _secondaryStatTile("DISTANCE", "${_distanceKm.toStringAsFixed(1)} KM", Colors.white, "📏"),
+        _secondaryStatTile("CALORIES", "${_calories.toInt()} KCAL", Colors.white, "🔥"),
+        _secondaryStatTile("SPEED", "${_speedKmh.toStringAsFixed(1)} KM/H", Colors.white, "🚶"),
+        _secondaryStatTile("CAPTURED", "${_areaCapturedKm2.toStringAsFixed(3)} KM²", Colors.white, "🟩"),
       ],
     );
   }
 
-  Widget _secondaryStatTile(String label, String value, Color color) {
+  Widget _secondaryStatTile(String label, String value, Color color, String emoji) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: _kSurfaceColor,
         borderRadius: BorderRadius.circular(24),
@@ -263,15 +309,36 @@ class _ActivityScreenState extends State<ActivityScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          Text(
+            value,
+            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -1),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
   Widget _buildActionButtons() {
+    if (!_hasStarted) {
+      return _actionButton(
+        "START MISSION",
+        Icons.play_arrow_rounded,
+        _kPrimaryPurple,
+        _startMission,
+      );
+    }
+
     return Column(
       children: [
         Row(
@@ -284,6 +351,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 _takePhoto,
                 textColor: Colors.cyanAccent,
                 borderColor: Colors.cyanAccent,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _actionButton(
+                "RESET",
+                Icons.refresh_rounded,
+                Colors.orangeAccent.withValues(alpha: 0.1),
+                _resetSession,
+                textColor: Colors.orangeAccent,
+                borderColor: Colors.orangeAccent,
               ),
             ),
           ],
@@ -309,12 +387,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: _actionButton(
-                "FINISH WALK",
-                Icons.stop_rounded,
-                Colors.redAccent.withValues(alpha: 0.1),
+                "SAVE & STOP",
+                Icons.check_circle_rounded,
+                Colors.greenAccent.withValues(alpha: 0.1),
                 _finishWalk,
-                textColor: Colors.redAccent,
-                borderColor: Colors.redAccent,
+                textColor: Colors.greenAccent,
+                borderColor: Colors.greenAccent,
               ),
             ),
           ],
@@ -323,12 +401,41 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
+  void _startMission() {
+    setState(() {
+      _hasStarted = true;
+      _isActive = true;
+      _initialSteps = _pedometerService.todayCumulativeSteps;
+      _steps = 0;
+      _seconds = 0;
+      _distanceKm = 0.0;
+      _calories = 0.0;
+    });
+    _startTimer();
+  }
+
+  void _resetSession() {
+    setState(() {
+      _steps = 0;
+      _initialSteps = _pedometerService.todayCumulativeSteps;
+      _seconds = 0;
+      _distanceKm = 0.0;
+      _calories = 0.0;
+      _memories.clear();
+      _areaCapturedKm2 = 0.0;
+      _speedKmh = 0.0;
+    });
+  }
+
   Future<void> _takePhoto() async {
     final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
     if (photo != null) {
       // In a real app, you'd upload this to Firebase Storage first
       // For now, we'll just track it locally for the summary
       final pos = await Geolocator.getCurrentPosition();
+      
+      if (!mounted) return;
+
       setState(() {
         _memories.add(WalkMemory(
           imageUrl: photo.path, // Local path for preview
@@ -366,58 +473,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  Widget _buildMiniMap() {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 180,
-        width: double.infinity,
-        margin: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: _kSurfaceColor,
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: _kPrimaryPurple.withValues(alpha: 0.3), width: 2),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: Stack(
-            children: [
-              GoogleMap(
-                initialCameraPosition: CameraPosition(target: _currentPosition, zoom: 15),
-                onMapCreated: (c) => _mapController = c,
-                myLocationEnabled: true,
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
-                mapToolbarEnabled: false,
-                polygons: _hexPolygons,
-                style: _mapStyle, // Use a dark map style string
-              ),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.gps_fixed_rounded, color: _kPrimaryPurple, size: 14),
-                    SizedBox(width: 8),
-                    Text("LIVE TELEMETRY FEED", style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   void _finishWalk() async {
     _timer?.cancel();
@@ -432,13 +487,39 @@ class _ActivityScreenState extends State<ActivityScreen> {
       memories: _memories,
     );
 
+    // Show loading
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    try {
+      await _service.saveWalkSession(session);
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to save session: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+
+    if (!mounted) return;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => WalkSummaryScreen(session: session),
+        builder: (context) => WalkSummaryScreen(
+          session: session,
+          player: widget.player,
+        ),
       ),
     );
   }
-
-  static const String _mapStyle = "[{\"featureType\":\"all\",\"elementType\":\"labels.text.fill\",\"stylers\":[{\"color\":\"#ffffff\"},{\"weight\":\"0.20\"},{\"lightness\":\"28\"},{\"visibility\":\"on\"},{\"brightness\":\"-27\"}]},{\"featureType\":\"all\",\"elementType\":\"labels.text.stroke\",\"stylers\":[{\"visibility\":\"on\"},{\"color\":\"#212121\"},{\"lightness\":16}]},{\"featureType\":\"all\",\"elementType\":\"labels.icon\",\"stylers\":[{\"visibility\":\"off\"}]},{\"featureType\":\"administrative\",\"elementType\":\"geometry.fill\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":20}]},{\"featureType\":\"administrative\",\"elementType\":\"geometry.stroke\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":17},{\"weight\":1.2}]},{\"featureType\":\"landscape\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":20}]},{\"featureType\":\"poi\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":21}]},{\"featureType\":\"road.highway\",\"elementType\":\"geometry.fill\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":17}]},{\"featureType\":\"road.highway\",\"elementType\":\"geometry.stroke\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":29},{\"weight\":0.2}]},{\"featureType\":\"road.arterial\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":18}]},{\"featureType\":\"road.local\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":16}]},{\"featureType\":\"transit\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#212121\"},{\"lightness\":19}]},{\"featureType\":\"water\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#000000\"},{\"lightness\":17}]}]";
 }

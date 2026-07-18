@@ -38,9 +38,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final name = nameController.text.trim();
 
     if (email.isEmpty || password.isEmpty || (!isLogin && name.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in all standard validation fields.")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please fill in all standard validation fields.")),
+        );
+      }
       return;
     }
 
@@ -168,9 +170,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (vId == null) {
                     final phone = phoneController.text.trim();
                     if (!RegExp(r'^\+[1-9]\d{1,14}$').hasMatch(phone)) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Enter a valid phone number in E.164 format (e.g. +1234567890)")),
-                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Enter a valid phone number in E.164 format (e.g. +1234567890)")),
+                        );
+                      }
                       return;
                     }
 
@@ -208,9 +212,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
                       },
                       verificationFailed: (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(e.message ?? "Verification Fault")),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(e.message ?? "Verification Fault")),
+                          );
+                        }
                       },
                       codeSent: (id, resendToken) {
                         setDialogState(() => vId = id);
@@ -246,7 +252,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         );
                       }
                     } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                      }
                     }
                   }
                 },
@@ -385,19 +393,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           UserCredential? userCredential = await authService.signInWithGoogle();
                           if (userCredential != null) {
                             PedometerService().reset();
-                            bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
-                            if (isNew) {
-                              await firebaseService.createPlayer(
-                                uid: userCredential.user!.uid,
-                                name: userCredential.user!.displayName ?? "Explorer",
-                                email: userCredential.user!.email ?? "",
-                              );
-                            }
+                            // Profile creation/existence check is now handled inside authService.signInWithGoogle()
                             if (mounted) {
                               Navigator.pushReplacement(
                                 context, 
                                 MaterialPageRoute(
-                                  builder: (_) => isNew 
+                                  builder: (_) => (userCredential.additionalUserInfo?.isNewUser ?? true)
                                     ? ClassSelectionScreen(uid: userCredential.user!.uid) 
                                     : const MainNavigation()
                                 )
@@ -405,7 +406,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           }
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                          }
                         }
                       },
                     ),
@@ -416,10 +419,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         try {
                           UserCredential userCredential = await authService.signInAnonymously();
                           PedometerService().reset();
-                          await firebaseService.createPlayer(
-                            uid: userCredential.user!.uid,
-                            name: "Guest Player",
-                            email: "Anonymous Player",
+                          await firebaseService.ensurePlayerProfileExists(
+                            userCredential.user!.uid,
+                            "Anonymous Player",
+                            "Guest Player",
                           );
                           if (mounted) {
                             Navigator.pushReplacement(
@@ -428,7 +431,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             );
                           }
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                          }
                         }
                       },
                     ),

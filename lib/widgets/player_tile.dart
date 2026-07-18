@@ -3,43 +3,30 @@ import 'package:flutter/material.dart';
 import '../models/player_model.dart';
 
 class PlayerTile extends StatelessWidget {
-
   final PlayerModel player;
-
   final int rank;
+  final String? subtitle;
 
   const PlayerTile({
-
     super.key,
-
     required this.player,
-
     required this.rank,
+    this.subtitle,
   });
 
   @override
   Widget build(BuildContext context) {
-
-    Color rankColor =
-        Colors.blue;
-
-    IconData trophyIcon =
-        Icons.workspace_premium;
+    Color rankColor = Colors.blue;
+    IconData trophyIcon = Icons.workspace_premium;
 
     // =====================
     // TOP RANK COLORS
     // =====================
-
     if (rank == 1) {
-
       rankColor = Colors.amber;
-
     } else if (rank == 2) {
-
       rankColor = Colors.grey;
-
     } else if (rank == 3) {
-
       rankColor = Colors.brown;
     }
 
@@ -72,13 +59,13 @@ class PlayerTile extends StatelessWidget {
                 ),
                 child: player.avatar.isNotEmpty
                     ? ClipRRect(
-                  borderRadius: BorderRadius.circular(30),
-                  child: Image.network(player.avatar, fit: BoxFit.cover),
-                )
+                        borderRadius: BorderRadius.circular(30),
+                        child: Image.network(player.avatar, fit: BoxFit.cover),
+                      )
                     : CircleAvatar(
-                  backgroundColor: rankColor.withValues(alpha: 0.1),
-                  child: Icon(Icons.person_rounded, color: rankColor, size: 30),
-                ),
+                        backgroundColor: rankColor.withValues(alpha: 0.1),
+                        child: Icon(Icons.person_rounded, color: rankColor, size: 30),
+                      ),
               ),
               Positioned(
                 bottom: 0,
@@ -120,7 +107,7 @@ class PlayerTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "👣 ${player.totalSteps} Steps",
+                  subtitle ?? "👣 ${player.totalSteps} Steps",
                   style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 Text(

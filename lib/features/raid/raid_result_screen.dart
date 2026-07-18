@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../models/player_model.dart';
 import '../../controller/raid_controller.dart';
 
 class RaidResultScreen extends StatelessWidget {
@@ -101,7 +100,7 @@ class RaidResultScreen extends StatelessWidget {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: sortedByDamage.length,
-                    separatorBuilder: (_, __) => const Divider(color: Colors.white10),
+                    separatorBuilder: (context, index) => const Divider(color: Colors.white10),
                     itemBuilder: (context, index) {
                       final p = sortedByDamage[index];
                       return ListTile(

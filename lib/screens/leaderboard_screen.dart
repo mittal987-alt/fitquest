@@ -82,6 +82,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   child: Row(
                     children: [
                       _buildFilterButton("SOLO", "SOLO", const Color(0xFF8E2DE2)),
+                      const SizedBox(width: 4),
+                      _buildFilterButton("WEEKLY", "WEEKLY", Colors.orangeAccent),
                       if (currentPlayer.isInTeam) ...[
                         const SizedBox(width: 4),
                         _buildFilterButton("MY_TEAM", "MY TEAM", Colors.greenAccent),
@@ -99,7 +101,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   duration: const Duration(milliseconds: 250),
                   child: currentFilter == "SOLO"
                       ? _buildSoloStream()
-                      : (currentFilter == "MY_TEAM" ? _buildTeamMembersStream(userTeam) : _buildGlobalTeamsStream()),
+                      : (currentFilter == "WEEKLY"
+                          ? _buildWeeklyStream()
+                          : (currentFilter == "MY_TEAM" ? _buildTeamMembersStream(userTeam) : _buildGlobalTeamsStream())),
                 ),
               ),
             ],
@@ -132,8 +136,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             controller.add(value);
             timer = Timer(duration, () {
               timer = null;
-              if (hasValue && latestValue != null) {
-                controller.add(latestValue!);
+              final valueToEmit = latestValue;
+              if (hasValue && valueToEmit != null) {
+                controller.add(valueToEmit);
               }
             });
           }
@@ -196,7 +201,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         return Column(
           children: [
             _buildTopCard(
-              title: "TOP GLOBAL PLAYER",
+              title: "TOP GLOBAL PLAYER (TOTAL)",
               name: players[0].name,
               value: "${players[0].totalSteps} Steps Logged",
               icon: Icons.emoji_events_rounded,
@@ -207,6 +212,42 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: players.length,
                 itemBuilder: (context, index) => PlayerTile(player: players[index], rank: index + 1),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWeeklyStream() {
+    return StreamBuilder<List<PlayerModel>>(
+      key: const ValueKey("WeeklyStream"),
+      stream: _throttleStream(firebaseService.getWeeklyLeaderboard()),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.orangeAccent));
+        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.white60)));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Players Found", style: TextStyle(color: Colors.white24)));
+
+        final players = snapshot.data!;
+        return Column(
+          children: [
+            _buildTopCard(
+              title: "WEEKLY STRIKE LEADER",
+              name: players[0].name,
+              value: "${players[0].weeklySteps} Steps This Week",
+              icon: Icons.bolt_rounded,
+              neonColor: Colors.orangeAccent,
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: players.length,
+                itemBuilder: (context, index) => PlayerTile(
+                  player: players[index],
+                  rank: index + 1,
+                  subtitle: "${players[index].weeklySteps} weekly steps",
+                ),
               ),
             ),
           ],

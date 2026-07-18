@@ -89,7 +89,7 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
               Expanded(
                 child: ListView.separated(
                   itemCount: classes.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
+                  separatorBuilder: (context, index) => const SizedBox(height: 16),
                   itemBuilder: (context, index) {
                     final item = classes[index];
                     final isSelected = selectedClass == item['id'];

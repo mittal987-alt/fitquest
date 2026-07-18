@@ -144,7 +144,7 @@ class StepSyncService {
             _syncStatusController.add(true);
             
             // Unified Telemetry Sync (Batching multiple field increments)
-            final updates = await firebaseService.syncTelemetry(
+            await firebaseService.syncTelemetry(
               uid: uid,
               deltaSteps: deltaSteps,
               currentHardwareSteps: currentHardwareSteps,
@@ -164,7 +164,7 @@ class StepSyncService {
               }
             }
 
-            await firebaseService.contributeToGlobalEvent(deltaSteps);
+            await firebaseService.contributeToGlobalEvent(uid: uid, steps: deltaSteps);
 
             lastSyncTime = DateTime.now();
             
@@ -172,9 +172,11 @@ class StepSyncService {
               lastHardwareStepCount: currentHardwareSteps,
               totalSteps: player.totalSteps + deltaSteps,
               dailySteps: player.dailySteps + deltaSteps,
+              weeklySteps: player.weeklySteps + deltaSteps,
               dailyCalories: player.dailyCalories + (deltaSteps * GameplayRules.caloriesPerStep).toInt(),
               dailyDistance: player.dailyDistance + (deltaSteps * GameplayRules.distanceKmPerStep),
               xp: player.xp + (deltaSteps ~/ 10 * player.energyBoostXpMultiplier).toInt(),
+              currentStamina: player.currentStamina + (deltaSteps / 1000 * GameplayRules.staminaRefillPerThousandSteps).floor(),
             );
 
             doublePrint("CLOUD SYNC: +$deltaSteps total steps persisted to Firestore.");

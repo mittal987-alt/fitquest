@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -15,10 +16,8 @@ import '../services/notification_service.dart';
 import '../services/daily_login_service.dart';
 import '../controller/raid_controller.dart';
 import '../models/player_model.dart';
-
-import 'friends_screen.dart';
-import 'achievements_screen.dart';
 import '../models/achievement_model.dart';
+import '../models/activity_feed_model.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -67,9 +66,22 @@ class _MainNavigationState extends State<MainNavigation> {
     stepSyncService.startTracking();
   }
 
+  StreamSubscription<List<ActivityFeedModel>>? _teamActivitySubscription;
+
   void _setupTeamNotifications() {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
+    final notificationService = Provider.of<NotificationService>(context, listen: false);
     final uid = firebaseService.auth.currentUser?.uid;
+
+    // Listen for FCM messages directly when in foreground
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.notification != null) {
+        notificationService.showLocalNotification(
+          title: message.notification!.title ?? "TACTICAL INBOUND",
+          body: message.notification!.body ?? "",
+        );
+      }
+    });
 
     if (uid != null) {
       _playerSubscription = firebaseService.getPlayerStream(uid).listen((player) async {
@@ -94,9 +106,23 @@ class _MainNavigationState extends State<MainNavigation> {
         if (player.teamId != currentTeamId) {
           if (currentTeamId != null) {
             notificationService.unsubscribeFromTeam(currentTeamId!);
+            _teamActivitySubscription?.cancel();
           }
           if (player.teamId != null) {
             notificationService.subscribeToTeam(player.teamId!);
+            
+            // Listen to team activity feed for push-like notifications
+            _teamActivitySubscription = firebaseService.getTeamActivityFeed(player.teamId!).listen((feed) {
+              if (feed.isNotEmpty) {
+                final latest = feed.first;
+                // Only process very recent events
+                if (latest.timestamp != null && 
+                    DateTime.now().difference(latest.timestamp!).inSeconds < 10) {
+                  notificationService.processActivityFeedEvent(latest);
+                }
+              }
+            });
+
             if (mounted) {
               context.read<RaidController>().initTeamRaid(player.teamId!);
             }
@@ -111,7 +137,6 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   void _checkRpgMilestones(PlayerModel player) {
-    final firebaseService = Provider.of<FirebaseService>(context, listen: false);
 
     // 1. Check Level Up
     if (currentLevel != null && player.level > currentLevel!) {
@@ -139,7 +164,10 @@ class _MainNavigationState extends State<MainNavigation> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.purpleAccent, width: 2)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Colors.purpleAccent, width: 2),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -200,6 +228,7 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   void dispose() {
     _playerSubscription?.cancel();
+    _teamActivitySubscription?.cancel();
     _confettiController.dispose();
     stepSyncService.stopTracking();
     super.dispose();

@@ -6,9 +6,9 @@ import 'package:intl/intl.dart';
 import '../models/player_model.dart';
 import '../models/achievement_model.dart';
 import '../services/firebase_service.dart';
+import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'goal_adjustment_screen.dart';
-import 'achievements_screen.dart';
 import '../main.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -106,16 +106,18 @@ class ProfileScreen extends StatelessWidget {
                             onPressed: () async {
                               final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
                               if (image != null) {
-                                setDialogState(() => isUpdating = true);
-                                final bytes = await image.readAsBytes();
-                                final url = await FirebaseService().uploadAvatarFile(player.uid, bytes);
-                                if (url != null) {
+                                try {
+                                  setDialogState(() => isUpdating = true);
+                                  final bytes = await image.readAsBytes();
+                                  final url = await FirebaseService().uploadAvatarFile(player.uid, bytes);
                                   await FirebaseService().updateAvatar(uid: player.uid, avatarUrl: url);
                                   if (context.mounted) Navigator.pop(context);
-                                } else {
+                                } catch (e) {
                                   setDialogState(() => isUpdating = false);
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Upload failed.")));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: Colors.redAccent),
+                                    );
                                   }
                                 }
                               }
@@ -136,16 +138,18 @@ class ProfileScreen extends StatelessWidget {
                             onPressed: () async {
                               final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
                               if (image != null) {
-                                setDialogState(() => isUpdating = true);
-                                final bytes = await image.readAsBytes();
-                                final url = await FirebaseService().uploadAvatarFile(player.uid, bytes);
-                                if (url != null) {
+                                try {
+                                  setDialogState(() => isUpdating = true);
+                                  final bytes = await image.readAsBytes();
+                                  final url = await FirebaseService().uploadAvatarFile(player.uid, bytes);
                                   await FirebaseService().updateAvatar(uid: player.uid, avatarUrl: url);
                                   if (context.mounted) Navigator.pop(context);
-                                } else {
+                                } catch (e) {
                                   setDialogState(() => isUpdating = false);
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Upload failed.")));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: Colors.redAccent),
+                                    );
                                   }
                                 }
                               }
@@ -174,11 +178,20 @@ class ProfileScreen extends StatelessWidget {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: () async {
-                        setDialogState(() => isUpdating = true);
-                        if (nameController.text.isNotEmpty && nameController.text != player.name) {
-                          await FirebaseService().updatePlayerName(uid: player.uid, name: nameController.text);
+                        try {
+                          setDialogState(() => isUpdating = true);
+                          if (nameController.text.isNotEmpty && nameController.text != player.name) {
+                            await FirebaseService().updatePlayerName(uid: player.uid, name: nameController.text);
+                          }
+                          if (context.mounted) Navigator.pop(context);
+                        } catch (e) {
+                          setDialogState(() => isUpdating = false);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: Colors.redAccent),
+                            );
+                          }
                         }
-                        if (context.mounted) Navigator.pop(context);
                       },
                       child: const Text("SAVE CHANGES", style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
@@ -298,9 +311,24 @@ class ProfileScreen extends StatelessWidget {
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: 2),
                     ),
                     Text(
-                      "LVL ${player.level} ${_getClassTitle(player.level)}",
+                      "LVL ${player.level} ${FirebaseService().getRankTitle(player.level)}",
                       style: const TextStyle(color: _kPrimaryPurple, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 4),
                     ),
+                    if (player.fitnessGoal != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.cyanAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          player.fitnessGoal!.replaceAll('_', ' ').toUpperCase(),
+                          style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     _buildStatRow(player),
                   ],
@@ -313,33 +341,32 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  String _getClassTitle(int level) {
-    if (level < 10) return "RECRUIT";
-    if (level < 20) return "OPERATIVE";
-    if (level < 30) return "SPECIALIST";
-    if (level < 40) return "ELITE";
-    return "APEX LEGEND";
-  }
-
   Widget _buildStatRow(PlayerModel player) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _statItem("TOTAL XP", player.xp.toString()),
+        _statItem("${player.totalSteps}", "STEPS", icon: Icons.directions_walk_rounded, color: Colors.greenAccent),
         _statDivider(),
-        _statItem("TOTAL STEPS", player.totalSteps.toString()),
+        _statItem("${player.xp}", "XP", icon: Icons.bolt_rounded, color: Colors.amberAccent),
         _statDivider(),
-        _statItem("LAND KM²", player.totalLand.toString()),
+        _statItem("${player.currency}", "CREDITS", icon: Icons.monetization_on_rounded, color: Colors.cyanAccent),
       ],
     );
   }
 
-  Widget _statItem(String label, String value) {
+  Widget _statItem(String value, String label, {IconData? icon, Color? color}) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1)),
+        if (icon != null) Icon(icon, color: color ?? Colors.white70, size: 16),
+        if (icon != null) const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+        ),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1),
+        ),
       ],
     );
   }
@@ -516,6 +543,7 @@ class ProfileScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
+          _ghostStriderToggle(player),
           _settingsTile(context, player, Icons.track_changes_rounded, "GOALS", "ADAPTIVE MISSION TARGETS"),
           _settingsTile(context, player, Icons.palette_outlined, "TERRITORY COLOR", "CUSTOMIZE YOUR MAP PRESENCE"),
           _settingsTile(context, player, Icons.notifications_none_rounded, "NOTIFICATIONS", "MANAGE ALERT PREFERENCES"),
@@ -524,6 +552,31 @@ class ProfileScreen extends StatelessWidget {
           _settingsTile(context, player, Icons.help_outline_rounded, "HELP & SUPPORT", "FAQ & CONTACT CENTER", isLast: true),
         ],
       ),
+    );
+  }
+
+  Widget _ghostStriderToggle(PlayerModel player) {
+    return Column(
+      children: [
+        SwitchListTile.adaptive(
+          secondary: const Icon(Icons.psychology_outlined, color: Colors.cyanAccent, size: 22),
+          title: const Text(
+            "GHOST STRIDER",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1),
+          ),
+          subtitle: const Text(
+            "ENABLE HISTORICAL TELEMETRY & LOOT",
+            style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold),
+          ),
+          value: player.isGhostStriderEnabled,
+          activeColor: Colors.cyanAccent,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          onChanged: (val) async {
+            await FirebaseService().updateGhostStriderToggle(player.uid, val);
+          },
+        ),
+        const Divider(height: 1, indent: 64, color: Colors.white10),
+      ],
     );
   }
 
@@ -557,7 +610,7 @@ class ProfileScreen extends StatelessWidget {
               itemCount: colors.length,
               itemBuilder: (context, index) {
                 final color = colors[index];
-                final hex = '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+                final hex = '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
                 final isSelected = player.territoryColor == hex;
 
                 return GestureDetector(
@@ -597,38 +650,76 @@ class ProfileScreen extends StatelessWidget {
             subtitle,
             style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold),
           ),
-          trailing: title == "TERRITORY COLOR"
-              ? Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: player.territoryColor != null ? Color(int.parse(player.territoryColor!.replaceFirst('#', '0xFF'))) : Colors.cyanAccent,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white24),
-                  ),
+          trailing: title == "DARK MODE"
+              ? Switch.adaptive(
+                  value: Theme.of(context).brightness == Brightness.dark,
+                  onChanged: (val) {
+                    MyApp.of(context)?.toggleDarkMode();
+                  },
                 )
-              : const Icon(Icons.chevron_right_rounded, color: Colors.white10),
+              : title == "TERRITORY COLOR"
+                  ? Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: player.territoryColor != null ? Color(int.parse(player.territoryColor!.replaceFirst('#', '0xFF'))) : Colors.cyanAccent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24),
+                      ),
+                    )
+                  : const Icon(Icons.chevron_right_rounded, color: Colors.white10),
           onTap: () {
             if (title == "GOALS") {
               Navigator.push(context, MaterialPageRoute(builder: (context) => GoalAdjustmentScreen(player: player)));
             } else if (title == "TERRITORY COLOR") {
               _showColorPicker(context, player);
             } else if (title == "DARK MODE") {
-              // Toggle logic
+              MyApp.of(context)?.toggleDarkMode();
+            } else if (title == "NOTIFICATIONS") {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: _kSurfaceColor,
+                  title: const Text("NOTIFICATIONS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  content: const Text("Manage notification settings in your device system settings for maximum tactical efficiency.",
+                      style: TextStyle(color: Colors.white70)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("UNDERSTOOD", style: TextStyle(color: Colors.cyanAccent)),
+                    ),
+                  ],
+                ),
+              );
+            } else if (title == "PRIVACY") {
+              showAboutDialog(
+                context: context,
+                applicationName: "FitQuest",
+                applicationVersion: "1.0.0 Tactical Build",
+                applicationIcon: const Icon(Icons.security_outlined, color: Colors.cyanAccent),
+                children: [
+                  const Text("Your telemetry data is encrypted and used only for RPG progression and team coordination."),
+                ],
+              );
+            } else if (title == "HELP & SUPPORT") {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: _kSurfaceColor,
+                  title: const Text("COMMAND SUPPORT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  content: const Text("Tactical support is currently offline. Please refer to the Field Manual (FAQ) in the future update.",
+                      style: TextStyle(color: Colors.white70)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("CLOSE", style: TextStyle(color: Colors.cyanAccent)),
+                    ),
+                  ],
+                ),
+              );
             }
           },
         ),
-        if (title == "DARK MODE")
-          Positioned(
-            right: 20,
-            top: 15,
-            child: Switch.adaptive(
-              value: Theme.of(context).brightness == Brightness.dark,
-              onChanged: (val) {
-                MyApp.of(context)?.toggleDarkMode();
-              },
-            ),
-          ),
         if (!isLast) const Divider(height: 1, indent: 64, color: Colors.white10),
       ],
     );
@@ -639,7 +730,8 @@ class ProfileScreen extends StatelessWidget {
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: () async {
-          await FirebaseAuth.instance.signOut();
+          final authService = AuthService();
+          await authService.logout();
           if (context.mounted) {
             Navigator.pushAndRemoveUntil(
               context,

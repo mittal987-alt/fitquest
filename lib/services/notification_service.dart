@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import '../models/activity_feed_model.dart';
 
 class NotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
@@ -79,6 +80,34 @@ class NotificationService {
       body,
       platformDetails,
     );
+  }
+
+  void processActivityFeedEvent(ActivityFeedModel event) {
+    String title = "TACTICAL UPDATE";
+    String body = "";
+
+    switch (event.type) {
+      case ActivityType.challengeStarted:
+        title = "NEW MISSION ASSIGNED";
+        body = "Operation ${event.itemId} is now active!";
+        break;
+      case ActivityType.challengeCompleted:
+        title = "MISSION ACCOMPLISHED";
+        body = "${event.itemId} target reached. Claim rewards now!";
+        break;
+      case ActivityType.rewardClaimed:
+        title = "REWARD SECURED";
+        body = "A squad member has claimed rewards for ${event.itemId}.";
+        break;
+      case ActivityType.teamBuffActivated:
+        title = "TACTICAL BUFF ACTIVE";
+        body = event.message;
+        break;
+      default:
+        return;
+    }
+
+    showLocalNotification(title: title, body: body);
   }
 
   /// Schedules a notification for a tactical event (e.g., rest end, buff expiry)

@@ -1,12 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
-import 'dart:math';
+import 'package:flutter/foundation.dart';
+import 'firebase_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
 
   // =========================
   // GOOGLE SIGN IN
@@ -24,10 +22,19 @@ class AuthService {
           idToken: googleAuth.idToken,
         );
 
-        return await _auth.signInWithCredential(credential);
+        final userCredential = await _auth.signInWithCredential(credential);
+        if (userCredential.user != null) {
+          final firebaseService = FirebaseService(auth: _auth);
+          await firebaseService.ensurePlayerProfileExists(
+            userCredential.user!.uid,
+            userCredential.user!.email ?? "",
+            userCredential.user!.displayName ?? "Explorer",
+          );
+        }
+        return userCredential;
       }
     } catch (e) {
-      print("Error during Google Sign-In: $e");
+      debugPrint("Error during Google Sign-In: $e");
     }
     return null;
   }
@@ -68,87 +75,19 @@ class AuthService {
     return await _auth.signInWithCredential(credential);
   }
 
-  String _generateNonce([int length = 32]) {
-    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.-_';
-    final random = Random.secure();
-    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
-  }
-
-  String _sha256ofString(String input) {
-    final bytes = utf8.encode(input);
-    final digest = sha256.convert(bytes);
-    return digest.toString();
-  }
-
   // =========================
   // CURRENT USER
   // =========================
 
-  User? get currentUser =>
-      _auth.currentUser;
-
-  // =========================
-  // SIGN UP
-  // =========================
-
-  Future<UserCredential> signUp({
-
-    required String email,
-
-    required String password,
-  }) async {
-
-    return await _auth
-        .createUserWithEmailAndPassword(
-
-      email: email,
-
-      password: password,
-    );
-  }
-
-  // =========================
-  // LOGIN
-  // =========================
-
-  Future<UserCredential> login({
-
-    required String email,
-
-    required String password,
-  }) async {
-
-    return await _auth
-        .signInWithEmailAndPassword(
-
-      email: email,
-
-      password: password,
-    );
-  }
+  User? get currentUser => _auth.currentUser;
 
   // =========================
   // LOGOUT
   // =========================
 
   Future<void> logout() async {
-
+    await GoogleSignIn().signOut();
     await _auth.signOut();
-  }
-
-  // =========================
-  // RESET PASSWORD
-  // =========================
-
-  Future<void> resetPassword(
-
-      String email) async {
-
-    await _auth
-        .sendPasswordResetEmail(
-
-      email: email,
-    );
   }
 
   // =========================
@@ -156,7 +95,6 @@ class AuthService {
   // =========================
 
   Stream<User?> authStateChanges() {
-
     return _auth.authStateChanges();
   }
 }

@@ -1,41 +1,68 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum ActivityType { capture, teamRank, achievement, steps }
+enum ActivityType { 
+  capture, 
+  teamRank, 
+  achievement, 
+  steps, 
+  challengeStarted, 
+  challengeCompleted, 
+  rewardClaimed,
+  teamChallengeReward,
+  teamBuffActivated
+}
 
 class ActivityFeedModel {
   final String id;
-  final String playerName;
+  final String? userId;
+  final String? teamId;
+  final String? playerName;
   final ActivityType type;
+  final String? itemId;
   final String message;
-  final DateTime timestamp;
+  final DateTime? timestamp;
 
   ActivityFeedModel({
     required this.id,
-    required this.playerName,
+    this.userId,
+    this.teamId,
+    this.playerName,
     required this.type,
+    this.itemId,
     required this.message,
-    required this.timestamp,
+    this.timestamp,
   });
 
   factory ActivityFeedModel.fromMap(Map<String, dynamic> map, String id) {
     return ActivityFeedModel(
       id: id,
-      playerName: map['playerName'] ?? 'Unknown',
-      type: ActivityType.values.firstWhere(
-        (e) => e.toString() == 'ActivityType.${map['type']}',
-        orElse: () => ActivityType.steps,
-      ),
+      userId: map['userId'],
+      teamId: map['teamId'],
+      playerName: map['playerName'],
+      type: _parseType(map['type']),
+      itemId: map['itemId'],
       message: map['message'] ?? '',
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
+      timestamp: (map['timestamp'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  static ActivityType _parseType(String? typeStr) {
+    if (typeStr == null) return ActivityType.steps;
+    return ActivityType.values.firstWhere(
+      (e) => e.name == typeStr,
+      orElse: () => ActivityType.steps,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'playerName': playerName,
-      'type': type.toString().split('.').last,
+      if (userId != null) 'userId': userId,
+      if (teamId != null) 'teamId': teamId,
+      if (playerName != null) 'playerName': playerName,
+      'type': type.name,
+      if (itemId != null) 'itemId': itemId,
       'message': message,
-      'timestamp': Timestamp.fromDate(timestamp),
+      if (timestamp != null) 'timestamp': Timestamp.fromDate(timestamp!),
     };
   }
 }

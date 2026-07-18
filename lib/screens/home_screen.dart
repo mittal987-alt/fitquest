@@ -7,7 +7,6 @@ import '../services/step_sync_service.dart';
 import '../services/firebase_service.dart';
 import '../models/player_model.dart';
 import 'map_screen.dart';
-import 'shop_screen.dart';
 import 'armory_screen.dart';
 import 'tactical_relay_screen.dart';
 import 'crafting_screen.dart';
@@ -22,7 +21,6 @@ import '../widgets/energy_boost_badge.dart';
 import '../features/raid/raid_boss_screen.dart';
 
 import '../services/ai_coach_service.dart';
-import '../services/health_report_service.dart';
 import '../services/music_service.dart';
 import '../services/anti_cheat_service.dart';
 import 'package:provider/provider.dart';

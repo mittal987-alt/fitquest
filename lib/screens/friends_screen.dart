@@ -32,17 +32,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     try {
       final results = await firebaseService.searchPlayers(query.trim());
+      if (!mounted) return;
       setState(() {
         _searchResults = results;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("SEARCH ERROR: $e")),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("SEARCH ERROR: $e")),
+      );
     }
   }
 

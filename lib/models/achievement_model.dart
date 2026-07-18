@@ -69,3 +69,38 @@ final List<AchievementModel> kGlobalAchievements = [
     category: 'team',
   ),
 ];
+
+final List<AchievementModel> kTeamAchievements = [
+  AchievementModel(
+    id: 'team_first_100k',
+    title: 'CENTURIONS',
+    description: 'Team reaches 100,000 total steps.',
+    icon: Icons.military_tech,
+    color: Colors.amberAccent,
+    category: 'team',
+  ),
+  AchievementModel(
+    id: 'team_full_house',
+    title: 'FULL SQUADRON',
+    description: 'Reach maximum member capacity.',
+    icon: Icons.groups,
+    color: Colors.blueAccent,
+    category: 'team',
+  ),
+  AchievementModel(
+    id: 'team_raid_slayer',
+    title: 'TITAN FELLER',
+    description: 'Defeat a Raid Boss as a team.',
+    icon: Icons.gavel,
+    color: Colors.redAccent,
+    category: 'team',
+  ),
+  AchievementModel(
+    id: 'team_global_top_10',
+    title: 'ELITE VANGUARD',
+    description: 'Reach the Global Top 10 leaderboard.',
+    icon: Icons.star,
+    color: Colors.purpleAccent,
+    category: 'team',
+  ),
+];

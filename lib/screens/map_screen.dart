@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import '../services/location_service.dart';
 import '../services/pedometer_service.dart';
@@ -19,6 +21,7 @@ import '../models/team_model.dart';
 import '../models/gear_model.dart';
 import '../models/anomaly_model.dart';
 import '../models/world_event_model.dart';
+import '../config/crafting_recipes.dart';
 import 'hacking_minigame_screen.dart';
 
 class MapScreen extends StatefulWidget {
@@ -1379,7 +1382,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     if (player.activePowerUps.containsKey("energy_boost")) {
       DateTime expiry = player.activePowerUps["energy_boost"]!;
       if (expiry.isAfter(DateTime.now())) {
-        energyBoostMultiplier = player.energyBoostXpMultiplier;
+        energyBoostMultiplier = player.energyBoostXpMultiplier.toDouble();
       }
     }
 
@@ -1418,18 +1421,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     // SHIELD CHECK: Verify if target owner is shielded
     if (tile.ownerType == "solo") {
       final ownerDoc = await firebaseService.firestore.collection("players").doc(tile.ownerId).get();
+      if (!mounted) return;
       if (ownerDoc.exists) {
         final ownerData = PlayerModel.fromMap(ownerDoc.data()!);
         if (ownerData.activePowerUps.containsKey("shield") &&
             ownerData.activePowerUps["shield"]!.isAfter(DateTime.now())) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                backgroundColor: Colors.blueGrey,
-                content: Text("🛡️ PROTECTED: Territory Shield is Active!"),
-              ),
-            );
-          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.blueGrey,
+              content: Text("🛡️ PROTECTED: Territory Shield is Active!"),
+            ),
+          );
           return;
         }
       }
@@ -1749,9 +1751,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         int cost = isStronghold ? 20 : 10;
                         bool hasStamina = await firebaseService.consumeStamina(uid, cost);
                         if (!hasStamina) {
-                          scaffoldMessenger.showSnackBar(
-                            const SnackBar(content: Text("Insufficient Stamina to attack!"), backgroundColor: Colors.orange),
-                          );
+                          if (navigator.mounted) {
+                            scaffoldMessenger.showSnackBar(
+                              const SnackBar(content: Text("Insufficient Stamina to attack!"), backgroundColor: Colors.orange),
+                            );
+                          }
                           return;
                         }
 
@@ -1784,9 +1788,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         // Fortify costs 10 Stamina
                         bool hasStamina = await firebaseService.consumeStamina(uid, 10);
                         if (!hasStamina) {
-                          scaffoldMessenger.showSnackBar(
-                            const SnackBar(content: Text("Insufficient Stamina to fortify!"), backgroundColor: Colors.orange),
-                          );
+                          if (navigator.mounted) {
+                            scaffoldMessenger.showSnackBar(
+                              const SnackBar(content: Text("Insufficient Stamina to fortify!"), backgroundColor: Colors.orange),
+                            );
+                          }
                           return;
                         }
 
@@ -1910,6 +1916,43 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  Widget _buildTerritoryStats() {
+    return Positioned(
+      top: 100,
+      right: 16,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _statBadge(Icons.landscape, "${allTiles.length} SECTORS"),
+          const SizedBox(height: 8),
+          _statBadge(Icons.group, "${allTiles.where((t) => t.ownerType == 'team').length} TEAM-OWNED"),
+        ],
+      ),
+    );
+  }
+
+  Widget _statBadge(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.cyanAccent, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1930,6 +1973,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               mapController = controller;
             },
           ),
+          _buildTerritoryStats(),
 
           // Top Header Overlay for Map Info
           Positioned(

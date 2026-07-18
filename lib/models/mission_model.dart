@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 
 enum MissionType { steps, distance, capture, xp, workout }
 

@@ -73,6 +73,7 @@ class GameplayRules {
       "element": "Void",
       "weakness": "Light",
       "color": 0xFF4A00E0,
+      "description": "A massive entity from the dark sector. Vulnerable to Light-based healing energy.",
     },
     {
       "id": "magma_golem",
@@ -81,6 +82,7 @@ class GameplayRules {
       "element": "Fire",
       "weakness": "Ice",
       "color": 0xFFFF4B2B,
+      "description": "Molten rock animated by volcanic fury. Extreme temperature drop causes structural failure.",
     },
     {
       "id": "storm_wraith",
@@ -89,6 +91,105 @@ class GameplayRules {
       "element": "Electric",
       "weakness": "Earth",
       "color": 0xFF00D2FF,
+      "description": "Living lightning contained in a shell. Earth grounding disrupts its energy form.",
+    },
+    {
+      "id": "cyber_hydra",
+      "name": "CYBER HYDRA",
+      "maxHp": 200000.0,
+      "element": "Cyber",
+      "weakness": "Void",
+      "color": 0xFF00FF41,
+      "description": "Multi-headed server parasite. Void corruption desyncs its regeneration modules.",
+    },
+    {
+      "id": "terra_behemoth",
+      "name": "TERRA BEHEMOTH",
+      "maxHp": 250000.0,
+      "element": "Earth",
+      "weakness": "Fire",
+      "color": 0xFF8B4513,
+      "description": "Titan of the deep crust. High intensity thermal stress shatters its armor.",
+    },
+  ];
+
+  /// Calculates raid rewards based on team size and individual performance.
+  static Map<String, int> calculateRaidRewards(int teamSize, double ratio, bool isDefeated) {
+    if (!isDefeated) return {"xp": 0, "currency": 0};
+
+    // Base rewards scale with team size to encourage larger squads
+    // but the individual share (ratio) is the primary driver.
+    int baseXP = 800 + (teamSize * 50);
+    int baseCurrency = 400 + (teamSize * 25);
+
+    int individualXP = (baseXP * ratio).toInt() + 400;
+    int individualCurrency = (baseCurrency * ratio).toInt() + 200;
+
+    return {
+      "xp": individualXP,
+      "currency": individualCurrency,
+    };
+  }
+
+  // --- TEAM CHALLENGES ---
+  static const List<Map<String, dynamic>> dailyChallengePool = [
+    {
+      "id": "daily_march",
+      "title": "FORCED MARCH",
+      "description": "Team collective steps: 50,000",
+      "type": "steps",
+      "target": 50000.0,
+      "xp": 1000,
+      "currency": 500,
+    },
+    {
+      "id": "daily_raid",
+      "title": "SIEGE PROTOCOL",
+      "description": "Deal 20,000 damage to Raid Bosses",
+      "type": "raidDamage",
+      "target": 20000.0,
+      "xp": 1500,
+      "currency": 750,
+    },
+    {
+      "id": "daily_recon",
+      "title": "RECONNAISSANCE",
+      "description": "Team collective distance: 25 km",
+      "type": "distance",
+      "target": 25.0,
+      "xp": 1200,
+      "currency": 600,
+    },
+  ];
+
+  // --- TEAM BUFFS & COLLECTIVE ECONOMY ---
+  static const List<Map<String, dynamic>> teamBuffPool = [
+    {
+      "id": "expedite_recovery",
+      "name": "EXPEDITE RECOVERY",
+      "description": "+25% Stamina regeneration for all members.",
+      "cost": 5000,
+      "duration": Duration(hours: 24),
+      "type": "stamina_regen",
+      "multiplier": 1.25,
+    },
+    {
+      "id": "combat_resonance",
+      "name": "COMBAT RESONANCE",
+      "description": "+50% Raid Damage bonus for 12 hours.",
+      "cost": 8000,
+      "duration": Duration(hours: 12),
+      "type": "raid_damage",
+      "multiplier": 1.5,
+    },
+    {
+      "id": "territory_pioneer",
+      "name": "TERRITORY PIONEER",
+      "description": "Double XP from territory captures.",
+      "cost": 6000,
+      "duration": Duration(hours: 24),
+      "type": "territory_xp",
+      "multiplier": 2.0,
     },
   ];
 }

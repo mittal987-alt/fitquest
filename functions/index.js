@@ -52,6 +52,66 @@ exports.onTerritoryAttack = functions.firestore
     });
 
 /**
+ * Triggers when a new activity_feed entry is created.
+ * Specifically handles team-based events to send push notifications.
+ */
+exports.onActivityFeedCreated = functions.firestore
+    .document("activity_feed/{feedId}")
+    .onCreate(async (snapshot, context) => {
+      const data = snapshot.data();
+      const teamId = data.teamId;
+
+      if (!teamId) return null;
+
+      let title = "Team Event";
+      let body = data.message || "Something happened in your team!";
+
+      switch (data.type) {
+        case "team_buff_activated":
+          title = "Team Buff Active!";
+          body = `A teammate activated: ${data.itemId}`;
+          break;
+        case "challenge_started":
+          title = "New Team Challenge!";
+          body = `Daily Goal: ${data.itemId}`;
+          break;
+        case "challenge_completed":
+          title = "Challenge Completed!";
+          body = `Your team finished: ${data.itemId}`;
+          break;
+        case "reward_claimed":
+          title = "Reward Claimed";
+          body = `A teammate claimed rewards for ${data.itemId}`;
+          break;
+        default:
+          return null;
+      }
+
+      const payload = {
+        notification: {
+          title: title,
+          body: body,
+          sound: "default",
+        },
+        data: {
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+          type: "team_event",
+          teamId: teamId,
+        },
+      };
+
+      const topic = `team_${teamId}`;
+      try {
+        await admin.messaging().sendToTopic(topic, payload);
+        console.log(`Team notification sent to topic: ${topic}`);
+      } catch (error) {
+        console.error("Error sending team notification:", error);
+      }
+
+      return null;
+    });
+
+/**
  * Triggers when a territory is captured (created or owner changed).
  */
 exports.onTerritoryCapture = functions.firestore
@@ -85,5 +145,65 @@ exports.onTerritoryCapture = functions.firestore
           }
         }
       }
+      return null;
+    });
+
+/**
+ * Triggers when a new activity_feed entry is created.
+ * Specifically handles team-based events to send push notifications.
+ */
+exports.onActivityFeedCreated = functions.firestore
+    .document("activity_feed/{feedId}")
+    .onCreate(async (snapshot, context) => {
+      const data = snapshot.data();
+      const teamId = data.teamId;
+
+      if (!teamId) return null;
+
+      let title = "Team Event";
+      let body = data.message || "Something happened in your team!";
+
+      switch (data.type) {
+        case "team_buff_activated":
+          title = "Team Buff Active!";
+          body = `A teammate activated: ${data.itemId}`;
+          break;
+        case "challenge_started":
+          title = "New Team Challenge!";
+          body = `Daily Goal: ${data.itemId}`;
+          break;
+        case "challenge_completed":
+          title = "Challenge Completed!";
+          body = `Your team finished: ${data.itemId}`;
+          break;
+        case "reward_claimed":
+          title = "Reward Claimed";
+          body = `A teammate claimed rewards for ${data.itemId}`;
+          break;
+        default:
+          return null;
+      }
+
+      const payload = {
+        notification: {
+          title: title,
+          body: body,
+          sound: "default",
+        },
+        data: {
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+          type: "team_event",
+          teamId: teamId,
+        },
+      };
+
+      const topic = `team_${teamId}`;
+      try {
+        await admin.messaging().sendToTopic(topic, payload);
+        console.log(`Team notification sent to topic: ${topic}`);
+      } catch (error) {
+        console.error("Error sending team notification:", error);
+      }
+
       return null;
     });

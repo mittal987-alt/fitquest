@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:untitled/models/player_model.dart';
+import '../../lib/models/player_model.dart';
 import 'dart:async';
 
 void main() {
@@ -32,6 +32,7 @@ void main() {
           level: 1,
           xp: 500,
           avatar: "",
+          totalLand: 0,
         )
       ]);
     }

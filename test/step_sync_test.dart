@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:untitled/services/step_sync_service.dart';
-import 'package:untitled/models/player_model.dart';
+import '../lib/services/step_sync_service.dart';
+import '../lib/models/player_model.dart';
 import 'package:pedometer/pedometer.dart';
 import 'dart:async';
 

@@ -59,8 +59,9 @@ class RaidController extends ChangeNotifier {
         controller.add(value);
         timer = Timer(duration, () {
           timer = null;
-          if (hasValue && latestValue != null) {
-            controller.add(latestValue!);
+          final valueToEmit = latestValue;
+          if (hasValue && valueToEmit != null) {
+            controller.add(valueToEmit);
           }
         });
       }
@@ -93,6 +94,8 @@ class RaidController extends ChangeNotifier {
   String? get activeRaidId => _activeRaidId;
   String? get teamId => _teamId;
   String get bossName => _bossName;
+  String get bossElement => _bossElement;
+  String get bossWeakness => _bossWeakness;
   double get bossMaxHp => _bossMaxHp;
   double get bossCurrentHp => _bossCurrentHp;
   bool get isSystemHackActive => _isSystemHackActive;
@@ -193,7 +196,7 @@ class RaidController extends ChangeNotifier {
       }
     });
 
-    // 3. Listen to Tactical Pings
+    // 4. Listen to Tactical Pings
     _pingSubscription = _throttleStream(_firestore
         .collection("teams")
         .doc(teamId)
@@ -258,22 +261,6 @@ class RaidController extends ChangeNotifier {
     // Set up recurring hourly health regeneration simulation (scaled to 1 minute for local preview testing)
     _regenTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _applyBossRegeneration();
-    });
-
-    // 3. Listen to Tactical Pings
-    _pingSubscription = _throttleStream(_firestore
-        .collection("teams")
-        .doc(teamId)
-        .collection("pings")
-        .orderBy("timestamp", descending: true)
-        .limit(5)
-        .snapshots())
-        .listen((snap) {
-      _tacticalPings.clear();
-      for (var doc in snap.docs) {
-        _tacticalPings.add(doc.data());
-      }
-      notifyListeners();
     });
 
     notifyListeners();
@@ -357,6 +344,7 @@ class RaidController extends ChangeNotifier {
     bool anyPatchApplied = _participants.values.any((p) => p.hasPatchedFirewall);
     if (anyPatchApplied && _isSystemHackActive) {
       _isSystemHackActive = false;
+      notifyListeners();
     }
   }
 
