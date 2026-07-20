@@ -11,36 +11,39 @@ class MissionsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context);
     final user = firebaseService.currentUser;
+    final colorScheme = Theme.of(context).colorScheme;
 
     if (user == null) return const Scaffold(body: Center(child: Text("NOT AUTHENTICATED")));
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0A0E),
+        backgroundColor: colorScheme.surface,
         appBar: AppBar(
-          title: const Text("MISSIONS", style: TextStyle(fontFamily: 'Orbitron', letterSpacing: 2)),
+          title: Text("MISSIONS", style: TextStyle(fontFamily: 'Orbitron', letterSpacing: 2, color: colorScheme.onSurface)),
           backgroundColor: Colors.transparent,
           elevation: 0,
-          bottom: const TabBar(
-            tabs: [
+          bottom: TabBar(
+            tabs: const [
               Tab(text: "DAILY"),
               Tab(text: "WEEKLY"),
             ],
-            indicatorColor: Color(0xFF00F2FF),
-            labelStyle: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.bold),
+            indicatorColor: colorScheme.primary,
+            labelStyle: const TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.bold),
+            labelColor: colorScheme.primary,
+            unselectedLabelColor: colorScheme.onSurfaceVariant,
           ),
         ),
         body: StreamBuilder<PlayerModel?>(
           stream: firebaseService.getPlayerStream(user.uid),
           builder: (context, snapshot) {
-            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            if (!snapshot.hasData) return Center(child: CircularProgressIndicator(color: colorScheme.primary));
             final player = snapshot.data!;
 
             return TabBarView(
               children: [
-                _buildMissionList(context, firebaseService, player, false),
-                _buildMissionList(context, firebaseService, player, true),
+                _buildMissionList(context, firebaseService, player, false, colorScheme),
+                _buildMissionList(context, firebaseService, player, true, colorScheme),
               ],
             );
           },
@@ -49,7 +52,7 @@ class MissionsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMissionList(BuildContext context, FirebaseService service, PlayerModel player, bool isWeekly) {
+  Widget _buildMissionList(BuildContext context, FirebaseService service, PlayerModel player, bool isWeekly, ColorScheme colorScheme) {
     // These would normally come from Firestore
     final List<MissionModel> mockMissions = [
       MissionModel(
@@ -97,9 +100,9 @@ class MissionsScreen extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: canClaim ? const Color(0xFF00F2FF) : Colors.white10),
+            border: Border.all(color: canClaim ? colorScheme.primary : colorScheme.outlineVariant),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,27 +112,27 @@ class MissionsScreen extends StatelessWidget {
                 children: [
                   Text(
                     mission.title,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'),
+                    style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'),
                   ),
                   if (isClaimed)
                     const Icon(Icons.check_circle, color: Colors.green)
                   else
                     Text(
                       "${mission.rewardXp} XP | ${mission.rewardCoins}🪙",
-                      style: const TextStyle(color: Color(0xFF00F2FF), fontSize: 12),
+                      style: TextStyle(color: colorScheme.primary, fontSize: 12),
                     ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
                 mission.description,
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
               ),
               const SizedBox(height: 16),
               LinearProgressIndicator(
                 value: progressPercent,
-                backgroundColor: Colors.white10,
-                valueColor: AlwaysStoppedAnimation(canClaim ? const Color(0xFF00F2FF) : Colors.purpleAccent),
+                backgroundColor: colorScheme.surfaceContainer,
+                valueColor: AlwaysStoppedAnimation(canClaim ? colorScheme.primary : colorScheme.tertiary),
               ),
               const SizedBox(height: 8),
               Row(
@@ -137,7 +140,7 @@ class MissionsScreen extends StatelessWidget {
                 children: [
                   Text(
                     "${currentProgress.toStringAsFixed(1)} / ${mission.target.toStringAsFixed(0)}",
-                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+                    style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 10),
                   ),
                   if (canClaim)
                     ElevatedButton(
@@ -145,14 +148,18 @@ class MissionsScreen extends StatelessWidget {
                         await service.claimQuestReward(player.uid, mission.id, mission.rewardXp);
                         await service.updateCurrency(player.uid, mission.rewardCoins);
                       },
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F2FF)),
-                      child: const Text("CLAIM", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                      ),
+                      child: const Text("CLAIM", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                 ],
               ),
             ],
           ),
         );
+
       },
     );
   }

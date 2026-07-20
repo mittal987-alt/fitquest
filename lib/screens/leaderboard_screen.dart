@@ -20,14 +20,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final theme = Theme.of(context);
 
     if (user == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF0D1117),
+      return Scaffold(
+        backgroundColor: theme.colorScheme.surface,
         body: Center(
           child: Text(
             "User Not Logged In",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -37,18 +38,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       stream: firebaseService.getPlayerStream(user.uid),
       builder: (context, playerSnapshot) {
         if (playerSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0D1117),
-            body: Center(child: CircularProgressIndicator(color: Color(0xFF8E2DE2))),
+          return Scaffold(
+            backgroundColor: theme.colorScheme.surface,
+            body: Center(child: CircularProgressIndicator(color: theme.colorScheme.primary)),
           );
         }
 
         final currentPlayer = playerSnapshot.data;
         if (currentPlayer == null) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0D1117),
+          return Scaffold(
+            backgroundColor: theme.colorScheme.surface,
             body: Center(
-              child: Text("Player Profiles Inaccessible", style: TextStyle(color: Colors.redAccent)),
+              child: Text("Player Profiles Inaccessible", style: TextStyle(color: theme.colorScheme.error)),
             ),
           );
         }
@@ -56,16 +57,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         final String userTeam = currentPlayer.team;
 
         return Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
+          backgroundColor: theme.colorScheme.surface,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
-            title: const Text(
+            title: Text(
               "LEADERBOARDS",
-              style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5, fontSize: 18),
+              style: TextStyle(fontWeight: FontWeight.w900, color: theme.colorScheme.onSurface, letterSpacing: 1.5, fontSize: 18),
             ),
             centerTitle: true,
-            iconTheme: const IconThemeData(color: Colors.white),
+            iconTheme: IconThemeData(color: theme.colorScheme.onSurface),
           ),
           body: Column(
             children: [
@@ -75,13 +76,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF161B22),
+                    color: theme.colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                    border: Border.all(color: theme.colorScheme.onSurface.withValues(alpha: 0.1)),
                   ),
                   child: Row(
                     children: [
-                      _buildFilterButton("SOLO", "SOLO", const Color(0xFF8E2DE2)),
+                      _buildFilterButton("SOLO", "SOLO", theme.colorScheme.primary),
                       const SizedBox(width: 4),
                       _buildFilterButton("WEEKLY", "WEEKLY", Colors.orangeAccent),
                       if (currentPlayer.isInTeam) ...[
@@ -155,6 +156,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Widget _buildFilterButton(String filterTarget, String label, Color activeNeonColor) {
     final bool isActive = currentFilter == filterTarget;
+    final theme = Theme.of(context);
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => currentFilter = filterTarget),
@@ -176,7 +178,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             child: Text(
               label,
               style: TextStyle(
-                color: isActive ? Colors.white : Colors.white60,
+                color: isActive ? Colors.white : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 fontWeight: FontWeight.w900,
                 fontSize: 12,
                 letterSpacing: 1,
@@ -189,13 +191,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _buildSoloStream() {
+    final theme = Theme.of(context);
     return StreamBuilder<List<PlayerModel>>(
       key: const ValueKey("SoloStream"),
       stream: _throttleStream(firebaseService.getLeaderboard()),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Color(0xFF8E2DE2)));
-        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.white60)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Players Found", style: TextStyle(color: Colors.white24)));
+        if (snapshot.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: theme.colorScheme.primary));
+        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text("No Players Found", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.24))));
 
         final players = snapshot.data!;
         return Column(
@@ -205,7 +208,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               name: players[0].name,
               value: "${players[0].totalSteps} Steps Logged",
               icon: Icons.emoji_events_rounded,
-              neonColor: const Color(0xFF8E2DE2),
+              neonColor: theme.colorScheme.primary,
             ),
             Expanded(
               child: ListView.builder(
@@ -221,13 +224,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _buildWeeklyStream() {
+    final theme = Theme.of(context);
     return StreamBuilder<List<PlayerModel>>(
       key: const ValueKey("WeeklyStream"),
       stream: _throttleStream(firebaseService.getWeeklyLeaderboard()),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.orangeAccent));
-        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.white60)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Players Found", style: TextStyle(color: Colors.white24)));
+        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text("No Players Found", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.24))));
 
         final players = snapshot.data!;
         return Column(
@@ -257,13 +261,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _buildTeamMembersStream(String teamName) {
+    final theme = Theme.of(context);
     return StreamBuilder<List<PlayerModel>>(
       key: const ValueKey("TeamMembersStream"),
       stream: _throttleStream(firebaseService.getTeamLeaderboard(teamName)),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
-        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.white60)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Team Members Found", style: TextStyle(color: Colors.white24)));
+        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text("No Team Members Found", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.24))));
 
         final players = snapshot.data!;
         return Column(
@@ -289,13 +294,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _buildGlobalTeamsStream() {
+    final theme = Theme.of(context);
     return StreamBuilder<List<TeamModel>>(
       key: const ValueKey("GlobalTeamsStream"),
       stream: _throttleStream(firebaseService.getTeamLeaderboardGlobal()),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
-        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: const TextStyle(color: Colors.white60)));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No Teams Found", style: TextStyle(color: Colors.white24)));
+        if (snapshot.hasError) return Center(child: Text("${snapshot.error}", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text("No Teams Found", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.24))));
 
         final teams = snapshot.data!;
         return Column(
@@ -318,9 +324,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF161B22),
+                      color: theme.colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                      border: Border.all(color: theme.colorScheme.onSurface.withValues(alpha: 0.1)),
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -330,10 +336,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         decoration: BoxDecoration(
                           color: index == 0
                               ? Colors.amber.withValues(alpha: 0.1)
-                              : const Color(0xFF0D1117),
+                              : theme.colorScheme.surface,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: index == 0 ? Colors.amberAccent : Colors.white.withValues(alpha: 0.1),
+                            color: index == 0 ? Colors.amberAccent : theme.colorScheme.onSurface.withValues(alpha: 0.1),
                             width: index == 0 ? 1.5 : 1,
                           ),
                         ),
@@ -342,16 +348,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                               ? const Icon(Icons.emoji_events_rounded, color: Colors.amberAccent, size: 20)
                               : Text(
                             "${index + 1}",
-                            style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w900),
+                            style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 14, fontWeight: FontWeight.w900),
                           ),
                         ),
                       ),
-                      title: Text(team.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
+                      title: Text(team.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: theme.colorScheme.onSurface)),
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 4.0),
                         child: Text(
                           "👥 ${team.members} members  •  ⚡ Efficiency: ${avgEfficiency.toStringAsFixed(0)} steps/member",
-                          style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.4),
+                          style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 11, height: 1.4),
                         ),
                       ),
                       trailing: Column(
@@ -362,7 +368,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                             "${team.totalSteps}",
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.cyanAccent),
                           ),
-                          const Text("STEPS", style: TextStyle(fontSize: 9, color: Colors.white24, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                          Text("STEPS", style: TextStyle(fontSize: 9, color: theme.colorScheme.onSurface.withValues(alpha: 0.24), fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                         ],
                       ),
                     ),
@@ -383,12 +389,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     required IconData icon,
     required Color neonColor,
   }) {
+    final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: neonColor.withValues(alpha: 0.2), width: 1.5),
       ),
@@ -407,10 +414,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
+            style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 24, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500)),
+          Text(value, style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 13, fontWeight: FontWeight.w500)),
         ],
       ),
     );

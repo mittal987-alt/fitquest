@@ -50,16 +50,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context);
     final user = firebaseService.currentUser;
+    final colorScheme = Theme.of(context).colorScheme;
 
     if (user == null) return const Scaffold(body: Center(child: Text("NOT AUTHENTICATED")));
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0E),
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text("NETWORK", style: TextStyle(fontFamily: 'Orbitron', letterSpacing: 2, color: Colors.white)),
+        title: Text("NETWORK", style: TextStyle(fontFamily: 'Orbitron', letterSpacing: 2, color: colorScheme.onSurface)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colorScheme.onSurface),
         actions: [
           if (_isSearching)
             IconButton(
@@ -80,13 +81,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: "SEARCH OPERATIVE ID OR NAME...",
-                hintStyle: const TextStyle(color: Colors.white38),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF00F2FF)),
+                hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                prefixIcon: Icon(Icons.search, color: colorScheme.primary),
                 filled: true,
-                fillColor: const Color(0xFF1A1A2E),
+                fillColor: colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
               ),
               onSubmitted: (value) => _performSearch(value, firebaseService),
@@ -94,20 +95,20 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F2FF)))
+                ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
                 : _isSearching
-                    ? _buildSearchResults(firebaseService, user.uid)
-                    : _buildFriendsList(firebaseService, user.uid),
+                    ? _buildSearchResults(firebaseService, user.uid, colorScheme)
+                    : _buildFriendsList(firebaseService, user.uid, colorScheme),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSearchResults(FirebaseService firebaseService, String currentUid) {
+  Widget _buildSearchResults(FirebaseService firebaseService, String currentUid, ColorScheme colorScheme) {
     if (_searchResults.isEmpty) {
-      return const Center(
-        child: Text("NO OPERATIVES FOUND", style: TextStyle(color: Colors.white38, fontFamily: 'Orbitron')),
+      return Center(
+        child: Text("NO OPERATIVES FOUND", style: TextStyle(color: colorScheme.onSurfaceVariant, fontFamily: 'Orbitron')),
       );
     }
 
@@ -119,12 +120,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: Colors.blueGrey,
+            backgroundColor: colorScheme.secondaryContainer,
             backgroundImage: player.avatar.isNotEmpty ? NetworkImage(player.avatar) : null,
-            child: player.avatar.isEmpty ? Text(player.name[0]) : null,
+            child: player.avatar.isEmpty ? Text(player.name[0], style: TextStyle(color: colorScheme.onSecondaryContainer)) : null,
           ),
-          title: Text(player.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          subtitle: Text("LVL ${player.level}", style: const TextStyle(color: Color(0xFF00F2FF), fontSize: 12)),
+          title: Text(player.name, style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
+          subtitle: Text("LVL ${player.level}", style: TextStyle(color: colorScheme.primary, fontSize: 12)),
           trailing: StreamBuilder<PlayerModel?>(
             stream: firebaseService.getPlayerStream(currentUid),
             builder: (context, snapshot) {
@@ -141,8 +142,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         }
                       },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isFriend ? Colors.grey : const Color(0xFF00F2FF),
-                  foregroundColor: Colors.black,
+                  backgroundColor: isFriend ? colorScheme.surfaceContainer : colorScheme.primary,
+                  foregroundColor: isFriend ? colorScheme.onSurfaceVariant : colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                 ),
                 child: Text(isFriend ? "CONNECTED" : "CONNECT"),
@@ -154,19 +155,19 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  Widget _buildFriendsList(FirebaseService firebaseService, String currentUid) {
+  Widget _buildFriendsList(FirebaseService firebaseService, String currentUid, ColorScheme colorScheme) {
     return StreamBuilder<PlayerModel?>(
       stream: firebaseService.getPlayerStream(currentUid),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator(color: colorScheme.primary));
         final player = snapshot.data!;
         final friends = player.friends;
 
         if (friends.isEmpty) {
-          return const Center(
+          return Center(
             child: Text(
               "NO ACTIVE CONNECTIONS FOUND",
-              style: TextStyle(color: Colors.white38, fontFamily: 'Orbitron'),
+              style: TextStyle(color: colorScheme.onSurfaceVariant, fontFamily: 'Orbitron'),
             ),
           );
         }
@@ -182,15 +183,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: Colors.purple,
+                    backgroundColor: colorScheme.tertiaryContainer,
                     backgroundImage: friend.avatar.isNotEmpty ? NetworkImage(friend.avatar) : null,
-                    child: friend.avatar.isEmpty ? Text(friend.name[0]) : null,
+                    child: friend.avatar.isEmpty ? Text(friend.name[0], style: TextStyle(color: colorScheme.onTertiaryContainer)) : null,
                   ),
-                  title: Text(friend.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text("LVL ${friend.level} | ${friend.totalSteps} STEPS", style: const TextStyle(color: Color(0xFF00F2FF), fontSize: 12)),
+                  title: Text(friend.name, style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
+                  subtitle: Text("LVL ${friend.level} | ${friend.totalSteps} STEPS", style: TextStyle(color: colorScheme.secondary, fontSize: 12)),
                   trailing: IconButton(
-                    icon: const Icon(Icons.person_remove_outlined, color: Colors.white24),
-                    onPressed: () => _confirmRemoveFriend(firebaseService, currentUid, friend.uid, friend.name),
+                    icon: Icon(Icons.person_remove_outlined, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                    onPressed: () => _confirmRemoveFriend(firebaseService, currentUid, friend.uid, friend.name, colorScheme),
                   ),
                   onTap: () {
                     // TODO: View friend profile
@@ -204,13 +205,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  void _confirmRemoveFriend(FirebaseService firebaseService, String currentUid, String friendId, String friendName) {
+  void _confirmRemoveFriend(FirebaseService firebaseService, String currentUid, String friendId, String friendName, ColorScheme colorScheme) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text("TERMINATE CONNECTION?", style: TextStyle(color: Colors.white, fontFamily: 'Orbitron')),
-        content: Text("Are you sure you want to remove $friendName from your network?", style: const TextStyle(color: Colors.white70)),
+        backgroundColor: colorScheme.surfaceContainer,
+        title: Text("TERMINATE CONNECTION?", style: TextStyle(color: colorScheme.onSurface, fontFamily: 'Orbitron')),
+        content: Text("Are you sure you want to remove $friendName from your network?", style: TextStyle(color: colorScheme.onSurfaceVariant)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
           TextButton(
@@ -218,10 +219,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
               Navigator.pop(context);
               await firebaseService.removeFriend(currentUid, friendId);
             },
-            child: const Text("TERMINATE", style: TextStyle(color: Colors.redAccent)),
+            child: Text("TERMINATE", style: TextStyle(color: colorScheme.error)),
           ),
         ],
       ),
     );
   }
+
 }

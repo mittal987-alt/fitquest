@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 import 'firebase_service.dart';
+import 'pedometer_service.dart';
+import 'step_sync_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -86,6 +88,10 @@ class AuthService {
   // =========================
 
   Future<void> logout() async {
+    // Reset telemetry services to clear session-specific hardware anchors and sync state
+    PedometerService().reset();
+    StepSyncService().reset();
+
     await GoogleSignIn().signOut();
     await _auth.signOut();
   }

@@ -27,10 +27,11 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   static const double _kSectionGap = 20;
 
   BoxDecoration _cardDecoration({Color? borderColor, double borderWidth = 1}) {
+    final colorScheme = Theme.of(context).colorScheme;
     return BoxDecoration(
-      color: const Color(0xFF161B22),
+      color: colorScheme.surfaceContainer,
       borderRadius: BorderRadius.circular(_kCardRadius),
-      border: Border.all(color: borderColor ?? Colors.white.withValues(alpha: 0.05), width: borderWidth),
+      border: Border.all(color: borderColor ?? colorScheme.onSurface.withValues(alpha: 0.05), width: borderWidth),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.2),
@@ -44,7 +45,7 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   Widget _sectionHeader(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white38, letterSpacing: 1),
+      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38), letterSpacing: 1),
     );
   }
 
@@ -98,19 +99,20 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   @override
   Widget build(BuildContext context) {
     final rec = _computeRecommendation();
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0D1117),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           "ADAPTIVE GOALS",
-          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.w900, color: colorScheme.onSurface, letterSpacing: 1.5, fontSize: 18),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: colorScheme.onSurface, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -142,20 +144,21 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   }
 
   Widget _buildHistoricalTelemetrySection() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "MANUAL TELEMETRY OVERRIDE",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.54), letterSpacing: 0.5),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Directly modify hourly baselines or daily logs for testing Ghost Strider performance.",
-            style: TextStyle(color: Colors.white24, fontSize: 10),
+            style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.24), fontSize: 10),
           ),
           const SizedBox(height: 20),
           _telemetryActionTile(
@@ -163,7 +166,7 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             Icons.access_time_filled_rounded,
             () => _showHourlyEditor(),
           ),
-          const Divider(height: 1, color: Colors.white10),
+          Divider(height: 1, color: colorScheme.onSurface.withValues(alpha: 0.1)),
           _telemetryActionTile(
             "DAILY ARCHIVE LOGS",
             Icons.calendar_month_rounded,
@@ -175,22 +178,24 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   }
 
   Widget _telemetryActionTile(String title, IconData icon, VoidCallback onTap) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: Colors.cyanAccent, size: 20),
+      leading: Icon(icon, color: colorScheme.primary, size: 20),
       title: Text(
         title,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
+        style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
       ),
-      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white24),
+      trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurface.withValues(alpha: 0.24)),
       onTap: onTap,
     );
   }
 
   void _showHourlyEditor() {
+    final colorScheme = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: colorScheme.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => StatefulBuilder(
@@ -200,11 +205,11 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             height: MediaQuery.of(context).size.height * 0.7,
             child: Column(
               children: [
-                const Padding(
-                  padding: EdgeInsets.all(24),
+                Padding(
+                  padding: const EdgeInsets.all(24),
                   child: Text(
                     "EDIT HOURLY DISTRIBUTION",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
+                    style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
                   ),
                 ),
                 Expanded(
@@ -214,15 +219,15 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
                       final hour = index.toString().padLeft(2, '0');
                       final steps = _hourlySteps[hour] ?? 0;
                       return ListTile(
-                        title: Text("HOUR $hour:00", style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                        title: Text("HOUR $hour:00", style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.bold)),
                         trailing: SizedBox(
                           width: 100,
                           child: TextField(
                             keyboardType: TextInputType.number,
-                            style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
-                            decoration: const InputDecoration(
+                            style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold),
+                            decoration: InputDecoration(
                               hintText: "Steps",
-                              hintStyle: TextStyle(color: Colors.white10),
+                              hintStyle: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.1)),
                               isDense: true,
                             ),
                             onChanged: (val) {
@@ -241,7 +246,7 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
+                      style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary, foregroundColor: colorScheme.onPrimary),
                       onPressed: () => Navigator.pop(context),
                       child: const Text("CLOSE & PREVIEW", style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
@@ -256,9 +261,10 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   }
 
   void _showDailyHistoryEditor() {
+    final colorScheme = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF161B22),
+      backgroundColor: colorScheme.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => StatefulBuilder(
@@ -269,11 +275,11 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             height: MediaQuery.of(context).size.height * 0.7,
             child: Column(
               children: [
-                const Padding(
-                  padding: EdgeInsets.all(24),
+                Padding(
+                  padding: const EdgeInsets.all(24),
                   child: Text(
                     "DAILY HISTORY ARCHIVE",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
+                    style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
                   ),
                 ),
                 Expanded(
@@ -284,13 +290,13 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
                       final data = _dailyHistory[date] as Map<String, dynamic>;
                       final steps = data['steps'] ?? 0;
                       return ListTile(
-                        title: Text(date, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
-                        subtitle: Text("${data['calories'] ?? 0} KCAL | ${data['distance'] ?? 0.0} KM", style: const TextStyle(color: Colors.white24, fontSize: 10)),
+                        title: Text(date, style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.bold)),
+                        subtitle: Text("${data['calories'] ?? 0} KCAL | ${data['distance'] ?? 0.0} KM", style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.24), fontSize: 10)),
                         trailing: SizedBox(
                           width: 100,
                           child: TextField(
                             keyboardType: TextInputType.number,
-                            style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold),
                             decoration: const InputDecoration(isDense: true),
                             onChanged: (val) {
                               final intValue = int.tryParse(val) ?? 0;
@@ -312,7 +318,7 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
+                      style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary, foregroundColor: colorScheme.onPrimary),
                       onPressed: () => Navigator.pop(context),
                       child: const Text("CLOSE & PREVIEW", style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
@@ -327,18 +333,19 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   }
 
   Widget _buildHeaderCard(ActivityModel rec) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+        gradient: LinearGradient(
+          colors: [colorScheme.primary, colorScheme.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(_kCardRadius),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4A00E0).withValues(alpha: 0.3),
+            color: colorScheme.secondary.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
           )
@@ -350,9 +357,9 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 "ML ENGINE STATUS",
-                style: TextStyle(color: Colors.white60, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.5),
+                style: TextStyle(color: colorScheme.onPrimary.withValues(alpha: 0.6), fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.5),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -373,12 +380,12 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
           const SizedBox(height: 20),
           Text(
             "RECOMMENDED TIER: ${rec.tier}",
-            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+            style: TextStyle(color: colorScheme.onPrimary, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5),
           ),
           const SizedBox(height: 8),
           Text(
             "Based on your BMI, Trust Score (${widget.player.trustScore}), and Level (${widget.player.level}), our engine suggests ${rec.tier} level activity.",
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12, height: 1.5),
+            style: TextStyle(color: colorScheme.onPrimary.withValues(alpha: 0.7), fontSize: 12, height: 1.5),
           ),
           const SizedBox(height: 24),
           Row(
@@ -395,24 +402,26 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   }
 
   Widget _headerStat(String label, String value, IconData icon) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         Icon(icon, color: Colors.cyanAccent, size: 20),
         const SizedBox(height: 6),
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        Text(value, style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.w900, fontSize: 16)),
+        Text(label, style: TextStyle(color: colorScheme.onPrimary.withValues(alpha: 0.54), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
       ],
     );
   }
 
   Widget _buildInputSection() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("PRIMARY FITNESS GOAL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
+          Text("PRIMARY FITNESS GOAL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.54), letterSpacing: 0.5)),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -431,13 +440,13 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("HEIGHT: ${_height.toStringAsFixed(0)} CM", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
+                    Text("HEIGHT: ${_height.toStringAsFixed(0)} CM", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.54), letterSpacing: 0.5)),
                     Slider(
                       value: _height,
                       min: 120,
                       max: 220,
-                      activeColor: Colors.cyanAccent,
-                      inactiveColor: Colors.white10,
+                      activeColor: colorScheme.primary,
+                      inactiveColor: colorScheme.onSurface.withValues(alpha: 0.1),
                       onChanged: (v) => setState(() => _height = v),
                     ),
                   ],
@@ -452,13 +461,13 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("WEIGHT: ${_weight.toStringAsFixed(1)} KG", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
+                    Text("WEIGHT: ${_weight.toStringAsFixed(1)} KG", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.54), letterSpacing: 0.5)),
                     Slider(
                       value: _weight,
                       min: 40,
                       max: 150,
-                      activeColor: Colors.cyanAccent,
-                      inactiveColor: Colors.white10,
+                      activeColor: colorScheme.primary,
+                      inactiveColor: colorScheme.onSurface.withValues(alpha: 0.1),
                       onChanged: (v) => setState(() => _weight = v),
                     ),
                   ],
@@ -472,20 +481,21 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   }
 
   Widget _goalChip(String id, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
     bool selected = _goal == id;
     return GestureDetector(
       onTap: () => setState(() => _goal = id),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? Colors.cyanAccent : Colors.white.withValues(alpha: 0.05),
+          color: selected ? colorScheme.primary : colorScheme.onSurface.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(_kChipRadius),
-          border: Border.all(color: selected ? Colors.cyanAccent : Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(color: selected ? colorScheme.primary : colorScheme.onSurface.withValues(alpha: 0.05)),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.black : Colors.white54,
+            color: selected ? colorScheme.onPrimary : colorScheme.onSurface.withValues(alpha: 0.54),
             fontWeight: FontWeight.w900,
             fontSize: 10,
             letterSpacing: 0.5,
@@ -496,6 +506,7 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   }
 
   Widget _buildTargetSliders() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: _cardDecoration(),
@@ -504,8 +515,8 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("DAILY STEP TARGET", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
-              Text(_stepTarget.toString(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.cyanAccent)),
+              Text("DAILY STEP TARGET", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.54), letterSpacing: 0.5)),
+              Text(_stepTarget.toString(), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: colorScheme.primary)),
             ],
           ),
           Slider(
@@ -513,16 +524,16 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             min: 2000,
             max: 30000,
             divisions: 28,
-            activeColor: Colors.cyanAccent,
-            inactiveColor: Colors.white10,
+            activeColor: colorScheme.primary,
+            inactiveColor: colorScheme.onSurface.withValues(alpha: 0.1),
             onChanged: (v) => setState(() => _stepTarget = v.toInt()),
           ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("EXERCISE GOAL (MINS)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.white54, letterSpacing: 0.5)),
-              Text("${_exerciseTarget}M", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.cyanAccent)),
+              Text("EXERCISE GOAL (MINS)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.54), letterSpacing: 0.5)),
+              Text("${_exerciseTarget}M", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: colorScheme.primary)),
             ],
           ),
           Slider(
@@ -530,8 +541,8 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             min: 10,
             max: 120,
             divisions: 11,
-            activeColor: Colors.cyanAccent,
-            inactiveColor: Colors.white10,
+            activeColor: colorScheme.primary,
+            inactiveColor: colorScheme.onSurface.withValues(alpha: 0.1),
             onChanged: (v) => setState(() => _exerciseTarget = v.toInt()),
           ),
         ],
@@ -540,19 +551,20 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
   }
 
   Widget _buildActionButtons() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white.withValues(alpha: 0.05),
-              foregroundColor: Colors.cyanAccent,
+              backgroundColor: colorScheme.onSurface.withValues(alpha: 0.05),
+              foregroundColor: colorScheme.primary,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Colors.cyanAccent, width: 1.5),
+                side: BorderSide(color: colorScheme.primary, width: 1.5),
               ),
             ),
             onPressed: _applyRecommendation,
@@ -564,14 +576,14 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
         Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            gradient: _isSaving ? null : const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
+            gradient: _isSaving ? null : LinearGradient(colors: [colorScheme.primary, colorScheme.secondary]),
             borderRadius: BorderRadius.circular(16),
-            color: _isSaving ? Colors.white10 : null,
+            color: _isSaving ? colorScheme.onSurface.withValues(alpha: 0.1) : null,
           ),
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.transparent,
-              foregroundColor: Colors.white,
+              foregroundColor: colorScheme.onPrimary,
               elevation: 0,
               shadowColor: Colors.transparent,
               padding: const EdgeInsets.symmetric(vertical: 20),
@@ -579,7 +591,7 @@ class _GoalAdjustmentScreenState extends State<GoalAdjustmentScreen> {
             ),
             onPressed: _isSaving ? null : _saveGoals,
             child: _isSaving 
-              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: colorScheme.onPrimary, strokeWidth: 2))
               : const Text("DEPLOY UPDATED TARGETS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
           ),
         ),

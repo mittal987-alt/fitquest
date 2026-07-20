@@ -17,17 +17,20 @@ class TeamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color teamColor = team.getTeamColor();
+    final Color teamColor = team.getTeamColor(context);
     
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF161B22),
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: joined ? teamColor.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
+            color: joined ? teamColor.withValues(alpha: 0.3) : colorScheme.onSurface.withValues(alpha: 0.05),
             width: joined ? 2 : 1,
           ),
           boxShadow: [
@@ -60,33 +63,33 @@ class TeamCard extends StatelessWidget {
                 children: [
                   Text(
                     team.name.toUpperCase(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
-                      color: Colors.white,
+                      color: colorScheme.onSurface,
                       letterSpacing: 0.5,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.person_outline_rounded, size: 12, color: Colors.white.withValues(alpha: 0.5)),
+                      Icon(Icons.person_outline_rounded, size: 12, color: colorScheme.onSurface.withValues(alpha: 0.5)),
                       const SizedBox(width: 4),
                       Text(
                         "${team.members}/${team.maxMembers}",
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: colorScheme.onSurface.withValues(alpha: 0.5),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Icon(Icons.bolt_rounded, size: 12, color: Colors.white.withValues(alpha: 0.5)),
+                      Icon(Icons.bolt_rounded, size: 12, color: colorScheme.onSurface.withValues(alpha: 0.5)),
                       const SizedBox(width: 4),
                       Text(
                         "${team.totalSteps} XP",
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: colorScheme.onSurface.withValues(alpha: 0.5),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),

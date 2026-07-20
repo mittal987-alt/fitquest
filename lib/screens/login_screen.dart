@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firebase_service.dart';
 import '../services/auth_service.dart';
 import '../services/pedometer_service.dart';
+import '../services/step_sync_service.dart';
 import 'main_navigation.dart';
 import 'class_selection_screen.dart';
 
@@ -52,12 +53,14 @@ class _LoginScreenState extends State<LoginScreen> {
       if (isLogin) {
         await auth.signInWithEmailAndPassword(email: email, password: password);
         PedometerService().reset();
+        StepSyncService().reset();
       } else {
         UserCredential userCredential = await auth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
         PedometerService().reset();
+        StepSyncService().reset();
         await firebaseService.createPlayer(
           uid: userCredential.user!.uid,
           name: name,
@@ -93,196 +96,204 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (builderContext, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF161B22),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          title: const Text(
-            "SECURE PHONE LINK",
-            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (vId == null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: phoneController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: "Phone Number",
-                        labelStyle: const TextStyle(color: Colors.white54),
-                        hintText: "+1234567890",
-                        hintStyle: const TextStyle(color: Colors.white24),
-                        prefixIcon: const Icon(Icons.phone_rounded, color: Colors.cyanAccent),
-                        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white12)),
-                        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
-                      ),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        "Enter a valid phone number in E.164 format (e.g. +1234567890)",
-                        style: TextStyle(fontSize: 11, color: Colors.white38),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                TextField(
-                  controller: codeController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: "Verification Token",
-                    labelStyle: TextStyle(color: Colors.white54),
-                    prefixIcon: Icon(Icons.lock_clock_rounded, color: Colors.cyanAccent),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white12)),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("CANCEL", style: TextStyle(color: Colors.white38)),
+      builder: (dialogContext) {
+        final colorScheme = Theme.of(dialogContext).colorScheme;
+        return StatefulBuilder(
+          builder: (builderContext, setDialogState) => AlertDialog(
+            backgroundColor: colorScheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+              side: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
             ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
-                borderRadius: BorderRadius.circular(12),
+            title: Text(
+              "SECURE PHONE LINK",
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (vId == null)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: phoneController,
+                        style: TextStyle(color: colorScheme.onSurface),
+                        decoration: InputDecoration(
+                          labelText: "Phone Number",
+                          labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                          hintText: "+1234567890",
+                          hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                          prefixIcon: Icon(Icons.phone_rounded, color: colorScheme.primary),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.outlineVariant)),
+                          focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                        ),
+                        keyboardType: TextInputType.phone,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          "Enter a valid phone number in E.164 format (e.g. +1234567890)",
+                          style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  TextField(
+                    controller: codeController,
+                    style: TextStyle(color: colorScheme.onSurface),
+                    decoration: InputDecoration(
+                      labelText: "Verification Token",
+                      labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                      prefixIcon: Icon(Icons.lock_clock_rounded, color: colorScheme.primary),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.outlineVariant)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text("CANCEL", style: TextStyle(color: colorScheme.onSurfaceVariant)),
               ),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.secondary]),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                onPressed: () async {
-                  if (vId == null) {
-                    final phone = phoneController.text.trim();
-                    if (!RegExp(r'^\+[1-9]\d{1,14}$').hasMatch(phone)) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Enter a valid phone number in E.164 format (e.g. +1234567890)")),
-                        );
-                      }
-                      return;
-                    }
-
-                    await authService.verifyPhone(
-                      phoneNumber: phone,
-                      verificationCompleted: (cred) async {
-                        try {
-                          UserCredential userCredential = await auth.signInWithCredential(cred);
-                          PedometerService().reset();
-                          bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
-                          if (isNew) {
-                            await firebaseService.createPlayer(
-                              uid: userCredential.user!.uid,
-                              name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
-                              email: userCredential.user!.phoneNumber ?? "Phone User",
-                            );
-                          }
-                          if (Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
-                          if (mounted) {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => isNew 
-                                  ? ClassSelectionScreen(uid: userCredential.user!.uid) 
-                                  : const MainNavigation()
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Auto-verification breakdown: $e")),
-                            );
-                          }
-                        }
-                      },
-                      verificationFailed: (e) {
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    if (vId == null) {
+                      final phone = phoneController.text.trim();
+                      if (!RegExp(r'^\+[1-9]\d{1,14}$').hasMatch(phone)) {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(e.message ?? "Verification Fault")),
+                            const SnackBar(content: Text("Enter a valid phone number in E.164 format (e.g. +1234567890)")),
                           );
                         }
-                      },
-                      codeSent: (id, resendToken) {
-                        setDialogState(() => vId = id);
-                      },
-                      codeAutoRetrievalTimeout: (id) {
-                        setDialogState(() => vId = id);
-                      },
-                    );
-                  } else {
-                    try {
-                      UserCredential userCredential = await authService.signInWithPhone(
-                        vId!,
-                        codeController.text.trim(),
+                        return;
+                      }
+
+                      await authService.verifyPhone(
+                        phoneNumber: phone,
+                        verificationCompleted: (cred) async {
+                          try {
+                            UserCredential userCredential = await auth.signInWithCredential(cred);
+                            PedometerService().reset();
+                            StepSyncService().reset();
+                            bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
+                            if (isNew) {
+                              await firebaseService.createPlayer(
+                                uid: userCredential.user!.uid,
+                                name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
+                                email: userCredential.user!.phoneNumber ?? "Phone User",
+                              );
+                            }
+                            if (Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
+                            if (mounted) {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => isNew 
+                                    ? ClassSelectionScreen(uid: userCredential.user!.uid) 
+                                    : const MainNavigation()
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Auto-verification breakdown: $e")),
+                              );
+                            }
+                          }
+                        },
+                        verificationFailed: (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.message ?? "Verification Fault")),
+                            );
+                          }
+                        },
+                        codeSent: (id, resendToken) {
+                          setDialogState(() => vId = id);
+                        },
+                        codeAutoRetrievalTimeout: (id) {
+                          setDialogState(() => vId = id);
+                        },
                       );
-                      PedometerService().reset();
-                      bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
-                      if (isNew) {
-                        await firebaseService.createPlayer(
-                          uid: userCredential.user!.uid,
-                          name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
-                          email: userCredential.user!.phoneNumber ?? "",
+                    } else {
+                      try {
+                        UserCredential userCredential = await authService.signInWithPhone(
+                          vId!,
+                          codeController.text.trim(),
                         );
-                      }
-                      if (Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
-                      if (mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => isNew 
-                              ? ClassSelectionScreen(uid: userCredential.user!.uid) 
-                              : const MainNavigation()
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                        PedometerService().reset();
+                        StepSyncService().reset();
+                        bool isNew = userCredential.additionalUserInfo?.isNewUser == true;
+                        if (isNew) {
+                          await firebaseService.createPlayer(
+                            uid: userCredential.user!.uid,
+                            name: "Operator ${userCredential.user!.uid.substring(0, 5)}",
+                            email: userCredential.user!.phoneNumber ?? "",
+                          );
+                        }
+                        if (Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
+                        if (mounted) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => isNew 
+                                ? ClassSelectionScreen(uid: userCredential.user!.uid) 
+                                : const MainNavigation()
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
                       }
                     }
-                  }
-                },
-                child: Text(vId == null ? "REQUEST CODE" : "VERIFY CODE", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  },
+                  child: Text(vId == null ? "REQUEST CODE" : "VERIFY CODE", style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: const Color(0xFF161B22),
+              color: colorScheme.surface,
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1.5),
+              border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05), width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
+                  color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.05),
                   blurRadius: 16,
                   offset: const Offset(0, 8),
                 )
@@ -291,30 +302,30 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.public_rounded, size: 70, color: Colors.cyanAccent),
+                Icon(Icons.public_rounded, size: 70, color: colorScheme.primary),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   "FITQUEST",
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2),
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: colorScheme.onSurface, letterSpacing: 2),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   isLogin ? "START PLAYER SESSION" : "CREATE PLAYER PROFILE",
-                  style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 32),
 
                 if (!isLogin) ...[
                   TextField(
                     controller: nameController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: colorScheme.onSurface),
                     decoration: InputDecoration(
                       labelText: "Player Name",
-                      labelStyle: const TextStyle(color: Colors.white54),
-                      prefixIcon: const Icon(Icons.person_outline_rounded, color: Colors.white24),
+                      labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                      prefixIcon: Icon(Icons.person_outline_rounded, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white12)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.cyanAccent)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: colorScheme.outlineVariant)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: colorScheme.primary)),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -322,30 +333,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 TextField(
                   controller: emailController,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: colorScheme.onSurface),
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: "Email Address",
-                    labelStyle: const TextStyle(color: Colors.white54),
-                    prefixIcon: const Icon(Icons.email_outlined, color: Colors.white24),
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    prefixIcon: Icon(Icons.email_outlined, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white12)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.cyanAccent)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: colorScheme.outlineVariant)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: colorScheme.primary)),
                   ),
                 ),
                 const SizedBox(height: 16),
 
                 TextField(
                   controller: passwordController,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: colorScheme.onSurface),
                   obscureText: true,
                   decoration: InputDecoration(
                     labelText: "Password",
-                    labelStyle: const TextStyle(color: Colors.white54),
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.white24),
+                    labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    prefixIcon: Icon(Icons.lock_outline_rounded, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white12)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.cyanAccent)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: colorScheme.outlineVariant)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: colorScheme.primary)),
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -353,9 +364,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: loading ? null : const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
+                    gradient: loading ? null : LinearGradient(colors: [colorScheme.primary, colorScheme.secondary]),
                     borderRadius: BorderRadius.circular(16),
-                    color: loading ? Colors.white10 : null,
+                    color: loading ? colorScheme.onSurface.withValues(alpha: 0.1) : null,
                   ),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -375,9 +386,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
                 const Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.white12)),
-                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("SOCIAL SIGN IN", style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w900))),
-                    Expanded(child: Divider(color: Colors.white12)),
+                    Expanded(child: Divider(color: Colors.black12)),
+                    Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("SOCIAL SIGN IN", style: TextStyle(color: Colors.black26, fontSize: 10, fontWeight: FontWeight.w900))),
+                    Expanded(child: Divider(color: Colors.black12)),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -393,6 +404,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           UserCredential? userCredential = await authService.signInWithGoogle();
                           if (userCredential != null) {
                             PedometerService().reset();
+                            StepSyncService().reset();
                             // Profile creation/existence check is now handled inside authService.signInWithGoogle()
                             if (mounted) {
                               Navigator.pushReplacement(
@@ -419,6 +431,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         try {
                           UserCredential userCredential = await authService.signInAnonymously();
                           PedometerService().reset();
+                          StepSyncService().reset();
                           await firebaseService.ensurePlayerProfileExists(
                             userCredential.user!.uid,
                             "Anonymous Player",
@@ -450,7 +463,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: () => setState(() => isLogin = !isLogin),
                   child: Text(
                     isLogin ? "CREATE AN ACCOUNT" : "ALREADY HAVE AN ACCOUNT?",
-                    style: const TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                    style: TextStyle(color: colorScheme.primary, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                   ),
                 ),
               ],
@@ -462,18 +475,21 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _socialButton({required IconData icon, required Color color, required VoidCallback onTap}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(100),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFF161B22),
+          color: colorScheme.surface,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
+              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.05),
               blurRadius: 8,
               offset: const Offset(0, 4),
             )

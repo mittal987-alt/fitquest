@@ -10,43 +10,44 @@ class CraftingScreen extends StatelessWidget {
   static const double _kCardRadius = 24;
   static const double _kChipRadius = 12;
 
-  BoxDecoration _cardDecoration({Color? borderColor, double borderWidth = 1}) {
+  BoxDecoration _cardDecoration(ThemeData theme, {Color? borderColor, double borderWidth = 1}) {
     return BoxDecoration(
-      color: const Color(0xFF161B22),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       borderRadius: BorderRadius.circular(_kCardRadius),
-      border: Border.all(color: borderColor ?? Colors.white.withValues(alpha: 0.1), width: borderWidth),
+      border: Border.all(color: borderColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.1), width: borderWidth),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           "CRAFTING STATION",
           style: TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
             fontSize: 18,
-            color: Colors.white,
+            color: theme.colorScheme.onSurface,
           ),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: theme.colorScheme.onSurface),
       ),
       body: StreamBuilder<PlayerModel?>(
         stream: firebaseService.getPlayerStream(firebaseService.auth.currentUser?.uid ?? ""),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFF8E2DE2)));
+            return Center(child: CircularProgressIndicator(color: theme.colorScheme.primary));
           }
           if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: Text("OFFLINE", style: TextStyle(color: Colors.white)));
+            return Center(child: Text("OFFLINE", style: TextStyle(color: theme.colorScheme.onSurface)));
           }
 
           final player = snapshot.data!;
@@ -58,13 +59,13 @@ class CraftingScreen extends StatelessWidget {
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(20),
-                decoration: _cardDecoration(),
+                decoration: _cardDecoration(theme),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       "MATERIALS INVENTORY",
-                      style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -75,18 +76,21 @@ class CraftingScreen extends StatelessWidget {
                           player.inventory[CraftingRecipes.materialSilicon] ?? 0,
                           Icons.grid_3x3_rounded,
                           Colors.amber,
+                          theme,
                         ),
                         _buildInventoryItem(
                           "Energy Core",
                           player.inventory[CraftingRecipes.materialEnergyCore] ?? 0,
                           Icons.blur_on_rounded,
-                          const Color(0xFF8E2DE2),
+                          theme.colorScheme.primary,
+                          theme,
                         ),
                         _buildInventoryItem(
                           "Nanites",
                           player.inventory[CraftingRecipes.materialNanites] ?? 0,
                           Icons.bubble_chart_rounded,
                           Colors.cyanAccent,
+                          theme,
                         ),
                       ],
                     ),
@@ -94,11 +98,11 @@ class CraftingScreen extends StatelessWidget {
                 ),
               ),
 
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Text(
                   "CRAFTING BLUEPRINTS",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white54, letterSpacing: 1),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: theme.colorScheme.onSurface.withValues(alpha: 0.5), letterSpacing: 1),
                 ),
               ),
 
@@ -114,7 +118,7 @@ class CraftingScreen extends StatelessWidget {
                       playerCurrentStamina: player.currentStamina,
                     );
 
-                    return _buildRecipeCard(context, recipe, player, canCraft, firebaseService);
+                    return _buildRecipeCard(context, recipe, player, canCraft, firebaseService, theme);
                   },
                 ),
               ),
@@ -125,7 +129,7 @@ class CraftingScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInventoryItem(String label, int count, IconData icon, Color color) {
+  Widget _buildInventoryItem(String label, int count, IconData icon, Color color, ThemeData theme) {
     return Column(
       children: [
         Container(
@@ -139,20 +143,20 @@ class CraftingScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           "$count",
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white),
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: theme.colorScheme.onSurface),
         ),
         Text(
           label.toUpperCase(),
-          style: const TextStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold),
+          style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.38), fontSize: 8, fontWeight: FontWeight.bold),
         ),
       ],
     );
   }
 
-  Widget _buildRecipeCard(BuildContext context, CraftingRecipe recipe, PlayerModel player, bool canCraft, FirebaseService firebaseService) {
+  Widget _buildRecipeCard(BuildContext context, CraftingRecipe recipe, PlayerModel player, bool canCraft, FirebaseService firebaseService, ThemeData theme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: _cardDecoration(),
+      decoration: _cardDecoration(theme),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -165,7 +169,7 @@ class CraftingScreen extends StatelessWidget {
                     children: [
                       Text(
                         recipe.resultName.toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white),
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: theme.colorScheme.onSurface),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -177,8 +181,8 @@ class CraftingScreen extends StatelessWidget {
                 ),
                 Container(
                   decoration: BoxDecoration(
-                    gradient: canCraft ? const LinearGradient(
-                      colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                    gradient: canCraft ? LinearGradient(
+                      colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ) : null,
@@ -195,16 +199,16 @@ class CraftingScreen extends StatelessWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text("CRAFTING SUCCESSFUL: ${recipe.resultName}"),
-                            backgroundColor: const Color(0xFF161B22),
+                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
                           ),
                         );
                       }
                     } : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
+                      foregroundColor: theme.colorScheme.onPrimary,
                       shadowColor: Colors.transparent,
-                      disabledBackgroundColor: Colors.white.withValues(alpha: 0.05),
+                      disabledBackgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_kChipRadius)),
                       elevation: 0,
                     ),
@@ -214,7 +218,7 @@ class CraftingScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            Divider(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+            Divider(height: 1, color: theme.colorScheme.onSurface.withValues(alpha: 0.1)),
             const SizedBox(height: 16),
             Row(
               children: recipe.requiredMaterials.entries.map((entry) {
@@ -248,7 +252,7 @@ class CraftingScreen extends StatelessWidget {
                       ),
                       Text(
                         name,
-                        style: const TextStyle(fontSize: 10, color: Colors.white54, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.54), fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

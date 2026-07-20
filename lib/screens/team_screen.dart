@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/team_model.dart';
 import '../models/player_model.dart';
@@ -25,15 +26,18 @@ class _TeamScreenState extends State<TeamScreen> {
   Stream<PlayerModel?>? _playerStream;
   Stream<List<TeamModel>>? _teamsStream;
 
-  static const Color _kPrimaryPurple = Color(0xFF8E2DE2);
-  static const Color _kSecondaryPurple = Color(0xFF4A00E0);
-  static const Color _kBgColor = Color(0xFF0D1117);
-  static const Color _kSurfaceColor = Color(0xFF161B22);
+  StreamSubscription<List<ActivityFeedModel>>? _feedSubscription;
 
   @override
   void initState() {
     super.initState();
     _initStreams();
+  }
+
+  @override
+  void dispose() {
+    _feedSubscription?.cancel();
+    super.dispose();
   }
 
   void _initStreams() {
@@ -50,7 +54,7 @@ class _TeamScreenState extends State<TeamScreen> {
     final player = await firebaseService.getPlayer(uid);
     if (player != null && player.isInTeam && player.teamId != null) {
       // Logic to subscribe to FCM topics or listen to local feed
-      firebaseService.getTeamActivityFeed(player.teamId!).listen((feed) {
+      _feedSubscription = firebaseService.getTeamActivityFeed(player.teamId!).listen((feed) {
         if (feed.isNotEmpty) {
           final latest = feed.first;
           // Only show if it happened in the last minute to avoid spamming old events on init
@@ -85,23 +89,24 @@ class _TeamScreenState extends State<TeamScreen> {
     }
 
     if (body.isNotEmpty && mounted) {
+      final colorScheme = Theme.of(context).colorScheme;
        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: _kSurfaceColor,
+          backgroundColor: colorScheme.surfaceContainerHighest,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           content: Row(
             children: [
-              const Icon(Icons.notifications_active, color: Colors.orangeAccent, size: 20),
+              Icon(Icons.notifications_active, color: colorScheme.tertiary, size: 20),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                    Text(body, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                    Text(title, style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(body, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 10)),
                   ],
                 ),
               ),
@@ -121,32 +126,33 @@ class _TeamScreenState extends State<TeamScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (currentUid == null) {
-      return const Scaffold(backgroundColor: _kBgColor, body: Center(child: Text("NOT LOGGED IN", style: TextStyle(color: Colors.white))));
+      return Scaffold(backgroundColor: colorScheme.surface, body: const Center(child: Text("NOT LOGGED IN", style: TextStyle(fontWeight: FontWeight.bold))));
     }
 
     return StreamBuilder<PlayerModel?>(
       stream: _playerStream,
       builder: (context, playerSnapshot) {
         final currentPlayer = playerSnapshot.data;
-        if (currentPlayer == null) return const Scaffold(backgroundColor: _kBgColor, body: Center(child: CircularProgressIndicator(color: _kPrimaryPurple)));
+        if (currentPlayer == null) return Scaffold(backgroundColor: colorScheme.surface, body: Center(child: CircularProgressIndicator(color: colorScheme.primary)));
 
         final bool alreadyInTeam = currentPlayer.isInTeam;
 
         return Scaffold(
-          backgroundColor: _kBgColor,
+          backgroundColor: colorScheme.surface,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
-            title: const Text("TEAM OPERATIONS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 18, color: Colors.white)),
+            title: Text("TEAM OPERATIONS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 18, color: colorScheme.onSurface)),
             centerTitle: true,
           ),
           body: StreamBuilder<List<TeamModel>>(
             stream: _teamsStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: _kPrimaryPurple));
+                return Center(child: CircularProgressIndicator(color: colorScheme.primary));
               }
               final teams = snapshot.data ?? [];
 
@@ -169,8 +175,8 @@ class _TeamScreenState extends State<TeamScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text("AVAILABLE TEAMS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white38, letterSpacing: 1.5)),
-                          Text("${teams.length} OPERATIONAL", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _kPrimaryPurple)),
+                          Text("AVAILABLE TEAMS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant, letterSpacing: 1.5)),
+                          Text("${teams.length} OPERATIONAL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.primary)),
                         ],
                       ),
                     ),
@@ -192,9 +198,7 @@ class _TeamScreenState extends State<TeamScreen> {
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) => TeamMembersScreen(
-                                          teamName: team.name,
-                                          teamId: team.id,
-                                          leaderId: team.leaderId,
+                                          team: team,
                                         ),
                                       ),
                                     )
@@ -216,35 +220,36 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Widget _buildNoTeamState(PlayerModel player) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.all(24),
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: _kSurfaceColor,
+        color: colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: _kPrimaryPurple.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.groups_outlined, color: _kPrimaryPurple, size: 40),
+            decoration: BoxDecoration(color: colorScheme.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: Icon(Icons.groups_outlined, color: colorScheme.primary, size: 40),
           ),
           const SizedBox(height: 24),
-          const Text("YOU'RE NOT IN A TEAM", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+          Text("YOU'RE NOT IN A TEAM", style: TextStyle(color: colorScheme.onSurface, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Join forces with other operators to capture more territory and dominate the leaderboards.",
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white38, fontSize: 13, height: 1.5),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13, height: 1.5),
           ),
           const SizedBox(height: 32),
           Row(
             children: [
-              Expanded(child: _actionBtn("CREATE TEAM", _kPrimaryPurple, () => _showCreateTeamDialog(player))),
+              Expanded(child: _actionBtn("CREATE TEAM", colorScheme.primary, () => _showCreateTeamDialog(player))),
               const SizedBox(width: 12),
-              Expanded(child: _actionBtn("JOIN BY CODE", Colors.white10, () => _showJoinCodeDialog(player))),
+              Expanded(child: _actionBtn("JOIN BY CODE", colorScheme.surfaceContainerHighest, () => _showJoinCodeDialog(player))),
             ],
           ),
         ],
@@ -253,11 +258,12 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Widget _actionBtn(String label, Color color, VoidCallback onTap) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ElevatedButton(
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white,
+        foregroundColor: color == colorScheme.primary ? colorScheme.onPrimary : colorScheme.onSurface,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
@@ -267,6 +273,7 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Widget _buildInsideTeamDashboard(TeamModel team, PlayerModel player) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.all(24),
       child: Column(
@@ -274,7 +281,7 @@ class _TeamScreenState extends State<TeamScreen> {
         children: [
           _buildTeamBanner(team),
           const SizedBox(height: 24),
-          const Text("MISSION PROGRESS", style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.5)),
+          Text("MISSION PROGRESS", style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.5)),
           const SizedBox(height: 16),
           _buildTeamStatsGrid(team, player),
           const SizedBox(height: 24),
@@ -293,15 +300,14 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Widget _buildTeamBanner(TeamModel team) {
+    final colorScheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => TeamMembersScreen(
-              teamName: team.name,
-              teamId: team.id,
-              leaderId: team.leaderId,
+              team: team,
             ),
           ),
         );
@@ -309,7 +315,11 @@ class _TeamScreenState extends State<TeamScreen> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [_kPrimaryPurple, _kSecondaryPurple], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          gradient: LinearGradient(
+            colors: [colorScheme.primary, colorScheme.tertiary],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(28),
         ),
         child: Row(
@@ -317,20 +327,54 @@ class _TeamScreenState extends State<TeamScreen> {
             Container(
               width: 60,
               height: 60,
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
-              child: const Icon(Icons.shield_outlined, color: Colors.white, size: 32),
+              decoration: BoxDecoration(color: colorScheme.onPrimary.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
+              child: Icon(Icons.shield_outlined, color: colorScheme.onPrimary, size: 32),
             ),
             const SizedBox(width: 20),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(team.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                  Text("CAPTAIN ID: ${team.leaderId.substring(0, (team.leaderId.length > 8 ? 8 : team.leaderId.length)).toUpperCase()}", style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 10, fontWeight: FontWeight.bold)),
+                  Text(team.name.toUpperCase(), style: TextStyle(color: colorScheme.onPrimary, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        "TEAM ID: ${team.id.toUpperCase()}", 
+                        style: TextStyle(
+                          color: colorScheme.onPrimary.withValues(alpha: 0.6), 
+                          fontSize: 10, 
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        )
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: team.id));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text("TEAM ID COPIED TO CLIPBOARD"),
+                              backgroundColor: colorScheme.surfaceContainerHighest,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: colorScheme.onPrimary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Icon(Icons.copy_rounded, color: colorScheme.onPrimary.withValues(alpha: 0.8), size: 10),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 16),
+            Icon(Icons.arrow_forward_ios_rounded, color: colorScheme.onPrimary.withValues(alpha: 0.4), size: 16),
           ],
         ),
       ),
@@ -338,6 +382,11 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Widget _buildTeamStatsGrid(TeamModel team, PlayerModel player) {
+    // Each hex is approx 0.0001 degrees (~11m side). 
+    // Area of one hex ≈ 0.0003 km²
+    // Now using the persistent territoryCount field
+    final double territoryArea = team.territoryCount * 0.0003;
+
     return GridView(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -348,8 +397,8 @@ class _TeamScreenState extends State<TeamScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
-          _miniStatCard("WEEKLY STEPS", team.totalSteps.toString(), Icons.directions_walk_rounded),
-          _miniStatCard("TERRITORY", "12.4 KM²", Icons.map_rounded),
+          _miniStatCard("WEEKLY STEPS", team.weeklySteps.toString(), Icons.directions_walk_rounded),
+          _miniStatCard("TERRITORY", "${territoryArea.toStringAsFixed(2)} KM²", Icons.map_rounded),
           _miniStatCard("CONTRIBUTION", "${player.dailySteps} TODAY", Icons.add_chart_rounded),
           _miniStatCard("TEAM BANK", team.teamCurrency.toString(), Icons.stars_rounded),
           StreamBuilder<List<TeamModel>>(
@@ -368,22 +417,28 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Widget _miniStatCard(String label, String value, IconData icon) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _kSurfaceColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer, 
+        borderRadius: BorderRadius.circular(20), 
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5))
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: _kPrimaryPurple, size: 16),
+          Icon(icon, color: colorScheme.primary, size: 16),
           const Spacer(),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)),
-          Text(label, style: const TextStyle(color: Colors.white24, fontSize: 9, fontWeight: FontWeight.bold)),
+          Text(value, style: TextStyle(color: colorScheme.onSurface, fontSize: 14, fontWeight: FontWeight.w900)),
+          Text(label, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 9, fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
   Widget _buildDailyChallenge(TeamChallengeModel challenge) {
+    final colorScheme = Theme.of(context).colorScheme;
     final remaining = challenge.expiresAt.difference(DateTime.now());
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes % 60;
@@ -394,12 +449,12 @@ class _TeamScreenState extends State<TeamScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _kSurfaceColor,
+        color: colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isCompleted 
             ? Colors.greenAccent.withValues(alpha: 0.2) 
-            : Colors.orangeAccent.withValues(alpha: 0.1)
+            : colorScheme.tertiary.withValues(alpha: 0.2)
         ),
       ),
       child: Column(
@@ -411,20 +466,20 @@ class _TeamScreenState extends State<TeamScreen> {
               Text(
                 isCompleted ? "MISSION COMPLETED" : "DAILY MISSION", 
                 style: TextStyle(
-                  color: isCompleted ? Colors.greenAccent : Colors.orangeAccent, 
+                  color: isCompleted ? Colors.greenAccent : colorScheme.tertiary, 
                   fontSize: 10, 
                   fontWeight: FontWeight.w900, 
                   letterSpacing: 1
                 )
               ),
               if (!isCompleted)
-                Text("${hours}H ${minutes}M REMAINING", style: const TextStyle(color: Colors.white24, fontSize: 9, fontWeight: FontWeight.bold)),
+                Text("${hours}H ${minutes}M REMAINING", style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 9, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 12),
-          Text(challenge.title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)),
+          Text(challenge.title, style: TextStyle(color: colorScheme.onSurface, fontSize: 14, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          Text(challenge.description, style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold)),
+          Text(challenge.description, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           if (!isClaimed) ...[
             ClipRRect(
@@ -432,8 +487,8 @@ class _TeamScreenState extends State<TeamScreen> {
               child: LinearProgressIndicator(
                 value: challenge.percentage,
                 minHeight: 6,
-                backgroundColor: Colors.white10,
-                valueColor: AlwaysStoppedAnimation(isCompleted ? Colors.greenAccent : Colors.orangeAccent),
+                backgroundColor: colorScheme.outlineVariant.withValues(alpha: 0.2),
+                valueColor: AlwaysStoppedAnimation(isCompleted ? Colors.greenAccent : colorScheme.tertiary),
               ),
             ),
             const SizedBox(height: 10),
@@ -444,7 +499,7 @@ class _TeamScreenState extends State<TeamScreen> {
               if (!isClaimed)
                 Text(
                   "${challenge.progress.toInt()} / ${challenge.target.toInt()} ${challenge.type == ChallengeType.steps ? 'STEPS' : 'UNIT'}",
-                  style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.bold),
                 )
               else
                 const Text("REWARD SECURED", style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -464,8 +519,8 @@ class _TeamScreenState extends State<TeamScreen> {
               else if (!isClaimed)
                 Row(
                   children: [
-                    const Icon(Icons.bolt, color: Colors.purpleAccent, size: 12),
-                    Text(" +${challenge.xpReward}", style: const TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    Icon(Icons.bolt, color: colorScheme.primary, size: 12),
+                    Text(" +${challenge.xpReward}", style: TextStyle(color: colorScheme.primary, fontSize: 10, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 8),
                     const Icon(Icons.monetization_on, color: Colors.amberAccent, size: 12),
                     Text(" +${challenge.currencyReward}", style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -479,6 +534,7 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Future<void> _handleClaimReward(TeamChallengeModel challenge) async {
+    final colorScheme = Theme.of(context).colorScheme;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final player = await firebaseService.getPlayer(uid!);
     if (player != null && player.teamId != null) {
@@ -486,9 +542,9 @@ class _TeamScreenState extends State<TeamScreen> {
         await firebaseService.claimTeamChallengeReward(player.teamId!, challenge.id, uid);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Color(0xFF161B22),
-              content: Text("REWARDS SYNCHRONIZED TO PROFILE", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+            SnackBar(
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              content: const Text("REWARDS SYNCHRONIZED TO PROFILE", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
             ),
           );
         }
@@ -503,6 +559,7 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Widget _buildTeamQuickActions(TeamModel team, PlayerModel player) {
+    final colorScheme = Theme.of(context).colorScheme;
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     final bool isLeader = team.leaderId == currentUid;
 
@@ -517,7 +574,7 @@ class _TeamScreenState extends State<TeamScreen> {
                 "PENDING REQUESTS",
                 Icons.person_add_alt_1_rounded,
                 requestCount > 0 ? "$requestCount RECRUITS WAITING" : "NO PENDING RECRUITS",
-                color: requestCount > 0 ? Colors.orangeAccent : _kPrimaryPurple,
+                color: requestCount > 0 ? Colors.orangeAccent : colorScheme.primary,
                 onTap: () => _showRequestsDialog(team),
               );
             },
@@ -528,7 +585,7 @@ class _TeamScreenState extends State<TeamScreen> {
           "TEAM ARMORY",
           Icons.shopping_cart_outlined,
           "EXCHANGE CURRENCY FOR BUFFS",
-          color: Colors.blueAccent,
+          color: colorScheme.secondary,
           onTap: () {
             Navigator.push(
               context,
@@ -575,25 +632,27 @@ class _TeamScreenState extends State<TeamScreen> {
           },
         ),
         const SizedBox(height: 12),
-        _quickActionTile("LEAVE TEAM", Icons.logout_rounded, "EXIT CURRENT SQUADRON", color: Colors.redAccent, onTap: () => _handleLeaveTeam(team)),
+        _quickActionTile("LEAVE TEAM", Icons.logout_rounded, "EXIT CURRENT SQUADRON", color: colorScheme.error, onTap: () => _handleLeaveTeam(team)),
       ],
     );
   }
 
-  Widget _quickActionTile(String title, IconData icon, String subtitle, {Color color = _kPrimaryPurple, VoidCallback? onTap}) {
+  Widget _quickActionTile(String title, IconData icon, String subtitle, {Color? color, VoidCallback? onTap}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final effectiveColor = color ?? colorScheme.primary;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.1))),
+        decoration: BoxDecoration(color: effectiveColor.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: effectiveColor.withValues(alpha: 0.1))),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 20),
+            Icon(icon, color: effectiveColor, size: 20),
             const SizedBox(width: 16),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 14)),
-                Text(subtitle, style: TextStyle(color: color.withValues(alpha: 0.5), fontSize: 10, fontWeight: FontWeight.bold)),
+                Text(title, style: TextStyle(color: effectiveColor, fontWeight: FontWeight.w900, fontSize: 14)),
+                Text(subtitle, style: TextStyle(color: effectiveColor.withValues(alpha: 0.5), fontSize: 10, fontWeight: FontWeight.bold)),
               ]),
             ),
           ],
@@ -603,11 +662,12 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   void _showRequestsDialog(TeamModel team) {
+    final colorScheme = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: _kSurfaceColor,
-        title: const Text("PENDING RECRUITS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+        backgroundColor: colorScheme.surfaceContainer,
+        title: Text("PENDING RECRUITS", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
         content: SizedBox(
           width: double.maxFinite,
           height: 300,
@@ -616,14 +676,14 @@ class _TeamScreenState extends State<TeamScreen> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
               final requests = snapshot.data ?? [];
-              if (requests.isEmpty) return const Center(child: Text("NO PENDING REQUESTS", style: TextStyle(color: Colors.white24)));
+              if (requests.isEmpty) return Text("NO PENDING REQUESTS", style: TextStyle(color: colorScheme.onSurfaceVariant));
 
               return ListView.builder(
                 itemCount: requests.length,
                 itemBuilder: (context, index) {
                   final req = requests[index];
                   return ListTile(
-                    title: Text(req.playerName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    title: Text(req.playerName, style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -650,8 +710,8 @@ class _TeamScreenState extends State<TeamScreen> {
                                 }
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    backgroundColor: const Color(0xFF161B22),
-                                    content: Text(errorMsg, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                    backgroundColor: colorScheme.surfaceContainerHighest,
+                                    content: Text(errorMsg, style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold)),
                                   ),
                                 );
                               }
@@ -659,7 +719,7 @@ class _TeamScreenState extends State<TeamScreen> {
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                          icon: Icon(Icons.cancel, color: colorScheme.error),
                           onPressed: () => firebaseService.rejectRequest(req.requestId),
                         ),
                       ],
@@ -671,24 +731,25 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CLOSE", style: TextStyle(color: Colors.white38))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text("CLOSE", style: TextStyle(color: colorScheme.onSurfaceVariant))),
         ],
       ),
     );
   }
 
   Future<void> _handleLeaveTeam(TeamModel team) async {
+    final colorScheme = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: _kSurfaceColor,
-        title: const Text("LEAVE TEAM?", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
-        content: const Text("Are you sure you want to exit this squadron?", style: TextStyle(color: Colors.white70)),
+        backgroundColor: colorScheme.surfaceContainer,
+        title: Text("LEAVE TEAM?", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w900)),
+        content: Text("Are you sure you want to exit this squadron?", style: TextStyle(color: colorScheme.onSurfaceVariant)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL")),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("LEAVE", style: TextStyle(color: Colors.redAccent)),
+            child: Text("LEAVE", style: TextStyle(color: colorScheme.error)),
           ),
         ],
       ),
@@ -703,24 +764,25 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   void _showCreateTeamDialog(PlayerModel player) {
+    final colorScheme = Theme.of(context).colorScheme;
     final TextEditingController nameController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: _kSurfaceColor,
-        title: const Text("CREATE NEW TEAM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+        backgroundColor: colorScheme.surfaceContainer,
+        title: Text("CREATE NEW TEAM", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
         content: TextField(
           controller: nameController,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
+          style: TextStyle(color: colorScheme.onSurface),
+          decoration: InputDecoration(
             hintText: "TEAM NAME",
-            hintStyle: TextStyle(color: Colors.white24),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white10)),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _kPrimaryPurple)),
+            hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.outlineVariant)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL", style: TextStyle(color: Colors.white38))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text("CANCEL", style: TextStyle(color: colorScheme.onSurfaceVariant))),
           TextButton(
             onPressed: () async {
               if (nameController.text.trim().isNotEmpty) {
@@ -740,15 +802,15 @@ class _TeamScreenState extends State<TeamScreen> {
                     }
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        backgroundColor: const Color(0xFF161B22),
-                        content: Text(message, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                        backgroundColor: colorScheme.surfaceContainerHighest,
+                        content: Text(message, style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold)),
                       ),
                     );
                   }
                 }
               }
             },
-            child: const Text("CREATE", style: TextStyle(color: _kPrimaryPurple, fontWeight: FontWeight.bold)),
+            child: Text("CREATE", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -756,24 +818,25 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   void _showJoinCodeDialog(PlayerModel player) {
+    final colorScheme = Theme.of(context).colorScheme;
     final TextEditingController codeController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: _kSurfaceColor,
-        title: const Text("JOIN BY TEAM ID", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+        backgroundColor: colorScheme.surfaceContainer,
+        title: Text("JOIN BY TEAM ID", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
         content: TextField(
           controller: codeController,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
+          style: TextStyle(color: colorScheme.onSurface),
+          decoration: InputDecoration(
             hintText: "PASTE TEAM ID HERE",
-            hintStyle: TextStyle(color: Colors.white24),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white10)),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _kPrimaryPurple)),
+            hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.outlineVariant)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL", style: TextStyle(color: Colors.white38))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text("CANCEL", style: TextStyle(color: colorScheme.onSurfaceVariant))),
           TextButton(
             onPressed: () async {
               if (codeController.text.trim().isNotEmpty) {
@@ -792,9 +855,9 @@ class _TeamScreenState extends State<TeamScreen> {
                   if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        backgroundColor: Color(0xFF161B22),
-                        content: Text("SQUADRON REQUEST TRANSMITTED", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                      SnackBar(
+                        backgroundColor: colorScheme.surfaceContainerHighest,
+                        content: const Text("SQUADRON REQUEST TRANSMITTED", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
                       ),
                     );
                   }
@@ -806,15 +869,15 @@ class _TeamScreenState extends State<TeamScreen> {
                     }
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        backgroundColor: const Color(0xFF161B22),
-                        content: Text(message, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                        backgroundColor: colorScheme.surfaceContainerHighest,
+                        content: Text(message, style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold)),
                       ),
                     );
                   }
                 }
               }
             },
-            child: const Text("SEND REQUEST", style: TextStyle(color: _kPrimaryPurple, fontWeight: FontWeight.bold)),
+            child: Text("SEND REQUEST", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -822,6 +885,7 @@ class _TeamScreenState extends State<TeamScreen> {
   }
 
   Future<void> _handleJoinTeam(TeamModel team, PlayerModel player) async {
+    final colorScheme = Theme.of(context).colorScheme;
     if (team.members >= team.maxMembers) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Team is full!")));
@@ -843,7 +907,7 @@ class _TeamScreenState extends State<TeamScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF161B22),
+            backgroundColor: colorScheme.surfaceContainerHighest,
             content: Text("Join request sent to ${team.name.toUpperCase()}!", style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
           ),
         );
@@ -856,8 +920,8 @@ class _TeamScreenState extends State<TeamScreen> {
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF161B22),
-            content: Text(message, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            backgroundColor: colorScheme.surfaceContainerHighest,
+            content: Text(message, style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold)),
           ),
         );
       }

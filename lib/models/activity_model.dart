@@ -4,7 +4,7 @@ class ActivityModel {
   final int restIntervalSeconds;
   final double xpMultiplier;
   final double raidDamageMultiplier;
-  final List<Map<String, String>> exerciseGuide; // Now holds Name + Tip
+  final List<Map<String, String>> exerciseGuide; // Now holds Name + Tip + Target
 
   ActivityModel({
     required this.tier,
@@ -21,11 +21,11 @@ class ActivityModel {
     int duration = 30;
     int rest = 60;
     double xpMult = 1.5;
-    double raidMult = 1.3;
+    double raidMult = 6.0; 
     List<Map<String, String>> guide = [
-      {"name": "Pushups", "tip": "Keep core tight, back straight."},
-      {"name": "Squats", "tip": "Weight on heels, chest up."},
-      {"name": "Plank", "tip": "Squeeze glutes, hold steady."}
+      {"name": "Pushups", "tip": "Keep core tight, back straight.", "target": "15 REPS"},
+      {"name": "Squats", "tip": "Weight on heels, chest up.", "target": "20 REPS"},
+      {"name": "Plank", "tip": "Squeeze glutes, hold steady.", "target": "45 SEC"}
     ];
 
     // 1. PHYSICAL BASELINE (BMI Logic)
@@ -35,23 +35,36 @@ class ActivityModel {
         duration = 20;
         rest = 90;
         xpMult = 1.2;
-        raidMult = 1.0;
+        raidMult = 4.5;
         guide = [
-          {"name": "Bodyweight Squats", "tip": "Control the descent."},
-          {"name": "Wall Pushups", "tip": "Keep elbows tucked."},
-          {"name": "Plank (Knees)", "tip": "Don't let hips sag."}
+          {"name": "Bodyweight Squats", "tip": "Control the descent.", "target": "10 REPS"},
+          {"name": "Wall Pushups", "tip": "Keep elbows tucked.", "target": "10 REPS"},
+          {"name": "Plank (Knees)", "tip": "Don't let hips sag.", "target": "30 SEC"}
         ];
       } else if (bmi < 25.0) {
         tier = "ELITE";
         duration = 50;
         rest = 45;
         xpMult = 2.2;
-        raidMult = 1.75;
+        raidMult = 11.5; 
         guide = [
-          {"name": "Burpees", "tip": "Explosive movement."},
-          {"name": "Weighted Squats", "tip": "Drive through heels."},
-          {"name": "Pull-ups", "tip": "Full range of motion."}
+          {"name": "Burpees", "tip": "Explosive movement.", "target": "20 REPS"},
+          {"name": "Weighted Squats", "tip": "Drive through heels.", "target": "25 REPS"},
+          {"name": "Pull-ups", "tip": "Full range of motion.", "target": "8 REPS"}
         ];
+      }
+    }
+
+    // Adjust targets based on level
+    if (level > 10) {
+      for (var exercise in guide) {
+        if (exercise["target"]!.contains("REPS")) {
+          int reps = int.parse(exercise["target"]!.split(" ")[0]);
+          exercise["target"] = "${reps + (level ~/ 5)} REPS";
+        } else if (exercise["target"]!.contains("SEC")) {
+          int sec = int.parse(exercise["target"]!.split(" ")[0]);
+          exercise["target"] = "${sec + (level * 2)} SEC";
+        }
       }
     }
 
@@ -72,22 +85,22 @@ class ActivityModel {
       duration = (duration * 1.2).toInt();
       xpMult += 0.2;
       guide.addAll([
-        {"name": "Mountain Climbers", "tip": "High intensity, quick feet."},
-        {"name": "Jumping Jacks", "tip": "Stay light on your toes."}
+        {"name": "Mountain Climbers", "tip": "High intensity, quick feet.", "target": "40 SEC"},
+        {"name": "Jumping Jacks", "tip": "Stay light on your toes.", "target": "50 REPS"}
       ]);
     } else if (goal == "muscle_gain") {
       rest = (rest * 1.5).toInt();
       raidMult += 0.25;
       guide.addAll([
-        {"name": "Diamond Pushups", "tip": "Focus on triceps."},
-        {"name": "Lunges", "tip": "Keep torso upright."}
+        {"name": "Diamond Pushups", "tip": "Focus on triceps.", "target": "12 REPS"},
+        {"name": "Lunges", "tip": "Keep torso upright.", "target": "20 REPS"}
       ]);
     } else if (goal == "endurance") {
       duration = (duration * 1.5).toInt();
       rest = (rest * 0.8).toInt();
       guide.addAll([
-        {"name": "High Knees", "tip": "Pump your arms."},
-        {"name": "Shadow Boxing", "tip": "Focus on breathing."}
+        {"name": "High Knees", "tip": "Pump your arms.", "target": "60 SEC"},
+        {"name": "Shadow Boxing", "tip": "Focus on breathing.", "target": "2 MIN"}
       ]);
     }
 

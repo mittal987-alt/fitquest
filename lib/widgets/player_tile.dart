@@ -16,7 +16,8 @@ class PlayerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color rankColor = Colors.blue;
+    final colorScheme = Theme.of(context).colorScheme;
+    Color rankColor = colorScheme.primary;
     IconData trophyIcon = Icons.workspace_premium;
 
     // =====================
@@ -34,10 +35,10 @@ class PlayerTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: colorScheme.onSurface.withValues(alpha: 0.1),
         ),
       ),
       child: Row(
@@ -75,12 +76,12 @@ class PlayerTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: rankColor,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF161B22), width: 2),
+                    border: Border.all(color: colorScheme.surface, width: 2),
                   ),
                   child: Text(
                     "#$rank",
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: rankColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 10,
                     ),
@@ -99,24 +100,24 @@ class PlayerTile extends StatelessWidget {
               children: [
                 Text(
                   player.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
-                    color: Colors.white,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle ?? "👣 ${player.totalSteps} Steps",
-                  style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 Text(
                   "👥 ${player.team}",
-                  style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 Text(
                   "⭐ Level ${player.level}",
-                  style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 if (player.streakCount > 0)
                   Padding(

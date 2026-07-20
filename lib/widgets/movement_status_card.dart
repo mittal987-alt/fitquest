@@ -19,8 +19,10 @@ class MovementStatusCard
   @override
   Widget build(BuildContext context) {
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     Color statusColor =
-        Colors.green;
+        colorScheme.primary;
 
     IconData statusIcon =
         Icons.directions_walk;
@@ -33,7 +35,7 @@ class MovementStatusCard
         "Standing")) {
 
       statusColor =
-          Colors.blueGrey;
+          colorScheme.outline;
 
       statusIcon =
           Icons.accessibility_new;
@@ -47,7 +49,7 @@ class MovementStatusCard
         "Vehicle")) {
 
       statusColor =
-          Colors.red;
+          colorScheme.error;
 
       statusIcon =
           Icons.directions_car;
@@ -57,10 +59,10 @@ class MovementStatusCard
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: Colors.black.withValues(alpha: 0.05),
+          color: colorScheme.onSurface.withValues(alpha: 0.05),
         ),
         boxShadow: [
           BoxShadow(

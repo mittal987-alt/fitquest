@@ -395,5 +395,9 @@ class PedometerService {
     _todayCumulativeSteps = 0;
     _lastKnownStepCount = 0;
     _hourlyStepsBuffer.clear();
+    _lastStepTime = DateTime.now().subtract(const Duration(minutes: 5));
+    _isPaused = false;
+    _playerContext = null;
+    debugPrint("[PEDOMETER] PedometerService reset.");
   }
 }

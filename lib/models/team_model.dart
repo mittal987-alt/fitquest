@@ -11,6 +11,7 @@ class TeamModel {
   final int totalSteps;
   final int dailySteps;
   final int weeklySteps;
+  final int territoryCount;
   final int teamCurrency;
   final DateTime? lastDailyReset;
   final String? activeDailyChallengeId;
@@ -33,6 +34,7 @@ class TeamModel {
     required this.totalSteps,
     this.dailySteps = 0,
     this.weeklySteps = 0,
+    this.territoryCount = 0,
     this.teamCurrency = 0,
     this.lastDailyReset,
     this.activeDailyChallengeId,
@@ -75,6 +77,7 @@ class TeamModel {
       totalSteps: (map["totalSteps"] as num?)?.toInt() ?? 0,
       dailySteps: (map["dailySteps"] as num?)?.toInt() ?? 0,
       weeklySteps: (map["weeklySteps"] as num?)?.toInt() ?? 0,
+      territoryCount: (map["territoryCount"] as num?)?.toInt() ?? 0,
       teamCurrency: (map["teamCurrency"] as num?)?.toInt() ?? 0,
       lastDailyReset: map["lastDailyReset"] != null ? (map["lastDailyReset"] as Timestamp).toDate() : null,
       activeDailyChallengeId: map["activeDailyChallengeId"],
@@ -118,6 +121,7 @@ class TeamModel {
       "totalSteps": totalSteps,
       "dailySteps": dailySteps,
       "weeklySteps": weeklySteps,
+      "territoryCount": territoryCount,
       "teamCurrency": teamCurrency,
       "lastDailyReset": lastDailyReset != null ? Timestamp.fromDate(lastDailyReset!) : null,
       "activeDailyChallengeId": activeDailyChallengeId,
@@ -142,18 +146,23 @@ class TeamModel {
   // =========================
   // TEAM COLOR
   // =========================
-  Color getTeamColor() {
+  Color getTeamColor(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     switch (color) {
       case "red":
-        return Colors.red;
+        return colorScheme.error;
       case "green":
         return Colors.green;
       case "yellow":
-        return Colors.orange;
+        return colorScheme.tertiary;
       case "purple":
         return Colors.purple;
+      case "blue":
+        return colorScheme.primary;
+      case "orange":
+        return colorScheme.secondary;
       default:
-        return Colors.blue;
+        return colorScheme.primary;
     }
   }
 }

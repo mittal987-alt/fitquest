@@ -26,8 +26,6 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
   final ScrollController _scrollController = ScrollController();
 
   static const Color _kPrimaryPurple = Color(0xFF8E2DE2);
-  static const Color _kBgColor = Color(0xFF0D1117);
-  static const Color _kSurfaceColor = Color(0xFF161B22);
 
   @override
   void dispose() {
@@ -43,8 +41,9 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    final firebaseService = FirebaseService();
     _messageController.clear();
-    await _firebaseService.sendTeamChatMessage(
+    await firebaseService.sendTeamChatMessage(
       widget.teamId,
       user.uid,
       widget.playerName,
@@ -55,23 +54,24 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
   @override
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: _kBgColor,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Column(
           children: [
             Text(widget.teamName.toUpperCase(),
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1.5, color: Colors.white)),
-            const Text("SECURE COMMS CHANNEL",
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: _kPrimaryPurple, letterSpacing: 1)),
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1.5, color: colorScheme.onSurface)),
+            Text("SECURE COMMS CHANNEL",
+                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: colorScheme.primary, letterSpacing: 1)),
           ],
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: colorScheme.onSurface, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -82,13 +82,13 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
               stream: _firebaseService.getTeamMessages(widget.teamId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: _kPrimaryPurple));
+                  return Center(child: CircularProgressIndicator(color: colorScheme.primary));
                 }
                 final messages = snapshot.data ?? [];
                 if (messages.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text("NO RECENT TRANSMISSIONS",
-                        style: TextStyle(color: Colors.white24, fontWeight: FontWeight.bold, fontSize: 12)),
+                        style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), fontWeight: FontWeight.bold, fontSize: 12)),
                   );
                 }
 
@@ -99,19 +99,19 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
                   itemBuilder: (context, index) {
                     final msg = messages[index];
                     final isMe = msg.senderId == currentUid;
-                    return _buildMessageBubble(msg, isMe);
+                    return _buildMessageBubble(msg, isMe, colorScheme);
                   },
                 );
               },
             ),
           ),
-          _buildMessageInput(),
+          _buildMessageInput(colorScheme),
         ],
       ),
     );
   }
 
-  Widget _buildMessageBubble(ChatMessageModel msg, bool isMe) {
+  Widget _buildMessageBubble(ChatMessageModel msg, bool isMe, ColorScheme colorScheme) {
     final timeStr = DateFormat('HH:mm').format(msg.timestamp);
 
     return Align(
@@ -121,28 +121,28 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isMe ? _kPrimaryPurple : _kSurfaceColor,
+          color: isMe ? colorScheme.primary : colorScheme.surfaceContainer,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
             bottomLeft: Radius.circular(isMe ? 20 : 0),
             bottomRight: Radius.circular(isMe ? 0 : 20),
           ),
-          border: isMe ? null : Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: isMe ? null : Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!isMe)
               Text(msg.senderName.toUpperCase(),
-                  style: const TextStyle(color: _kPrimaryPurple, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                  style: TextStyle(color: colorScheme.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
             if (!isMe) const SizedBox(height: 4),
-            Text(msg.message, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4)),
+            Text(msg.message, style: TextStyle(color: isMe ? colorScheme.onPrimary : colorScheme.onSurface, fontSize: 14, height: 1.4)),
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.bottomRight,
               child: Text(timeStr,
-                  style: TextStyle(color: isMe ? Colors.white60 : Colors.white24, fontSize: 9, fontWeight: FontWeight.bold)),
+                  style: TextStyle(color: isMe ? colorScheme.onPrimary.withValues(alpha: 0.6) : colorScheme.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 9, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -150,24 +150,24 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
     );
   }
 
-  Widget _buildMessageInput() {
+  Widget _buildMessageInput(ColorScheme colorScheme) {
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).viewInsets.bottom),
       decoration: BoxDecoration(
-        color: _kSurfaceColor,
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+        color: colorScheme.surfaceContainer,
+        border: Border(top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
       ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _messageController,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
               decoration: InputDecoration(
                 hintText: "TRANSMIT MESSAGE...",
-                hintStyle: const TextStyle(color: Colors.white24, fontSize: 12, fontWeight: FontWeight.bold),
+                hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 12, fontWeight: FontWeight.bold),
                 filled: true,
-                fillColor: _kBgColor,
+                fillColor: colorScheme.surface,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
               ),
@@ -179,12 +179,13 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
             onTap: _sendMessage,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(color: _kPrimaryPurple, shape: BoxShape.circle),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              decoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
+              child: Icon(Icons.send_rounded, color: colorScheme.onPrimary, size: 20),
             ),
           ),
         ],
       ),
     );
   }
+
 }

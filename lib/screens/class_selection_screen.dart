@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
+import '../config/game_theme.dart';
 import 'main_navigation.dart';
 
 class ClassSelectionScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
       'id': 'tank',
       'name': 'TANK',
       'icon': Icons.shield_rounded,
-      'color': Colors.orangeAccent,
+      'color': const Color(0xFFFF9800), // GameTheme.xp color
       'description': 'Strong and tough. Perfect for those who want more power and extra energy.',
       'stats': {'STR': 15, 'AGI': 8, 'END': 12}
     },
@@ -68,22 +69,29 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 "CHOOSE YOUR CLASS",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: Colors.white),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  color: colorScheme.onSurface,
+                ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 "Pick the role that fits your playstyle. This sets your starting stats and special perks.",
-                style: TextStyle(color: Colors.white54, fontSize: 13),
+                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
               ),
               const SizedBox(height: 32),
               Expanded(
@@ -99,10 +107,10 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF161B22),
+                          color: colorScheme.surfaceContainer,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: isSelected ? item['color'] : Colors.white.withValues(alpha: 0.05),
+                            color: isSelected ? item['color'] : colorScheme.onSurface.withValues(alpha: 0.05),
                             width: 2,
                           ),
                           boxShadow: [
@@ -131,12 +139,21 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
                                 children: [
                                   Text(
                                     item['name'],
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 1, color: Colors.white),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 18,
+                                      letterSpacing: 1,
+                                      color: colorScheme.onSurface,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     item['description'],
-                                    style: const TextStyle(fontSize: 11, color: Colors.white54, height: 1.4),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: colorScheme.onSurfaceVariant,
+                                      height: 1.4,
+                                    ),
                                   ),
                                   const SizedBox(height: 12),
                                   Row(
@@ -172,12 +189,12 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
                       ? null 
                       : const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
                   borderRadius: BorderRadius.circular(20),
-                  color: selectedClass == null || loading ? Colors.white10 : null,
+                  color: selectedClass == null || loading ? colorScheme.onSurface.withValues(alpha: 0.1) : null,
                 ),
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
+                    foregroundColor: colorScheme.onPrimary,
                     shadowColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -185,8 +202,8 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
                   ),
                   onPressed: selectedClass == null || loading ? null : _handleSelection,
                   child: loading
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text("START YOUR JOURNEY", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                      ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: colorScheme.onPrimary, strokeWidth: 2))
+                      : const Text("START YOUR JOURNEY", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, color: Colors.white)),
                 ),
               ),
             ],
@@ -195,4 +212,5 @@ class _ClassSelectionScreenState extends State<ClassSelectionScreen> {
       ),
     );
   }
+
 }

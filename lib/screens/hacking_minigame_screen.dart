@@ -118,16 +118,17 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: theme.colorScheme.surface,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(theme),
             const Spacer(),
-            _buildTargetSequence(),
+            _buildTargetSequence(theme),
             const SizedBox(height: 32),
-            _buildGrid(),
+            _buildGrid(theme),
             const Spacer(),
             _buildFooter(),
           ],
@@ -136,7 +137,8 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Row(
@@ -145,21 +147,21 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("BREACH PROTOCOL", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w900, letterSpacing: 2)),
+              Text("BREACH PROTOCOL", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.w900, letterSpacing: 2)),
               Text("STATUS: ${isGameOver ? (isSuccess ? 'ACCESS GRANTED' : 'FAILED') : 'ACTIVE'}", 
-                style: TextStyle(color: isGameOver ? (isSuccess ? Colors.greenAccent : Colors.redAccent) : Colors.white54, fontSize: 12)),
+                style: TextStyle(color: isGameOver ? (isSuccess ? Colors.greenAccent : colorScheme.error) : colorScheme.onSurfaceVariant, fontSize: 12)),
             ],
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              border: Border.all(color: timeLeft < 10 ? Colors.redAccent : Colors.cyanAccent),
+              border: Border.all(color: timeLeft < 10 ? colorScheme.error : colorScheme.primary),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
               "00:${timeLeft.toString().padLeft(2, '0')}",
               style: TextStyle(
-                color: timeLeft < 10 ? Colors.redAccent : Colors.cyanAccent,
+                color: timeLeft < 10 ? colorScheme.error : colorScheme.primary,
                 fontFamily: 'Courier',
                 fontWeight: FontWeight.bold,
                 fontSize: 20,
@@ -171,10 +173,11 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
     );
   }
 
-  Widget _buildTargetSequence() {
+  Widget _buildTargetSequence(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     return Column(
       children: [
-        const Text("REQUIRED SEQUENCE", style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        Text("REQUIRED SEQUENCE", style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -185,14 +188,14 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
               height: 50,
               margin: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
-                border: Border.all(color: isFilled ? Colors.cyanAccent : Colors.white10),
-                color: isFilled ? Colors.cyanAccent.withValues(alpha: 0.1) : Colors.transparent,
+                border: Border.all(color: isFilled ? colorScheme.primary : colorScheme.onSurfaceVariant.withValues(alpha: 0.2)),
+                color: isFilled ? colorScheme.primary.withValues(alpha: 0.1) : Colors.transparent,
               ),
               alignment: Alignment.center,
               child: Text(
                 targetSequence[index],
                 style: TextStyle(
-                  color: isFilled ? Colors.cyanAccent : Colors.white24,
+                  color: isFilled ? colorScheme.primary : colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Courier',
                 ),
@@ -204,13 +207,14 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
     );
   }
 
-  Widget _buildGrid() {
+  Widget _buildGrid(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.02),
-        border: Border.all(color: Colors.white10),
+        color: colorScheme.onSurface.withValues(alpha: 0.02),
+        border: Border.all(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.1)),
       ),
       child: GridView.builder(
         shrinkWrap: true,
@@ -227,14 +231,14 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
             onTap: () => _onTileTap(index),
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: isSelected ? Colors.cyanAccent : Colors.white10),
-                color: isSelected ? Colors.cyanAccent.withValues(alpha: 0.2) : Colors.transparent,
+                border: Border.all(color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant.withValues(alpha: 0.2)),
+                color: isSelected ? colorScheme.primary.withValues(alpha: 0.2) : Colors.transparent,
               ),
               alignment: Alignment.center,
               child: Text(
                 grid[index],
                 style: TextStyle(
-                  color: isSelected ? Colors.cyanAccent : Colors.white70,
+                  color: isSelected ? colorScheme.primary : colorScheme.onSurface,
                   fontFamily: 'Courier',
                   fontWeight: FontWeight.bold,
                 ),
@@ -251,7 +255,7 @@ class _HackingMinigameScreenState extends State<HackingMinigameScreen> {
       padding: const EdgeInsets.all(32.0),
       child: Text(
         "NETWORK NODE: ${widget.eventId.substring(0, 8).toUpperCase()}",
-        style: const TextStyle(color: Colors.white12, fontSize: 10, fontFamily: 'Courier'),
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3), fontSize: 10, fontFamily: 'Courier'),
       ),
     );
   }

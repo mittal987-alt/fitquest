@@ -14,8 +14,10 @@ class AchievementsScreen extends StatelessWidget {
 
     if (user == null) return const Scaffold(body: Center(child: Text("NOT AUTHENTICATED")));
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0E),
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text("ACHIEVEMENTS", style: TextStyle(fontFamily: 'Orbitron', letterSpacing: 2)),
         backgroundColor: Colors.transparent,
@@ -39,9 +41,9 @@ class AchievementsScreen extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isUnlocked ? const Color(0xFF1A1A2E) : Colors.black,
+                  color: isUnlocked ? colorScheme.surfaceContainerHigh : colorScheme.surfaceContainerLow,
                   border: Border.all(
-                    color: isUnlocked ? achievement.color : Colors.grey.withValues(alpha: 0.3),
+                    color: isUnlocked ? achievement.color : colorScheme.outlineVariant.withValues(alpha: 0.3),
                     width: 1,
                   ),
                   borderRadius: BorderRadius.circular(12),
@@ -54,7 +56,7 @@ class AchievementsScreen extends StatelessWidget {
                     Icon(
                       achievement.icon,
                       size: 40,
-                      color: isUnlocked ? achievement.color : Colors.grey,
+                      color: isUnlocked ? achievement.color : colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -64,7 +66,7 @@ class AchievementsScreen extends StatelessWidget {
                           Text(
                             achievement.title,
                             style: TextStyle(
-                              color: isUnlocked ? Colors.white : Colors.grey,
+                              color: isUnlocked ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Orbitron',
                               fontSize: 16,
@@ -74,7 +76,7 @@ class AchievementsScreen extends StatelessWidget {
                           Text(
                             achievement.description,
                             style: TextStyle(
-                              color: isUnlocked ? Colors.white70 : Colors.grey.withValues(alpha: 0.6),
+                              color: isUnlocked ? colorScheme.onSurface.withValues(alpha: 0.7) : colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                               fontSize: 12,
                             ),
                           ),
@@ -89,11 +91,11 @@ class AchievementsScreen extends StatelessWidget {
                         children: [
                           Text(
                             "${achievement.xpReward} XP",
-                            style: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 10),
+                            style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 10),
                           ),
                           Text(
                             "${achievement.coinReward} CREDITS",
-                            style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 10),
+                            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 10),
                           ),
                         ],
                       ),

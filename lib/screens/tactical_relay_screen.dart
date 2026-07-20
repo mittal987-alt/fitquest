@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../controller/tactical_relay_controller.dart';
 import '../models/tactical_relay_model.dart';
 import '../services/firebase_service.dart';
@@ -20,6 +21,7 @@ class TacticalRelayScreen extends StatefulWidget {
 class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
   final TacticalRelayController _challengeController = TacticalRelayController();
   final FirebaseService _firebaseService = FirebaseService();
+  bool _isProcessing = false;
   final Map<String, String> _nameCache = {};
 
   void _ensureNamesCached(List<String> uids) {
@@ -44,72 +46,73 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           "${widget.teamName.toUpperCase()} TACTICAL RELAY",
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
             fontSize: 16,
-            color: Colors.white,
+            color: theme.colorScheme.onSurface,
           ),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: theme.colorScheme.onSurface),
       ),
       body: StreamBuilder<TacticalRelayModel?>(
         stream: _challengeController.getTeamRelay(widget.teamId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFF8E2DE2)));
+            return Center(child: CircularProgressIndicator(color: theme.colorScheme.primary));
           }
 
           final challenge = snapshot.data;
 
           if (challenge == null || !challenge.isActive) {
-            return _buildNoActiveChallenge();
+            return _buildNoActiveChallenge(theme);
           }
 
-          return _buildActiveChallenge(challenge);
+          return _buildActiveChallenge(challenge, theme);
         },
       ),
     );
   }
 
-  Widget _buildNoActiveChallenge() {
+  Widget _buildNoActiveChallenge(ThemeData theme) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.sync_alt_rounded, size: 80, color: Colors.white10),
+          Icon(Icons.sync_alt_rounded, size: 80, color: theme.colorScheme.onSurface.withValues(alpha: 0.1)),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             "NO ACTIVE TACTICAL RELAY",
             style: TextStyle(
               fontWeight: FontWeight.w900,
               fontSize: 18,
-              color: Colors.white24,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
               letterSpacing: 1,
             ),
           ),
           const SizedBox(height: 12),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 40),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
               "Start a relay to coordinate step goals with your team and earn massive XP & Credit rewards.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white54, fontSize: 13, height: 1.5),
+              style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 13, height: 1.5),
             ),
           ),
           const SizedBox(height: 32),
           Container(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+              gradient: LinearGradient(
+                colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -119,7 +122,7 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
               onPressed: () => _showStartChallengeDialog(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
-                foregroundColor: Colors.white,
+                foregroundColor: theme.colorScheme.onPrimary,
                 shadowColor: Colors.transparent,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -137,11 +140,11 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
     );
   }
 
-  Widget _buildActiveChallenge(TacticalRelayModel challenge) {
+  Widget _buildActiveChallenge(TacticalRelayModel challenge, ThemeData theme) {
     final currentUid = _firebaseService.auth.currentUser?.uid;
     if (currentUid == null) {
-      return const Center(
-        child: Text("NOT LOGGED IN", style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold)),
+      return Center(
+        child: Text("NOT LOGGED IN", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontWeight: FontWeight.bold)),
       );
     }
     final bool isMyTurn = challenge.currentPlayerId == currentUid;
@@ -155,9 +158,9 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF161B22),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: isMyTurn ? const Color(0xFF8E2DE2).withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.1)),
+              border: Border.all(color: isMyTurn ? theme.colorScheme.primary.withValues(alpha: 0.3) : theme.colorScheme.onSurface.withValues(alpha: 0.1)),
             ),
             child: Column(
               children: [
@@ -167,22 +170,22 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           "CURRENT OPERATOR",
-                          style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                          style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           isMyTurn ? "YOU (ACTIVE)" : challenge.currentPlayerName.toUpperCase(),
                           style: TextStyle(
-                            color: isMyTurn ? const Color(0xFF8E2DE2) : Colors.white,
+                            color: isMyTurn ? theme.colorScheme.primary : theme.colorScheme.onSurface,
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                       ],
                     ),
-                    const Icon(Icons.fitness_center_rounded, color: Color(0xFF8E2DE2), size: 32),
+                    Icon(Icons.fitness_center_rounded, color: theme.colorScheme.primary, size: 32),
                   ],
                 ),
                 const SizedBox(height: 32),
@@ -195,8 +198,8 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                       child: CircularProgressIndicator(
                         value: challenge.progress,
                         strokeWidth: 12,
-                        backgroundColor: Colors.white.withValues(alpha: 0.05),
-                        color: const Color(0xFF8E2DE2),
+                        backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+                        color: theme.colorScheme.primary,
                         strokeCap: StrokeCap.round,
                       ),
                     ),
@@ -204,15 +207,15 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                       children: [
                         Text(
                           "${challenge.currentSteps}",
-                          style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: Colors.white),
+                          style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: theme.colorScheme.onSurface),
                         ),
                         Text(
                           "/ ${challenge.targetSteps}",
-                          style: const TextStyle(fontSize: 16, color: Colors.white38, fontWeight: FontWeight.bold),
+                          style: TextStyle(fontSize: 16, color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontWeight: FontWeight.bold),
                         ),
-                        const Text(
+                        Text(
                           "STEPS",
-                          style: TextStyle(fontSize: 10, color: Colors.white24, fontWeight: FontWeight.w900, letterSpacing: 2),
+                          style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.2), fontWeight: FontWeight.w900, letterSpacing: 2),
                         ),
                       ],
                     ),
@@ -220,40 +223,50 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                 ),
                 const SizedBox(height: 32),
                 if (isMyTurn) ...[
-                  const Text(
+                  Text(
                     "You are the active operator in the relay. Your steps are currently contributing to the team's progress.",
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                    style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 13, height: 1.4),
                   ),
                   const SizedBox(height: 24),
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      gradient: challenge.currentSteps >= challenge.targetSteps ? const LinearGradient(
-                        colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                      gradient: challenge.currentSteps >= challenge.targetSteps ? LinearGradient(
+                        colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ) : null,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: ElevatedButton.icon(
-                      onPressed: challenge.currentSteps >= challenge.targetSteps
-                          ? () => _challengeController.passRelayToken(widget.teamId)
+                      onPressed: (challenge.currentSteps >= challenge.targetSteps && !_isProcessing)
+                          ? () async {
+                              setState(() => _isProcessing = true);
+                              await HapticFeedback.heavyImpact();
+                              try {
+                                await _challengeController.passRelayToken(widget.teamId);
+                              } finally {
+                                if (mounted) setState(() => _isProcessing = false);
+                              }
+                            }
                           : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
-                        foregroundColor: Colors.white,
+                        foregroundColor: theme.colorScheme.onPrimary,
                         shadowColor: Colors.transparent,
-                        disabledBackgroundColor: Colors.white.withValues(alpha: 0.05),
-                        disabledForegroundColor: Colors.white24,
+                        disabledBackgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+                        disabledForegroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.2),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         elevation: 0,
                       ),
-                      icon: const Icon(Icons.send_rounded),
-                      label: const Text(
-                        "PASS RELAY TOKEN",
-                        style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                      icon: _isProcessing 
+                        ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.onPrimary))
+                        : const Icon(Icons.send_rounded),
+                      label: Text(
+                        _isProcessing ? "PROCESSING..." : "PASS RELAY TOKEN",
+                        style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
                       ),
                     ),
                   ),
@@ -261,16 +274,16 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                   Text(
                     "WAITING FOR ${challenge.currentPlayerName.toUpperCase()} TO FINISH THEIR TURN.",
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white24, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.2), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                   ),
                 ],
               ],
             ),
           ),
           const SizedBox(height: 32),
-          const Text(
+          Text(
             "RELAY SEQUENCE",
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white54, letterSpacing: 1),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: theme.colorScheme.onSurface.withValues(alpha: 0.5), letterSpacing: 1),
           ),
           const SizedBox(height: 16),
           Builder(
@@ -289,10 +302,10 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isCurrent ? const Color(0xFF161B22) : Colors.transparent,
+                      color: isCurrent ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3) : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isCurrent ? const Color(0xFF8E2DE2).withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+                        color: isCurrent ? theme.colorScheme.primary.withValues(alpha: 0.2) : theme.colorScheme.onSurface.withValues(alpha: 0.05),
                       ),
                     ),
                     child: Row(
@@ -301,7 +314,7 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: isPast ? Colors.greenAccent.withValues(alpha: 0.1) : (isCurrent ? const Color(0xFF8E2DE2) : Colors.white.withValues(alpha: 0.05)),
+                            color: isPast ? Colors.greenAccent.withValues(alpha: 0.1) : (isCurrent ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.05)),
                             shape: BoxShape.circle,
                           ),
                           child: Center(
@@ -310,7 +323,7 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                                 : Text(
                               "${index + 1}",
                               style: TextStyle(
-                                color: isCurrent ? Colors.white : Colors.white24,
+                                color: isCurrent ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface.withValues(alpha: 0.2),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
@@ -322,7 +335,7 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                           playerId == currentUid ? "YOU" : displayName.toUpperCase(),
                           style: TextStyle(
                             fontWeight: isCurrent ? FontWeight.w900 : FontWeight.bold,
-                            color: isCurrent ? Colors.white : Colors.white24,
+                            color: isCurrent ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.2),
                           ),
                         ),
                         const Spacer(),
@@ -346,25 +359,26 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
   }
 
   void _showStartChallengeDialog() {
+    final theme = Theme.of(context);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: theme.colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text("START TACTICAL RELAY", style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white)),
-        content: const Text(
+        title: Text("START TACTICAL RELAY", style: TextStyle(fontWeight: FontWeight.w900, color: theme.colorScheme.onSurface)),
+        content: Text(
           "This will start a multi-stage relay. Each operator must complete their step goal before passing the relay token to the next team member.",
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("CANCEL", style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold)),
+            child: Text("CANCEL", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontWeight: FontWeight.bold)),
           ),
           Container(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+              gradient: LinearGradient(
+                colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -373,13 +387,14 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
-                foregroundColor: Colors.white,
+                foregroundColor: theme.colorScheme.onPrimary,
                 shadowColor: Colors.transparent,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () async {
                 final scaffoldMessenger = ScaffoldMessenger.of(context);
                 Navigator.pop(context);
+                await HapticFeedback.mediumImpact();
 
                 try {
                   // Fetch all team members to build the sequence
@@ -406,16 +421,16 @@ class _TacticalRelayScreenState extends State<TacticalRelayScreen> {
                   );
 
                   scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text("TACTICAL RELAY STARTED"),
-                      backgroundColor: Color(0xFF8E2DE2),
+                    SnackBar(
+                      content: const Text("TACTICAL RELAY STARTED"),
+                      backgroundColor: theme.colorScheme.primary,
                     ),
                   );
                 } catch (e) {
                   scaffoldMessenger.showSnackBar(
                     SnackBar(
                       content: Text("ERROR STARTING RELAY: $e"),
-                      backgroundColor: Colors.redAccent,
+                      backgroundColor: theme.colorScheme.error,
                     ),
                   );
                 }

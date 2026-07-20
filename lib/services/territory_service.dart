@@ -108,14 +108,16 @@ class TerritoryService {
   // =========================
   // TEAM COLOR
   // =========================
-  Color getTeamColor(String team) {
-    switch (team) {
-      case "red": return Colors.red;
+  Color getTeamColor(String color, BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    switch (color) {
+      case "red": return colorScheme.error;
       case "green": return Colors.green;
-      case "yellow": return Colors.orange;
+      case "yellow": return colorScheme.tertiary;
       case "purple": return Colors.purple;
-      case "blue": return Colors.blue;
-      default: return Colors.orange; // Default solo
+      case "blue": return colorScheme.primary;
+      case "orange": return colorScheme.secondary;
+      default: return colorScheme.outline;
     }
   }
 

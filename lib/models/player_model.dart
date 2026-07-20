@@ -51,6 +51,7 @@ class PlayerModel {
   final DateTime? lastTeamAction;
   final DateTime? lastRaidAttack;
   final int streakCount;
+  final String? lastStreakUpdateDate; // YYYY-MM-DD
   final int totalRaidDamage;
   final int ghostRaidDamage;
   final DateTime? lastActiveDate;
@@ -91,6 +92,7 @@ class PlayerModel {
   }
 
   final bool isGhostStriderEnabled;
+  final String? activeTeamChallengeId;
 
   // Physical Telemetry Nodes
   final double? heightCm;
@@ -182,6 +184,7 @@ class PlayerModel {
     this.lastTeamAction,
     this.lastRaidAttack,
     this.streakCount = 0,
+    this.lastStreakUpdateDate,
     this.totalRaidDamage = 0,
     this.ghostRaidDamage = 0,
     required this.totalLand,
@@ -196,6 +199,7 @@ class PlayerModel {
     this.hourlySteps = const {},
     this.dailyHistory = const {},
     this.isGhostStriderEnabled = true,
+    this.activeTeamChallengeId,
     this.heightCm,
     this.weightKg,
     this.dailyStepTarget = 10000,
@@ -232,6 +236,7 @@ class PlayerModel {
     DateTime? lastTeamAction,
     DateTime? lastRaidAttack,
     int? streakCount,
+    String? lastStreakUpdateDate,
     int? totalRaidDamage,
     int? ghostRaidDamage,
     int? totalLand,
@@ -247,6 +252,7 @@ class PlayerModel {
     Map<String, dynamic>? dailyHistory,
     String? territoryColor,
     bool? isGhostStriderEnabled,
+    String? activeTeamChallengeId,
     double? heightCm,
     double? weightKg,
     int? dailyStepTarget,
@@ -281,6 +287,7 @@ class PlayerModel {
       lastTeamAction: lastTeamAction ?? this.lastTeamAction,
       lastRaidAttack: lastRaidAttack ?? this.lastRaidAttack,
       streakCount: streakCount ?? this.streakCount,
+      lastStreakUpdateDate: lastStreakUpdateDate ?? this.lastStreakUpdateDate,
       totalRaidDamage: totalRaidDamage ?? this.totalRaidDamage,
       ghostRaidDamage: ghostRaidDamage ?? this.ghostRaidDamage,
       totalLand: totalLand ?? this.totalLand,
@@ -296,6 +303,7 @@ class PlayerModel {
       dailyHistory: dailyHistory ?? this.dailyHistory,
       territoryColor: territoryColor ?? this.territoryColor,
       isGhostStriderEnabled: isGhostStriderEnabled ?? this.isGhostStriderEnabled,
+      activeTeamChallengeId: activeTeamChallengeId ?? this.activeTeamChallengeId,
       heightCm: heightCm ?? this.heightCm,
       weightKg: weightKg ?? this.weightKg,
       dailyStepTarget: dailyStepTarget ?? this.dailyStepTarget,
@@ -344,6 +352,7 @@ class PlayerModel {
       lastTeamAction: map["lastTeamAction"] is Timestamp ? (map["lastTeamAction"] as Timestamp).toDate() : null,
       lastRaidAttack: map["lastRaidAttack"] is Timestamp ? (map["lastRaidAttack"] as Timestamp).toDate() : null,
       streakCount: (map["streakCount"] as num?)?.toInt() ?? 0,
+      lastStreakUpdateDate: map["lastStreakUpdateDate"]?.toString(),
       totalRaidDamage: (map["totalRaidDamage"] as num?)?.toInt() ?? 0,
       ghostRaidDamage: (map["ghostRaidDamage"] as num?)?.toInt() ?? 0,
       totalLand: (map["totalLand"] as num?)?.toInt() ?? 0,
@@ -359,6 +368,7 @@ class PlayerModel {
       hourlySteps: Map<String, int>.from(map['hourlySteps'] ?? map['hourlyTelemetry'] ?? {}),
       dailyHistory: Map<String, dynamic>.from(map['dailyHistory'] ?? {}),
       isGhostStriderEnabled: map["isGhostStriderEnabled"] is bool ? map["isGhostStriderEnabled"] : true,
+      activeTeamChallengeId: map["activeTeamChallengeId"]?.toString(),
       heightCm: (map["heightCm"] as num?)?.toDouble(),
       weightKg: (map["weightKg"] as num?)?.toDouble(),
       dailyStepTarget: (map["dailyStepTarget"] as num?)?.toInt() ?? 10000,
@@ -401,6 +411,7 @@ class PlayerModel {
       "lastTeamAction": lastTeamAction != null ? Timestamp.fromDate(lastTeamAction!) : null,
       "lastRaidAttack": lastRaidAttack != null ? Timestamp.fromDate(lastRaidAttack!) : null,
       "streakCount": streakCount,
+      "lastStreakUpdateDate": lastStreakUpdateDate,
       "totalRaidDamage": totalRaidDamage,
       "ghostRaidDamage": ghostRaidDamage,
       "totalLand": totalLand,
@@ -416,6 +427,7 @@ class PlayerModel {
       "hourlySteps": hourlySteps,
       "dailyHistory": dailyHistory,
       "isGhostStriderEnabled": isGhostStriderEnabled,
+      "activeTeamChallengeId": activeTeamChallengeId,
       "heightCm": heightCm,
       "weightKg": weightKg,
       "dailyStepTarget": dailyStepTarget,

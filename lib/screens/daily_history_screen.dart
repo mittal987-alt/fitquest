@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/player_model.dart';
 import '../features/tactical/widgets/activity_heatmap.dart';
 import '../services/pedometer_service.dart';
+import '../widgets/weekly_step_chart.dart';
 
 class DailyHistoryScreen extends StatelessWidget {
   final PlayerModel player;
@@ -62,23 +63,25 @@ class DailyHistoryScreen extends StatelessWidget {
     double complianceRate = displayKeys.isEmpty ? 0 : (goalsMet / displayKeys.length) * 100;
     String reliabilityGrade = _getReliabilityGrade(complianceRate);
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0D1117),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           "OPERATIONAL LOGS",
-          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.w900, color: colorScheme.onSurface, letterSpacing: 1.5, fontSize: 18),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: colorScheme.onSurface, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: displayKeys.isEmpty
-          ? _buildEmptyState()
+          ? _buildEmptyState(context)
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: displayKeys.length + 1,
@@ -100,9 +103,14 @@ class DailyHistoryScreen extends StatelessWidget {
                         kCardRadius
                       ),
                       const SizedBox(height: kSectionGap),
-                      const Text(
+                      WeeklyStepChart(
+                        dailyHistory: player.dailyHistory,
+                        targetSteps: player.dailyStepTarget,
+                      ),
+                      const SizedBox(height: kSectionGap),
+                      Text(
                         "HISTORICAL TELEMETRY",
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white38, letterSpacing: 1),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4), letterSpacing: 1),
                       ),
                       const SizedBox(height: 12),
                     ],
@@ -110,7 +118,7 @@ class DailyHistoryScreen extends StatelessWidget {
                 }
                 final dateKey = displayKeys[index - 1];
                 final data = (player.dailyHistory[dateKey] as Map<String, dynamic>?) ?? {};
-                return _buildHistoryCard(dateKey, data, kCardRadius);
+                return _buildHistoryCard(context, dateKey, data, kCardRadius);
               },
             ),
     );
@@ -245,28 +253,30 @@ class DailyHistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.history_rounded, size: 80, color: Colors.white.withValues(alpha: 0.05)),
+          Icon(Icons.history_rounded, size: 80, color: colorScheme.onSurface.withValues(alpha: 0.05)),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             "NO ARCHIVED TELEMETRY",
-            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w900, letterSpacing: 1.2),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Complete a 24h cycle to log performance.",
-            style: TextStyle(color: Colors.white24, fontSize: 12),
+            style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 12),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHistoryCard(String dateKey, Map<String, dynamic> data, double radius) {
+  Widget _buildHistoryCard(BuildContext context, String dateKey, Map<String, dynamic> data, double radius) {
+    final colorScheme = Theme.of(context).colorScheme;
     DateTime date = DateTime.parse(dateKey);
     int steps = (data['steps'] as num?)?.toInt() ?? 0;
     int xp = (data['xpGained'] as num?)?.toInt() ?? 0;
@@ -289,12 +299,12 @@ class DailyHistoryScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: Colors.black.withValues(alpha: colorScheme.brightness == Brightness.dark ? 0.2 : 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
           )
@@ -314,13 +324,13 @@ class DailyHistoryScreen extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w900, 
                       fontSize: 10, 
-                      color: goalReached ? Colors.greenAccent : Colors.blueAccent, 
+                      color: goalReached ? Colors.greenAccent : colorScheme.primary, 
                       letterSpacing: 1.5
                     ),
                   ),
                   Text(
                     DateFormat('MMM dd, yyyy').format(date).toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white),
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: colorScheme.onSurface),
                   ),
                   const SizedBox(height: 6),
                   Row(
@@ -332,7 +342,7 @@ class DailyHistoryScreen extends StatelessWidget {
                         style: TextStyle(
                           fontWeight: FontWeight.w900, 
                           fontSize: 9, 
-                          color: goalReached ? Colors.greenAccent : Colors.white24, 
+                          color: goalReached ? Colors.greenAccent : colorScheme.onSurfaceVariant.withValues(alpha: 0.4), 
                           letterSpacing: 0.5
                         ),
                       ),
@@ -342,7 +352,7 @@ class DailyHistoryScreen extends StatelessWidget {
               ),
               _statusBox(
                 goalReached ? "GOAL MET" : "GOAL NOT MET",
-                goalReached ? Colors.greenAccent : Colors.blueAccent,
+                goalReached ? Colors.greenAccent : colorScheme.primary,
               ),
             ],
           ),
@@ -350,10 +360,10 @@ class DailyHistoryScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _statItem(Icons.directions_walk_rounded, "$steps", "STEPS", Colors.orangeAccent),
-              _statItem(Icons.local_fire_department_rounded, calories.toStringAsFixed(0), "KCAL", Colors.redAccent),
-              _statItem(Icons.map_rounded, distance.toStringAsFixed(1), "KM", Colors.blueAccent),
-              _statItem(Icons.bolt_rounded, "+$xp", "XP", Colors.amberAccent),
+              _statItem(context, Icons.directions_walk_rounded, "$steps", "STEPS", Colors.orangeAccent),
+              _statItem(context, Icons.local_fire_department_rounded, calories.toStringAsFixed(0), "KCAL", Colors.redAccent),
+              _statItem(context, Icons.map_rounded, distance.toStringAsFixed(1), "KM", colorScheme.primary),
+              _statItem(context, Icons.bolt_rounded, "+$xp", "XP", Colors.amberAccent),
             ],
           ),
           const SizedBox(height: 24),
@@ -363,7 +373,7 @@ class DailyHistoryScreen extends StatelessWidget {
                 height: 8,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.03),
+                  color: colorScheme.onSurface.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -375,7 +385,7 @@ class DailyHistoryScreen extends StatelessWidget {
                     gradient: LinearGradient(
                       colors: goalReached 
                         ? [Colors.greenAccent.withValues(alpha: 0.6), Colors.greenAccent] 
-                        : [Colors.blueAccent.withValues(alpha: 0.6), Colors.blueAccent],
+                        : [colorScheme.primary.withValues(alpha: 0.6), colorScheme.primary],
                     ),
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -392,9 +402,9 @@ class DailyHistoryScreen extends StatelessWidget {
                ),
              ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             "ACTIVITY INTENSITY",
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white24, letterSpacing: 1),
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4), letterSpacing: 1),
           ),
           const SizedBox(height: 12),
           ActivityHeatmap(
@@ -402,7 +412,7 @@ class DailyHistoryScreen extends StatelessWidget {
           ),
           if (achievements.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Divider(height: 1, color: Colors.white10),
+            Divider(height: 1, color: colorScheme.outlineVariant),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -410,18 +420,18 @@ class DailyHistoryScreen extends StatelessWidget {
               children: achievements.map((a) => Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withValues(alpha: 0.05),
+                  color: colorScheme.primary.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.1)),
+                  border: Border.all(color: colorScheme.primary.withValues(alpha: 0.1)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.military_tech_rounded, size: 14, color: Colors.blueAccent),
+                    Icon(Icons.military_tech_rounded, size: 14, color: colorScheme.primary),
                     const SizedBox(width: 6),
                     Text(
                       a.toString().toUpperCase(),
-                      style: const TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.w900),
+                      style: TextStyle(color: colorScheme.primary, fontSize: 10, fontWeight: FontWeight.w900),
                     ),
                   ],
                 ),
@@ -477,7 +487,8 @@ class DailyHistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _statItem(IconData icon, String value, String label, Color color) {
+  Widget _statItem(BuildContext context, IconData icon, String value, String label, Color color) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -485,10 +496,10 @@ class DailyHistoryScreen extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 18),
             const SizedBox(width: 6),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white)),
+            Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: colorScheme.onSurface)),
           ],
         ),
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        Text(label, style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
       ],
     );
   }

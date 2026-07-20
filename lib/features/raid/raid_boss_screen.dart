@@ -42,16 +42,18 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
     // FIX: was `FirebaseAuth.instance.currentUser!.uid` risk elsewhere in the
     // app — guarded consistently here too.
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (currentUid == null) {
-      return const Scaffold(
+      return Scaffold(
         body: Center(
-          child: Text("NOT LOGGED IN", style: TextStyle(color: Colors.black45, fontWeight: FontWeight.bold)),
+          child: Text("NOT LOGGED IN", style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold)),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection("teams").doc(widget.teamId).snapshots(),
@@ -65,13 +67,13 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
             );
             return Text(
               "RAID BOSS: ${bossConfig["name"]}",
-              style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 15),
+              style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 15, color: colorScheme.onSurface),
             );
           },
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: Colors.black87,
+        foregroundColor: colorScheme.onSurface,
         actions: [
           IconButton(
             icon: const Icon(Icons.history_rounded),
@@ -87,7 +89,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
         stream: FirebaseFirestore.instance.collection("teams").doc(widget.teamId).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: CircularProgressIndicator(color: Colors.orangeAccent));
+            return Center(child: CircularProgressIndicator(color: colorScheme.primary));
           }
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
@@ -117,7 +119,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                   children: [
                     Text(
                       team.name.toUpperCase(),
-                      style: const TextStyle(color: Colors.black45, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -142,7 +144,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                       ),
                       Text(
                         "WEAKNESS: ${bossConfig["weakness"]}",
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black38, letterSpacing: 1),
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6), letterSpacing: 1),
                       ),
                       if (activeSynergies.isNotEmpty) ...[
                         const SizedBox(height: 16),
@@ -150,7 +152,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                           spacing: 8,
                           children: activeSynergies.map((e) {
                             final className = e.key;
-                            Color synergyColor = Colors.grey;
+                            Color synergyColor = colorScheme.secondary;
                             if (className == 'medic') synergyColor = Colors.greenAccent;
                             if (className == 'tank') synergyColor = Colors.blueAccent;
                             if (className == 'scout') synergyColor = Colors.orangeAccent;
@@ -187,13 +189,13 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                     value: hpPercent,
                     minHeight: 22,
                     color: bossColor,
-                    backgroundColor: Colors.black.withValues(alpha: 0.06),
+                    backgroundColor: colorScheme.surfaceContainerHighest,
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   "${hp.toInt()} / ${maxHp.toInt()} HP",
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.black87),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
                 ),
 
                 if (team.strongholdActive) ...[
@@ -202,7 +204,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                     children: [
                       const Icon(Icons.shield_rounded, size: 14, color: Colors.amber),
                       const SizedBox(width: 4),
-                      const Text(
+                      Text(
                         "TEAM STRONGHOLD ACTIVE (1.5x DAMAGE)",
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber, letterSpacing: 0.5),
                       ),
@@ -237,9 +239,9 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
 
                       if (!success) {
                         scaffoldMessenger.showSnackBar(
-                          const SnackBar(
-                            content: Text("INSUFFICIENT STAMINA OR ON COOLDOWN"),
-                            backgroundColor: Colors.redAccent,
+                          SnackBar(
+                            content: const Text("INSUFFICIENT STAMINA OR ON COOLDOWN"),
+                            backgroundColor: colorScheme.error,
                           ),
                         );
                         return;
@@ -247,17 +249,17 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
 
                       if (primalSpirit) {
                         scaffoldMessenger.showSnackBar(
-                          const SnackBar(
-                            content: Text("✨ PRIMAL SPIRIT ULTIMATE TRIGGERED! 3.0x DAMAGE! ✨"),
-                            backgroundColor: Colors.deepPurpleAccent,
-                            duration: Duration(seconds: 3),
+                          SnackBar(
+                            content: const Text("✨ PRIMAL SPIRIT ULTIMATE TRIGGERED! 3.0x DAMAGE! ✨"),
+                            backgroundColor: colorScheme.tertiary,
+                            duration: const Duration(seconds: 3),
                           ),
                         );
                       } else {
                         scaffoldMessenger.showSnackBar(
-                          const SnackBar(
-                            content: Text("ATTACK LANDED"),
-                            backgroundColor: Colors.greenAccent,
+                          SnackBar(
+                            content: const Text("ATTACK LANDED"),
+                            backgroundColor: colorScheme.secondary,
                           ),
                         );
                       }
@@ -267,17 +269,17 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.black.withValues(alpha: 0.08),
+                      backgroundColor: colorScheme.error,
+                      foregroundColor: colorScheme.onError,
+                      disabledBackgroundColor: colorScheme.onSurface.withValues(alpha: 0.12),
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
                     ),
                     icon: _attacking
-                        ? const SizedBox(
+                        ? SizedBox(
                       width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.onError),
                     )
                         : const Icon(Icons.bolt_rounded),
                     label: const Text(
@@ -286,6 +288,7 @@ class _RaidBossScreenState extends State<RaidBossScreen> {
                     ),
                   ),
                 ),
+
               ],
             ),
           );

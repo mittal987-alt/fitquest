@@ -1,22 +1,49 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../models/walk_session_model.dart';
 import '../models/player_model.dart';
 import '../services/firebase_service.dart';
 
-class WalkSummaryScreen extends StatelessWidget {
+class WalkSummaryScreen extends StatefulWidget {
   final WalkSessionModel session;
   final PlayerModel? player;
 
   const WalkSummaryScreen({super.key, required this.session, this.player});
 
-  static const Color _kBgColor = Color(0xFF0D1117);
-  static const Color _kPrimaryPurple = Color(0xFF8E2DE2);
+  @override
+  State<WalkSummaryScreen> createState() => _WalkSummaryScreenState();
+}
+
+class _WalkSummaryScreenState extends State<WalkSummaryScreen> {
+  static const Color _kBgColor = Color(0xFFF5F7FA);
+  static const Color _kPrimaryPurple = Colors.blueAccent;
+  String? _mapStyle;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMapStyle();
+  }
+
+  Future<void> _loadMapStyle() async {
+    final style = await rootBundle.loadString('assets/map_style.json');
+    if (mounted) {
+      setState(() {
+        _mapStyle = style;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: _kBgColor,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -26,14 +53,14 @@ class WalkSummaryScreen extends StatelessWidget {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    icon: Icon(Icons.close_rounded, color: colorScheme.onSurface),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       "MISSION COMPLETE",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: colorScheme.onSurface,
                         fontWeight: FontWeight.w900,
                         fontSize: 16,
                         letterSpacing: 2,
@@ -49,24 +76,26 @@ class WalkSummaryScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
-                    const Text(
+                    Text(
                       "WELL DONE, STRIDER",
-                      style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      "${session.steps} STEPS",
-                      style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w900),
+                      "${widget.session.steps} STEPS",
+                      style: TextStyle(color: colorScheme.onSurface, fontSize: 48, fontWeight: FontWeight.w900),
                     ),
+                    const SizedBox(height: 24),
+                    _buildMiniMap(colorScheme),
                     const SizedBox(height: 32),
-                    _buildStatsRow(),
+                    _buildStatsRow(colorScheme),
                     const SizedBox(height: 40),
-                    if (session.memories.isNotEmpty) ...[
-                      const Align(
+                    if (widget.session.memories.isNotEmpty) ...[
+                      Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
                           "WALK MEMORIES",
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1),
+                          style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -81,7 +110,7 @@ class WalkSummaryScreen extends StatelessWidget {
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 children: [
-                  if (player?.isInTeam ?? false) ...[
+                  if (widget.player?.isInTeam ?? false) ...[
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
@@ -120,22 +149,96 @@ class WalkSummaryScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildMiniMap(ColorScheme colorScheme) {
+    if (widget.session.memories.isEmpty) return const SizedBox.shrink();
+
+    final markers = widget.session.memories.map((m) {
+      return Marker(
+        markerId: MarkerId(m.timestamp.toString()),
+        position: LatLng(m.latitude, m.longitude),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+      );
+    }).toSet();
+
+    final initialPos = LatLng(
+      widget.session.memories.first.latitude,
+      widget.session.memories.first.longitude,
+    );
+
+    return Container(
+      height: 180,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: GoogleMap(
+          initialCameraPosition: CameraPosition(target: initialPos, zoom: 15),
+          markers: markers,
+          style: _mapStyle,
+          myLocationEnabled: false,
+          myLocationButtonEnabled: false,
+          zoomControlsEnabled: false,
+          mapToolbarEnabled: false,
+          rotateGesturesEnabled: false,
+          scrollGesturesEnabled: false,
+          tiltGesturesEnabled: false,
+          zoomGesturesEnabled: false,
+          onMapCreated: (controller) {
+            if (widget.session.memories.length > 1) {
+              double minLat = widget.session.memories.first.latitude;
+              double maxLat = widget.session.memories.first.latitude;
+              double minLng = widget.session.memories.first.longitude;
+              double maxLng = widget.session.memories.first.longitude;
+
+              for (var m in widget.session.memories) {
+                if (m.latitude < minLat) minLat = m.latitude;
+                if (m.latitude > maxLat) maxLat = m.latitude;
+                if (m.longitude < minLng) minLng = m.longitude;
+                if (m.longitude > maxLng) maxLng = m.longitude;
+              }
+
+              controller.animateCamera(
+                CameraUpdate.newLatLngBounds(
+                  LatLngBounds(
+                    southwest: LatLng(minLat, minLng),
+                    northeast: LatLng(maxLat, maxLng),
+                  ),
+                  40,
+                ),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
   void _shareToTeam(BuildContext context) async {
-    if (player == null || !player!.isInTeam || player!.teamId == null) return;
+    if (widget.player == null || !widget.player!.isInTeam || widget.player!.teamId == null) return;
 
     final service = FirebaseService();
-    final kcal = (session.steps * 0.04).toInt();
-    final duration = session.endTime.difference(session.startTime).inMinutes;
+    final kcal = (widget.session.steps * 0.04).toInt();
+    final duration = widget.session.endTime.difference(widget.session.startTime).inMinutes;
     
     final message = "🚀 MISSION COMPLETE!\n"
-        "Captured ${session.steps} steps ($kcal kcal) over ${session.distanceKm.toStringAsFixed(2)} km.\n"
+        "Captured ${widget.session.steps} steps ($kcal kcal) over ${widget.session.distanceKm.toStringAsFixed(2)} km.\n"
         "Duration: $duration mins.";
 
     try {
       await service.sendTeamChatMessage(
-        player!.teamId!,
-        player!.uid,
-        player!.name,
+        widget.player!.teamId!,
+        widget.player!.uid,
+        widget.player!.name,
         message,
       );
       if (context.mounted) {
@@ -155,24 +258,24 @@ class WalkSummaryScreen extends StatelessWidget {
     }
   }
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(ColorScheme colorScheme) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _statItem(session.distanceKm.toStringAsFixed(2), "KM", Icons.straighten_rounded),
-        _statItem("${(session.steps * 0.04).toInt()}", "KCAL", Icons.local_fire_department_rounded),
-        _statItem("${session.endTime.difference(session.startTime).inMinutes}", "MINS", Icons.timer_rounded),
+        _statItem(colorScheme, widget.session.distanceKm.toStringAsFixed(2), "KM", Icons.straighten_rounded),
+        _statItem(colorScheme, "${(widget.session.steps * 0.04).toInt()}", "KCAL", Icons.local_fire_department_rounded),
+        _statItem(colorScheme, "${widget.session.endTime.difference(widget.session.startTime).inMinutes}", "MINS", Icons.timer_rounded),
       ],
     );
   }
 
-  Widget _statItem(String value, String unit, IconData icon) {
+  Widget _statItem(ColorScheme colorScheme, String value, String unit, IconData icon) {
     return Column(
       children: [
-        Icon(icon, color: _kPrimaryPurple, size: 24),
+        Icon(icon, color: colorScheme.primary, size: 24),
         const SizedBox(height: 8),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-        Text(unit, style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+        Text(value, style: TextStyle(color: colorScheme.onSurface, fontSize: 20, fontWeight: FontWeight.w900)),
+        Text(unit, style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 10, fontWeight: FontWeight.bold)),
       ],
     );
   }
@@ -186,13 +289,13 @@ class WalkSummaryScreen extends StatelessWidget {
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
-      itemCount: session.memories.length,
+      itemCount: widget.session.memories.length,
       itemBuilder: (context, index) {
-        final memory = session.memories[index];
+        final memory = widget.session.memories[index];
         return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(14),

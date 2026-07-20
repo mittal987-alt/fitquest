@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/activity_feed_model.dart';
 import '../models/tactical_relay_model.dart';
 import '../services/firebase_service.dart';
 
@@ -43,6 +44,21 @@ class TacticalRelayController {
         .collection('active_tactical_relay')
         .doc('current')
         .set(challenge.toMap());
+
+    // Log to Activity Feed
+    final activity = ActivityFeedModel(
+      id: "",
+      teamId: teamId,
+      playerName: playerName,
+      type: ActivityType.relayStarted,
+      message: "initiated a new Tactical Relay for the team!",
+      timestamp: DateTime.now(),
+    );
+    await logActivity(activity);
+  }
+
+  Future<void> logActivity(ActivityFeedModel activity) async {
+    await _firebaseService.logActivity(activity);
   }
 
   Future<void> updateRelayProgress(String teamId, int steps) async {
@@ -63,7 +79,9 @@ class TacticalRelayController {
         .collection('active_tactical_relay')
         .doc('current');
 
-    String? pingMessage;
+    String? activityMessage;
+    String? currentPlayerName;
+    ActivityType? activityType;
     bool isFinished = false;
 
     await _firestore.runTransaction((transaction) async {
@@ -76,6 +94,7 @@ class TacticalRelayController {
         return;
       }
 
+      currentPlayerName = challenge.currentPlayerName;
       final currentIndex = challenge.sequence.indexOf(challenge.currentPlayerId);
       
       if (currentIndex != -1 && currentIndex < challenge.sequence.length - 1) {
@@ -92,20 +111,33 @@ class TacticalRelayController {
           'startTime': FieldValue.serverTimestamp(),
         });
 
-        pingMessage = "RELAY TOKEN TRANSFERRED TO ${nextName.toUpperCase()}";
+        activityType = ActivityType.relayTransferred;
+        activityMessage = "transferred the relay baton to ${nextName.toUpperCase()}";
       } else {
         transaction.update(docRef, {'isActive': false});
         isFinished = true;
+        activityType = ActivityType.relayCompleted;
+        activityMessage = "finished the Tactical Relay! Rewards distributed to all operators.";
       }
     });
 
     // Execute side-effects (pings and rewards) outside the transaction
-    if (pingMessage != null) {
+    if (activityMessage != null && activityType != null) {
       await _firebaseService.sendTacticalPing(
         teamId,
         "CHALLENGE_CHANNEL",
-        pingMessage!
+        "${currentPlayerName?.toUpperCase() ?? 'OPERATOR'} $activityMessage"
       );
+
+      // Log to activity feed
+      await logActivity(ActivityFeedModel(
+        id: "",
+        teamId: teamId,
+        playerName: currentPlayerName,
+        type: activityType!,
+        message: activityMessage!,
+        timestamp: DateTime.now(),
+      ));
     }
 
     if (isFinished) {
@@ -114,12 +146,6 @@ class TacticalRelayController {
         await _firebaseService.updateCurrency(doc.id, 500); 
         await _firebaseService.incrementXP(uid: doc.id, xpToAdd: 1000);
       }
-
-      await _firebaseService.sendTacticalPing(
-        teamId,
-        "CHALLENGE_CHANNEL",
-        "TACTICAL STEP RELAY COMPLETE - 500 CREDITS & 1000 XP AWARDED TO ALL OPERATORS"
-      );
     }
   }
 }

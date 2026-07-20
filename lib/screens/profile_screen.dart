@@ -14,12 +14,9 @@ import '../main.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  static const Color _kPrimaryPurple = Color(0xFF8E2DE2);
-  static const Color _kSecondaryPurple = Color(0xFF4A00E0);
-  static const Color _kBgColor = Color(0xFF0D1117);
-  static const Color _kSurfaceColor = Color(0xFF161B22);
-
   void _showUpdateAvatarDialog(BuildContext context, PlayerModel player) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final nameController = TextEditingController(text: player.name);
     final ImagePicker picker = ImagePicker();
     bool isUpdating = false;
@@ -30,15 +27,14 @@ class ProfileScreen extends StatelessWidget {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            backgroundColor: _kSurfaceColor,
+            backgroundColor: colorScheme.surface,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
-              side: const BorderSide(color: Colors.white10),
+              side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
             ),
-            title: const Text(
+            title: Text(
               "EDIT OPERATOR PROFILE",
-              style: TextStyle(
-                color: Colors.white,
+              style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
                 letterSpacing: 1,
@@ -50,19 +46,18 @@ class ProfileScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (isUpdating) ...[
-                    const Center(
+                    Center(
                       child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
+                        padding: const EdgeInsets.symmetric(vertical: 20),
                         child: Column(
                           children: [
-                            CircularProgressIndicator(color: _kPrimaryPurple),
-                            SizedBox(height: 16),
+                            CircularProgressIndicator(color: colorScheme.primary),
+                            const SizedBox(height: 16),
                             Text(
                               "SYNCING CHANGES...",
-                              style: TextStyle(
-                                color: Colors.white70,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
                                 letterSpacing: 1,
                               ),
                             ),
@@ -71,26 +66,34 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                   ] else ...[
-                    const Text(
+                    Text(
                       "CODENAME",
-                      style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: nameController,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold),
                       decoration: InputDecoration(
                         hintText: "Enter codename",
-                        hintStyle: const TextStyle(color: Colors.white24),
+                        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                         filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.05),
+                        fillColor: colorScheme.onSurface.withValues(alpha: 0.05),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text(
+                    Text(
                       "AVATAR UPLOAD",
-                      style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -98,8 +101,8 @@ class ProfileScreen extends StatelessWidget {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white.withValues(alpha: 0.05),
-                              foregroundColor: Colors.white,
+                              backgroundColor: colorScheme.onSurface.withValues(alpha: 0.05),
+                              foregroundColor: colorScheme.onSurface,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
@@ -116,7 +119,7 @@ class ProfileScreen extends StatelessWidget {
                                   setDialogState(() => isUpdating = false);
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: Colors.redAccent),
+                                      SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: colorScheme.error),
                                     );
                                   }
                                 }
@@ -130,8 +133,8 @@ class ProfileScreen extends StatelessWidget {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white.withValues(alpha: 0.05),
-                              foregroundColor: Colors.white,
+                              backgroundColor: colorScheme.onSurface.withValues(alpha: 0.05),
+                              foregroundColor: colorScheme.onSurface,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
@@ -148,7 +151,7 @@ class ProfileScreen extends StatelessWidget {
                                   setDialogState(() => isUpdating = false);
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: Colors.redAccent),
+                                      SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: colorScheme.error),
                                     );
                                   }
                                 }
@@ -169,12 +172,12 @@ class ProfileScreen extends StatelessWidget {
                 : [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text("CANCEL", style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold)),
+                      child: Text("CANCEL", style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold)),
                     ),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _kPrimaryPurple,
-                        foregroundColor: Colors.white,
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: () async {
@@ -188,7 +191,7 @@ class ProfileScreen extends StatelessWidget {
                           setDialogState(() => isUpdating = false);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: Colors.redAccent),
+                              SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: colorScheme.error),
                             );
                           }
                         }
@@ -204,21 +207,23 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(
-        backgroundColor: _kBgColor,
-        body: Center(child: Text("NOT LOGGED IN", style: TextStyle(color: Colors.white))),
+      return Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: Center(child: Text("NOT LOGGED IN", style: TextStyle(color: colorScheme.onSurface))),
       );
     }
 
     return Scaffold(
-      backgroundColor: _kBgColor,
+      backgroundColor: colorScheme.surface,
       body: StreamBuilder<PlayerModel?>(
         stream: FirebaseService().getPlayerStream(user.uid),
         builder: (context, snapshot) {
           if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: CircularProgressIndicator(color: _kPrimaryPurple));
+            return Center(child: CircularProgressIndicator(color: colorScheme.primary));
           }
 
           final player = snapshot.data!;
@@ -232,15 +237,15 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle("TELEMETRY LOGS (LAST 7 DAYS)"),
+                      _buildSectionTitle(context, "TELEMETRY LOGS (LAST 7 DAYS)"),
                       const SizedBox(height: 16),
-                      _buildActivityChart(player),
+                      _buildActivityChart(context, player),
                       const SizedBox(height: 32),
-                      _buildSectionTitle("OPERATOR ACHIEVEMENTS"),
+                      _buildSectionTitle(context, "OPERATOR ACHIEVEMENTS"),
                       const SizedBox(height: 16),
-                      _buildAchievementGallery(player),
+                      _buildAchievementGallery(context, player),
                       const SizedBox(height: 32),
-                      _buildSectionTitle("SYSTEM SETTINGS"),
+                      _buildSectionTitle(context, "SYSTEM SETTINGS"),
                       const SizedBox(height: 16),
                       _buildSettingsSection(context, player),
                       const SizedBox(height: 32),
@@ -258,9 +263,12 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildSliverAppBar(BuildContext context, PlayerModel player) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return SliverAppBar(
       expandedHeight: 340,
-      backgroundColor: _kBgColor,
+      backgroundColor: colorScheme.surface,
       pinned: true,
       stretch: true,
       flexibleSpace: FlexibleSpaceBar(
@@ -268,11 +276,14 @@ class ProfileScreen extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [_kSecondaryPurple, _kBgColor],
+                  colors: [
+                    colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    colorScheme.surface,
+                  ],
                 ),
               ),
             ),
@@ -287,9 +298,9 @@ class ProfileScreen extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 60,
-                          backgroundColor: _kPrimaryPurple.withValues(alpha: 0.2),
+                          backgroundColor: colorScheme.primary.withValues(alpha: 0.2),
                           backgroundImage: player.avatar.isNotEmpty ? NetworkImage(player.avatar) : null,
-                          child: player.avatar.isEmpty ? const Icon(Icons.person, size: 60, color: _kPrimaryPurple) : null,
+                          child: player.avatar.isEmpty ? Icon(Icons.person, size: 60, color: colorScheme.primary) : null,
                         ),
                         Positioned(
                           bottom: 0,
@@ -298,8 +309,8 @@ class ProfileScreen extends StatelessWidget {
                             onTap: () => _showUpdateAvatarDialog(context, player),
                             child: Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(color: _kPrimaryPurple, shape: BoxShape.circle),
-                              child: const Icon(Icons.edit, color: Colors.white, size: 20),
+                              decoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
+                              child: Icon(Icons.edit, color: colorScheme.onPrimary, size: 20),
                             ),
                           ),
                         ),
@@ -308,29 +319,41 @@ class ProfileScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     Text(
                       player.name.toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: 2),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
                     ),
                     Text(
                       "LVL ${player.level} ${FirebaseService().getRankTitle(player.level)}",
-                      style: const TextStyle(color: _kPrimaryPurple, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 4),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 4,
+                      ),
                     ),
                     if (player.fitnessGoal != null) ...[
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.cyanAccent.withValues(alpha: 0.1),
+                          color: colorScheme.secondary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+                          border: Border.all(color: colorScheme.secondary.withValues(alpha: 0.3)),
                         ),
                         child: Text(
                           player.fitnessGoal!.replaceAll('_', ' ').toUpperCase(),
-                          style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.secondary,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
                         ),
                       ),
                     ],
                     const SizedBox(height: 20),
-                    _buildStatRow(player),
+                    _buildStatRow(context, player),
                   ],
                 ),
               ),
@@ -341,53 +364,70 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatRow(PlayerModel player) {
+  Widget _buildStatRow(BuildContext context, PlayerModel player) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _statItem("${player.totalSteps}", "STEPS", icon: Icons.directions_walk_rounded, color: Colors.greenAccent),
-        _statDivider(),
-        _statItem("${player.xp}", "XP", icon: Icons.bolt_rounded, color: Colors.amberAccent),
-        _statDivider(),
-        _statItem("${player.currency}", "CREDITS", icon: Icons.monetization_on_rounded, color: Colors.cyanAccent),
+        _statItem(context, "${player.totalSteps}", "STEPS", icon: Icons.directions_walk_rounded, color: Colors.greenAccent),
+        _statDivider(context),
+        _statItem(context, "${player.xp}", "XP", icon: Icons.bolt_rounded, color: Colors.amberAccent),
+        _statDivider(context),
+        _statItem(context, "${player.currency}", "CREDITS", icon: Icons.monetization_on_rounded, color: Colors.cyanAccent),
       ],
     );
   }
 
-  Widget _statItem(String value, String label, {IconData? icon, Color? color}) {
+  Widget _statItem(BuildContext context, String value, String label, {IconData? icon, Color? color}) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Column(
       children: [
-        if (icon != null) Icon(icon, color: color ?? Colors.white70, size: 16),
+        if (icon != null) Icon(icon, color: color ?? colorScheme.onSurfaceVariant, size: 16),
         if (icon != null) const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: colorScheme.onSurface,
+            fontWeight: FontWeight.w900,
+          ),
         ),
         Text(
           label,
-          style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
         ),
       ],
     );
   }
 
-  Widget _statDivider() {
+  Widget _statDivider(BuildContext context) {
     return Container(
       height: 30,
       width: 1,
       margin: const EdgeInsets.symmetric(horizontal: 24),
-      color: Colors.white10,
+      color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.2),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    final theme = Theme.of(context);
     return Text(
       title,
-      style: const TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2),
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 2,
+      ),
     );
   }
 
-  Widget _buildActivityChart(PlayerModel player) {
+  Widget _buildActivityChart(BuildContext context, PlayerModel player) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final List<BarChartGroupData> barGroups = [];
     final now = DateTime.now();
     final List<String> last7Days = List.generate(7, (i) {
@@ -400,19 +440,22 @@ class ProfileScreen extends StatelessWidget {
       if (player.dailyHistory.containsKey(dateKey)) {
         value = (player.dailyHistory[dateKey]['steps'] as num?)?.toDouble() ?? 0;
       }
+
+      final bool isGoalMet = value >= player.dailyStepTarget;
+
       barGroups.add(
         BarChartGroupData(
           x: i,
           barRods: [
             BarChartRodData(
               toY: value,
-              color: _kPrimaryPurple,
+              color: isGoalMet ? Colors.greenAccent : colorScheme.primary,
               width: 16,
               borderRadius: BorderRadius.circular(4),
               backDrawRodData: BackgroundBarChartRodData(
                 show: true,
                 toY: player.dailyStepTarget.toDouble(),
-                color: Colors.white.withValues(alpha: 0.05),
+                color: colorScheme.onSurface.withValues(alpha: 0.05),
               ),
             ),
           ],
@@ -424,25 +467,39 @@ class ProfileScreen extends StatelessWidget {
       height: 220,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _kSurfaceColor,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: 12000,
-          barTouchData: BarTouchData(enabled: false),
+          maxY: ((barGroups.isEmpty ? 12000 : barGroups.map((e) => e.barRods[0].toY).reduce((a, b) => a > b ? a : b) * 1.2)
+              .clamp(player.dailyStepTarget * 1.2, double.infinity))
+              .toDouble(),
+          barTouchData: BarTouchData(
+            enabled: true,
+            touchTooltipData: BarTouchTooltipData(
+              tooltipBgColor: colorScheme.surface,
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                return BarTooltipItem(
+                  "${rod.toY.toInt()} steps",
+                  TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold),
+                );
+              },
+            ),
+          ),
           titlesData: FlTitlesData(
             show: true,
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
-                  final day = last7Days[value.toInt()].split('-').last;
+                  final date = now.subtract(Duration(days: 6 - value.toInt()));
+                  final label = DateFormat('E').format(date).toUpperCase();
                   return Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(day, style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: Text(label, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.bold)),
                   );
                 },
               ),
@@ -459,13 +516,16 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAchievementGallery(PlayerModel player) {
+  Widget _buildAchievementGallery(BuildContext context, PlayerModel player) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _kSurfaceColor,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: kGlobalAchievements.map((achievement) {
@@ -475,13 +535,14 @@ class ProfileScreen extends StatelessWidget {
           return Column(
             children: [
               _achievementRow(
+                context,
                 achievement.icon,
                 achievement.title,
                 achievement.description,
                 isUnlocked,
                 achievement.color,
               ),
-              if (!isLast) const Divider(height: 32, color: Colors.white10),
+              if (!isLast) Divider(height: 32, color: colorScheme.outlineVariant.withValues(alpha: 0.2)),
             ],
           );
         }).toList(),
@@ -489,16 +550,19 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _achievementRow(IconData icon, String title, String subtitle, bool isUnlocked, Color color) {
+  Widget _achievementRow(BuildContext context, IconData icon, String title, String subtitle, bool isUnlocked, Color color) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isUnlocked ? color.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05),
+            color: isUnlocked ? color.withValues(alpha: 0.1) : colorScheme.onSurface.withValues(alpha: 0.05),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: isUnlocked ? color : Colors.white24, size: 24),
+          child: Icon(icon, color: isUnlocked ? color : colorScheme.onSurfaceVariant.withValues(alpha: 0.2), size: 24),
         ),
         const SizedBox(width: 20),
         Expanded(
@@ -507,19 +571,17 @@ class ProfileScreen extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: TextStyle(
-                  color: isUnlocked ? Colors.white : Colors.white38,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: isUnlocked ? colorScheme.onSurface : colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                   fontWeight: FontWeight.w900,
-                  fontSize: 14,
                   letterSpacing: 0.5,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: TextStyle(
-                  color: isUnlocked ? Colors.white54 : Colors.white24,
-                  fontSize: 10,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: isUnlocked ? colorScheme.onSurfaceVariant : colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -529,21 +591,23 @@ class ProfileScreen extends StatelessWidget {
         if (isUnlocked)
           const Icon(Icons.verified_outlined, color: Colors.greenAccent, size: 20)
         else
-          const Icon(Icons.lock_outline_rounded, color: Colors.white10, size: 20),
+          Icon(Icons.lock_outline_rounded, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.2), size: 20),
       ],
     );
   }
 
   Widget _buildSettingsSection(BuildContext context, PlayerModel player) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Container(
       decoration: BoxDecoration(
-        color: _kSurfaceColor,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [
-          _ghostStriderToggle(player),
+          _ghostStriderToggle(context, player),
           _settingsTile(context, player, Icons.track_changes_rounded, "GOALS", "ADAPTIVE MISSION TARGETS"),
           _settingsTile(context, player, Icons.palette_outlined, "TERRITORY COLOR", "CUSTOMIZE YOUR MAP PRESENCE"),
           _settingsTile(context, player, Icons.notifications_none_rounded, "NOTIFICATIONS", "MANAGE ALERT PREFERENCES"),
@@ -555,32 +619,45 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _ghostStriderToggle(PlayerModel player) {
+  Widget _ghostStriderToggle(BuildContext context, PlayerModel player) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Column(
       children: [
         SwitchListTile.adaptive(
-          secondary: const Icon(Icons.psychology_outlined, color: Colors.cyanAccent, size: 22),
-          title: const Text(
+          secondary: Icon(Icons.psychology_outlined, color: colorScheme.secondary, size: 22),
+          title: Text(
             "GHOST STRIDER",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1),
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
+            ),
           ),
-          subtitle: const Text(
+          subtitle: Text(
             "ENABLE HISTORICAL TELEMETRY & LOOT",
-            style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           value: player.isGhostStriderEnabled,
-          activeColor: Colors.cyanAccent,
+          activeThumbColor: colorScheme.secondary,
           contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           onChanged: (val) async {
             await FirebaseService().updateGhostStriderToggle(player.uid, val);
           },
         ),
-        const Divider(height: 1, indent: 64, color: Colors.white10),
+        Divider(height: 1, indent: 64, color: colorScheme.outlineVariant.withValues(alpha: 0.2)),
       ],
     );
   }
 
   void _showColorPicker(BuildContext context, PlayerModel player) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     final List<Color> colors = [
       Colors.cyanAccent,
       Colors.greenAccent,
@@ -594,7 +671,7 @@ class ProfileScreen extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: _kSurfaceColor,
+      backgroundColor: colorScheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => Padding(
         padding: const EdgeInsets.all(24),
@@ -602,7 +679,14 @@ class ProfileScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("SELECT TERRITORY COLOR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
+            Text(
+              "SELECT TERRITORY COLOR",
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
+            ),
             const SizedBox(height: 24),
             GridView.builder(
               shrinkWrap: true,
@@ -622,7 +706,7 @@ class ProfileScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: color,
                       shape: BoxShape.circle,
-                      border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+                      border: isSelected ? Border.all(color: colorScheme.onSurface, width: 3) : null,
                       boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 10, spreadRadius: 2)] : null,
                     ),
                   ),
@@ -637,22 +721,33 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _settingsTile(BuildContext context, PlayerModel player, IconData icon, String title, String subtitle, {bool isLast = false}) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Column(
       children: [
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          leading: Icon(icon, color: Colors.white38, size: 22),
+          leading: Icon(icon, color: colorScheme.onSurfaceVariant, size: 22),
           title: Text(
             title,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1),
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
+            ),
           ),
           subtitle: Text(
             subtitle,
-            style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           trailing: title == "DARK MODE"
               ? Switch.adaptive(
-                  value: Theme.of(context).brightness == Brightness.dark,
+                  value: theme.brightness == Brightness.dark,
+                  activeColor: colorScheme.primary,
                   onChanged: (val) {
                     MyApp.of(context)?.toggleDarkMode();
                   },
@@ -662,12 +757,12 @@ class ProfileScreen extends StatelessWidget {
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
-                        color: player.territoryColor != null ? Color(int.parse(player.territoryColor!.replaceFirst('#', '0xFF'))) : Colors.cyanAccent,
+                        color: player.territoryColor != null ? Color(int.parse(player.territoryColor!.replaceFirst('#', '0xFF'))) : colorScheme.primary,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white24),
+                        border: Border.all(color: colorScheme.outline),
                       ),
                     )
-                  : const Icon(Icons.chevron_right_rounded, color: Colors.white10),
+                  : Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
           onTap: () {
             if (title == "GOALS") {
               Navigator.push(context, MaterialPageRoute(builder: (context) => GoalAdjustmentScreen(player: player)));
@@ -679,14 +774,14 @@ class ProfileScreen extends StatelessWidget {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  backgroundColor: _kSurfaceColor,
-                  title: const Text("NOTIFICATIONS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  content: const Text("Manage notification settings in your device system settings for maximum tactical efficiency.",
-                      style: TextStyle(color: Colors.white70)),
+                  backgroundColor: colorScheme.surface,
+                  title: Text("NOTIFICATIONS", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
+                  content: Text("Manage notification settings in your device system settings for maximum tactical efficiency.",
+                      style: TextStyle(color: colorScheme.onSurfaceVariant)),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text("UNDERSTOOD", style: TextStyle(color: Colors.cyanAccent)),
+                      child: Text("UNDERSTOOD", style: TextStyle(color: colorScheme.primary)),
                     ),
                   ],
                 ),
@@ -696,7 +791,7 @@ class ProfileScreen extends StatelessWidget {
                 context: context,
                 applicationName: "FitQuest",
                 applicationVersion: "1.0.0 Tactical Build",
-                applicationIcon: const Icon(Icons.security_outlined, color: Colors.cyanAccent),
+                applicationIcon: Icon(Icons.security_outlined, color: colorScheme.primary),
                 children: [
                   const Text("Your telemetry data is encrypted and used only for RPG progression and team coordination."),
                 ],
@@ -705,14 +800,14 @@ class ProfileScreen extends StatelessWidget {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  backgroundColor: _kSurfaceColor,
-                  title: const Text("COMMAND SUPPORT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  content: const Text("Tactical support is currently offline. Please refer to the Field Manual (FAQ) in the future update.",
-                      style: TextStyle(color: Colors.white70)),
+                  backgroundColor: colorScheme.surface,
+                  title: Text("COMMAND SUPPORT", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
+                  content: Text("Tactical support is currently offline. Please refer to the Field Manual (FAQ) in the future update.",
+                      style: TextStyle(color: colorScheme.onSurfaceVariant)),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text("CLOSE", style: TextStyle(color: Colors.cyanAccent)),
+                      child: Text("CLOSE", style: TextStyle(color: colorScheme.primary)),
                     ),
                   ],
                 ),
@@ -720,12 +815,14 @@ class ProfileScreen extends StatelessWidget {
             }
           },
         ),
-        if (!isLast) const Divider(height: 1, indent: 64, color: Colors.white10),
+        if (!isLast) Divider(height: 1, indent: 64, color: colorScheme.outlineVariant.withValues(alpha: 0.2)),
       ],
     );
   }
 
   Widget _buildSignOutButton(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -746,13 +843,13 @@ class ProfileScreen extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-          foregroundColor: Colors.redAccent,
+          backgroundColor: colorScheme.error.withValues(alpha: 0.1),
+          foregroundColor: colorScheme.error,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 20),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
-            side: const BorderSide(color: Colors.redAccent, width: 2),
+            side: BorderSide(color: colorScheme.error, width: 2),
           ),
         ),
       ),

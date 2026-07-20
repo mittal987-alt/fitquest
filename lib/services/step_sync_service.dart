@@ -143,7 +143,7 @@ class StepSyncService {
           if (deltaSteps > 0) {
             _syncStatusController.add(true);
             
-            // Unified Telemetry Sync (Batching multiple field increments)
+            // Unified Telemetry Sync (Batching multiple field increments including team steps)
             await firebaseService.syncTelemetry(
               uid: uid,
               deltaSteps: deltaSteps,
@@ -153,15 +153,17 @@ class StepSyncService {
             
             // Cross-Document Updates
             if (player.isInTeam && player.teamId != null) {
-              await firebaseService.updateTeamSteps(
-                teamId: player.teamId!,
-                stepsToAdd: deltaSteps,
-              );
-
               final challenge = await challengeController.getTeamRelay(player.teamId!).first;
               if (challenge != null && challenge.isActive && challenge.currentPlayerId == uid) {
                 await challengeController.updateRelayProgress(player.teamId!, deltaSteps);
               }
+
+              // Background Raid Damage Contribution
+              await firebaseService.contributeRaidDamageFromSteps(
+                teamId: player.teamId!,
+                uid: uid,
+                steps: deltaSteps,
+              );
             }
 
             await firebaseService.contributeToGlobalEvent(uid: uid, steps: deltaSteps);
@@ -207,6 +209,15 @@ class StepSyncService {
     stepStream?.cancel();
     _locationSubscription?.cancel();
     _syncStatusController.close();
+  }
+
+  void reset() {
+    lastSyncTime = null;
+    _currentSpeedKmh = 0.0;
+    _isProcessing = false;
+    cachedPlayer = null;
+    _lastLocalHardwareSteps = null;
+    debugPrint("[TELEMETRY] StepSyncService reset.");
   }
 
   void doublePrint(String message) {

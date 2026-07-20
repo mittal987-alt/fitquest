@@ -9,7 +9,14 @@ enum ActivityType {
   challengeCompleted, 
   rewardClaimed,
   teamChallengeReward,
-  teamBuffActivated
+  teamBuffActivated,
+  relayStarted,
+  relayTransferred,
+  relayCompleted,
+  walkSessionStarted,
+  walkSessionEnded,
+  trainingSessionStarted,
+  trainingSessionEnded
 }
 
 class ActivityFeedModel {

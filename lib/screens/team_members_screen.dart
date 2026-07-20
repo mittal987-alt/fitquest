@@ -2,20 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../models/team_model.dart';
 import '../models/player_model.dart';
 import '../models/gear_model.dart';
 import '../services/firebase_service.dart';
 
 class TeamMembersScreen extends StatelessWidget {
-  final String teamName;
-  final String teamId;
-  final String leaderId;
+  final TeamModel team;
 
   const TeamMembersScreen({
     super.key,
-    required this.teamName,
-    required this.teamId,
-    required this.leaderId,
+    required this.team,
   });
 
   Widget _buildStatBar({required IconData icon, required Color color, required double value, required String label}) {
@@ -53,51 +50,53 @@ class TeamMembersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (currentUid == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF0D1117),
+      final colorScheme = Theme.of(context).colorScheme;
+      return Scaffold(
+        backgroundColor: colorScheme.surface,
         body: Center(
           child: Text(
             "NOT LOGGED IN",
-            style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
           ),
         ),
       );
     }
-    final bool isLeader = currentUid == leaderId;
+    final colorScheme = Theme.of(context).colorScheme;
+    final bool isLeader = currentUid == team.leaderId;
     final FirebaseService firebaseService = FirebaseService();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          "${teamName.toUpperCase()} ROSTER",
-          style: const TextStyle(
+          "${team.name.toUpperCase()} ROSTER",
+          style: TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
             fontSize: 16,
-            color: Colors.white,
+            color: colorScheme.onSurface,
           ),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colorScheme.onSurface),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("players")
-            .where("teamId", isEqualTo: teamId)
+            .where("teamId", isEqualTo: team.id)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFF8E2DE2)));
+            return Center(child: CircularProgressIndicator(color: team.getTeamColor(context)));
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
                 "NO SQUAD UNITS FOUND",
-                style: TextStyle(color: Colors.white24, fontWeight: FontWeight.bold, letterSpacing: 1),
+                style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.bold, letterSpacing: 1),
               ),
             );
           }
@@ -113,18 +112,18 @@ class TeamMembersScreen extends StatelessWidget {
             itemCount: members.length,
             itemBuilder: (context, index) {
               final player = members[index];
-              final bool playerIsLeader = player.uid == leaderId;
+              final bool playerIsLeader = player.uid == team.leaderId;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161B22),
+                  color: colorScheme.surfaceContainer,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: playerIsLeader
-                        ? Colors.orangeAccent.withValues(alpha: 0.4)
-                        : Colors.white.withValues(alpha: 0.1),
+                        ? colorScheme.tertiary.withValues(alpha: 0.4)
+                        : colorScheme.outlineVariant.withValues(alpha: 0.4),
                     width: playerIsLeader ? 1.5 : 1,
                   ),
                 ),
@@ -137,11 +136,11 @@ class TeamMembersScreen extends StatelessWidget {
                           height: 44,
                           decoration: BoxDecoration(
                             color: playerIsLeader
-                                ? Colors.orangeAccent.withValues(alpha: 0.1)
-                                : const Color(0xFF8E2DE2).withValues(alpha: 0.05),
+                                ? colorScheme.tertiary.withValues(alpha: 0.1)
+                                : team.getTeamColor(context).withValues(alpha: 0.05),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: playerIsLeader ? Colors.orangeAccent : const Color(0xFF8E2DE2).withValues(alpha: 0.4),
+                              color: playerIsLeader ? colorScheme.tertiary : team.getTeamColor(context).withValues(alpha: 0.4),
                             ),
                           ),
                           child: player.avatar.isNotEmpty
@@ -154,7 +153,7 @@ class TeamMembersScreen extends StatelessWidget {
                                 child: Text(
                                   "#${index + 1}",
                                   style: TextStyle(
-                                    color: playerIsLeader ? Colors.orangeAccent : const Color(0xFF8E2DE2),
+                                    color: playerIsLeader ? colorScheme.tertiary : team.getTeamColor(context),
                                     fontWeight: FontWeight.w900,
                                     fontSize: 13,
                                   ),
@@ -166,7 +165,7 @@ class TeamMembersScreen extends StatelessWidget {
                             child: Text(
                               "#${index + 1}",
                               style: TextStyle(
-                                color: playerIsLeader ? Colors.orangeAccent : const Color(0xFF8E2DE2),
+                                color: playerIsLeader ? colorScheme.tertiary : team.getTeamColor(context),
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
                               ),
@@ -183,10 +182,10 @@ class TeamMembersScreen extends StatelessWidget {
                                   Expanded(
                                     child: Text(
                                       player.name.toUpperCase(),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w900,
-                                        color: Colors.white,
+                                        color: colorScheme.onSurface,
                                         letterSpacing: 0.5,
                                       ),
                                       overflow: TextOverflow.ellipsis,
@@ -196,13 +195,13 @@ class TeamMembersScreen extends StatelessWidget {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: Colors.orangeAccent.withValues(alpha: 0.15),
+                                        color: colorScheme.tertiary.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.4)),
+                                        border: Border.all(color: colorScheme.tertiary.withValues(alpha: 0.4)),
                                       ),
-                                      child: const Text(
+                                      child: Text(
                                         "COMMANDER",
-                                        style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                        style: TextStyle(color: colorScheme.tertiary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                                       ),
                                     ),
                                     const SizedBox(width: 6),
@@ -232,14 +231,14 @@ class TeamMembersScreen extends StatelessWidget {
                               const SizedBox(height: 8),
                               _buildStatBar(
                                 icon: Icons.battery_charging_full,
-                                color: const Color(0xFF8E2DE2),
+                                color: team.getTeamColor(context),
                                 value: player.maxStamina > 0 ? player.currentStamina / player.maxStamina : 0,
                                 label: "STAMINA POOL",
                               ),
                               const SizedBox(height: 6),
                               _buildStatBar(
                                 icon: Icons.directions_run,
-                                color: Colors.orangeAccent,
+                                color: colorScheme.tertiary,
                                 value: player.dailyStepTarget > 0 ? player.dailySteps / player.dailyStepTarget : 0,
                                 label: "DAILY STEP GOAL",
                               ),
@@ -255,16 +254,20 @@ class TeamMembersScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     "⚡ ${player.totalSteps} TOTAL",
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                                    style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w600),
                                   ),
                                   const SizedBox(width: 12),
                                   Text(
                                     "🔥 ${player.dailySteps} TODAY",
-                                    style: const TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: colorScheme.tertiary, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                   const SizedBox(width: 12),
+                                  const Text(
+                                    "⭐ LVL ",
+                                    style: TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
                                   Text(
-                                    "⭐ LVL ${player.level}",
+                                    "${player.level}",
                                     style: const TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ],
@@ -305,7 +308,7 @@ class TeamMembersScreen extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.05),
+                                    color: colorScheme.onSurface.withValues(alpha: 0.05),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Row(
@@ -313,12 +316,12 @@ class TeamMembersScreen extends StatelessWidget {
                                     children: [
                                       Text(
                                         player.characterClass!.toUpperCase(),
-                                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white70),
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant),
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
                                         "STR ${player.strength} | AGI ${player.agility} | END ${player.endurance}",
-                                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white38),
+                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                                       ),
                                     ],
                                   ),
@@ -334,18 +337,18 @@ class TeamMembersScreen extends StatelessWidget {
                                     return Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF8E2DE2).withValues(alpha: 0.1),
+                                        color: team.getTeamColor(context).withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: const Color(0xFF8E2DE2).withValues(alpha: 0.2)),
+                                        border: Border.all(color: team.getTeamColor(context).withValues(alpha: 0.2)),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Icon(Icons.shield_outlined, size: 8, color: Color(0xFF8E2DE2)),
+                                          Icon(Icons.shield_outlined, size: 8, color: team.getTeamColor(context)),
                                           const SizedBox(width: 2),
                                           Text(
                                             gear.name.toUpperCase(),
-                                            style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Color(0xFF8E2DE2)),
+                                            style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: team.getTeamColor(context)),
                                           ),
                                         ],
                                       ),
@@ -355,9 +358,9 @@ class TeamMembersScreen extends StatelessWidget {
                               ],
                               if (player.hourlySteps.isNotEmpty) ...[
                                 const SizedBox(height: 12),
-                                const Text(
+                                Text(
                                   "HOURLY STEP DATA (PERSONAL BESTS)",
-                                  style: TextStyle(color: Colors.white24, fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                  style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                                 ),
                                 const SizedBox(height: 8),
                                 SizedBox(
@@ -375,13 +378,13 @@ class TeamMembersScreen extends StatelessWidget {
                                               .toList()
                                             ..sort((a, b) => a.x.compareTo(b.x)),
                                           isCurved: true,
-                                          color: const Color(0xFF8E2DE2).withValues(alpha: 0.5),
+                                          color: team.getTeamColor(context).withValues(alpha: 0.5),
                                           barWidth: 2,
                                           isStrokeCapRound: true,
                                           dotData: const FlDotData(show: false),
                                           belowBarData: BarAreaData(
                                             show: true,
-                                            color: const Color(0xFF8E2DE2).withValues(alpha: 0.1),
+                                            color: team.getTeamColor(context).withValues(alpha: 0.1),
                                           ),
                                         ),
                                       ],
@@ -400,10 +403,10 @@ class TeamMembersScreen extends StatelessWidget {
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                            foregroundColor: Colors.redAccent,
+                            backgroundColor: colorScheme.error.withValues(alpha: 0.1),
+                            foregroundColor: colorScheme.error,
                             elevation: 0,
-                            side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+                            side: BorderSide(color: colorScheme.error.withValues(alpha: 0.3)),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -411,27 +414,27 @@ class TeamMembersScreen extends StatelessWidget {
                             final bool confirmed = await showDialog<bool>(
                               context: context,
                               builder: (context) => AlertDialog(
-                                backgroundColor: const Color(0xFF161B22),
-                                title: const Text("CONFIRM TERMINATION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-                                content: Text("Are you sure you want to purge ${player.name.toUpperCase()} from the squadron?", style: const TextStyle(color: Colors.white70)),
+                                backgroundColor: colorScheme.surfaceContainer,
+                                title: Text("CONFIRM TERMINATION", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
+                                content: Text("Are you sure you want to purge ${player.name.toUpperCase()} from the squadron?", style: TextStyle(color: colorScheme.onSurfaceVariant)),
                                 actions: [
-                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL", style: TextStyle(color: Colors.white38))),
+                                  TextButton(onPressed: () => Navigator.pop(context, false), child: Text("CANCEL", style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6)))),
                                   TextButton(
                                     onPressed: () => Navigator.pop(context, true),
-                                    child: const Text("PURGE", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                    child: Text("PURGE", style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
                             ) ?? false;
 
                             if (confirmed) {
-                              await firebaseService.kickPlayer(playerId: player.uid, teamId: teamId);
+                              await firebaseService.kickPlayer(playerId: player.uid, teamId: team.id);
 
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  backgroundColor: Color(0xFF161B22),
-                                  content: Text("TERMINATED: OPERATOR PURGED FROM SQUAD", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                SnackBar(
+                                  backgroundColor: colorScheme.surfaceContainer,
+                                  content: Text("TERMINATED: OPERATOR PURGED FROM SQUAD", style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold)),
                                 ),
                               );
                             }

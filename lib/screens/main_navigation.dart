@@ -162,30 +162,52 @@ class _MainNavigationState extends State<MainNavigation> {
     _confettiController.play();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: Colors.purpleAccent, width: 2),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.stars_rounded, color: Colors.purpleAccent, size: 80),
-            const SizedBox(height: 24),
-            const Text("LEVEL UP", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 2)),
-            Text("RANK: ${FirebaseService().getRankTitle(level)}", style: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            Text("You have reached Level $level!", style: const TextStyle(color: Colors.white70)),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text("CONTINUE MISSION"),
-            ),
-          ],
-        ),
-      ),
+      builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        
+        return AlertDialog(
+          backgroundColor: colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: colorScheme.primary, width: 2),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.stars_rounded, color: colorScheme.primary, size: 80),
+              const SizedBox(height: 24),
+              Text(
+                "LEVEL UP", 
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              Text(
+                "RANK: ${FirebaseService().getRankTitle(level)}", 
+                style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "You have reached Level $level!", 
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary, 
+                  foregroundColor: colorScheme.onPrimary, 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text("CONTINUE MISSION"),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -196,30 +218,50 @@ class _MainNavigationState extends State<MainNavigation> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         behavior: SnackBarBehavior.floating,
-        content: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF161B22),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: achievement.color, width: 2),
-            boxShadow: [BoxShadow(color: achievement.color.withValues(alpha: 0.3), blurRadius: 12)],
-          ),
-          child: Row(
-            children: [
-              Icon(achievement.icon, color: achievement.color, size: 32),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("ACHIEVEMENT UNLOCKED", style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                    Text(achievement.title.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
-                  ],
-                ),
+        content: Builder(
+          builder: (context) {
+            final theme = Theme.of(context);
+            final colorScheme = theme.colorScheme;
+            
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: achievement.color, width: 2),
+                boxShadow: [BoxShadow(color: achievement.color.withValues(alpha: 0.2), blurRadius: 12)],
               ),
-            ],
-          ),
+              child: Row(
+                children: [
+                  Icon(achievement.icon, color: achievement.color, size: 32),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "ACHIEVEMENT UNLOCKED", 
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        Text(
+                          achievement.title.toUpperCase(), 
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: colorScheme.onSurface,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -236,10 +278,13 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
+          backgroundColor: colorScheme.surface,
           body: IndexedStack(
             index: currentIndex,
             children: pages,
@@ -248,7 +293,7 @@ class _MainNavigationState extends State<MainNavigation> {
             decoration: BoxDecoration(
               border: Border(
                 top: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.2),
                   width: 1.5,
                 ),
               ),
@@ -258,15 +303,15 @@ class _MainNavigationState extends State<MainNavigation> {
               padding: EdgeInsets.zero,
               notchMargin: 12,
               shape: const CircularNotchedRectangle(),
-              color: const Color(0xFF161B22),
+              color: colorScheme.surface,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildNavItem(0, Icons.home_rounded, "HQ"),
-                  _buildNavItem(1, Icons.map_rounded, "MAP"),
+                  _buildNavItem(0, Icons.home_rounded, "HQ", colorScheme),
+                  _buildNavItem(1, Icons.map_rounded, "MAP", colorScheme),
                   const SizedBox(width: 48),
-                  _buildNavItem(3, Icons.groups_rounded, "TEAMS"),
-                  _buildNavItem(4, Icons.person_rounded, "PROFILE"),
+                  _buildNavItem(3, Icons.groups_rounded, "TEAMS", colorScheme),
+                  _buildNavItem(4, Icons.person_rounded, "PROFILE", colorScheme),
                 ],
               ),
             ),
@@ -276,14 +321,14 @@ class _MainNavigationState extends State<MainNavigation> {
             width: 72,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+              gradient: LinearGradient(
+                colors: [colorScheme.primary, colorScheme.primary.withValues(alpha: 0.8)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF4A00E0).withValues(alpha: 0.4),
+                  color: colorScheme.primary.withValues(alpha: 0.4),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
@@ -294,7 +339,7 @@ class _MainNavigationState extends State<MainNavigation> {
               backgroundColor: Colors.transparent,
               elevation: 0,
               shape: const CircleBorder(),
-              child: const Icon(Icons.directions_walk_rounded, color: Colors.white, size: 36),
+              child: Icon(Icons.directions_walk_rounded, color: colorScheme.onPrimary, size: 36),
             ),
           ),
           floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -312,7 +357,7 @@ class _MainNavigationState extends State<MainNavigation> {
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(int index, IconData icon, String label, ColorScheme colorScheme) {
     final bool isSelected = currentIndex == index;
     return InkResponse(
       onTap: () => setState(() => currentIndex = index),
@@ -321,17 +366,17 @@ class _MainNavigationState extends State<MainNavigation> {
         children: [
           Icon(
             icon,
-            color: isSelected ? const Color(0xFF8E2DE2) : Colors.white24,
+            color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             size: 26,
           ),
           const SizedBox(height: 6),
           Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.white24,
+              color: isSelected ? colorScheme.onSurface : colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               fontSize: 10,
               fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
-              letterSpacing: 1.0,
+              letterSpacing: 0.5,
             ),
           ),
         ],

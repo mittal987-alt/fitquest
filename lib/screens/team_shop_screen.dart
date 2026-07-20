@@ -36,21 +36,22 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
   @override
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
+    final theme = Theme.of(context);
 
     return StreamBuilder<TeamModel?>(
       stream: firebaseService.getTeamStream(widget.teamId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0D1117),
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            backgroundColor: theme.colorScheme.surface,
+            body: const Center(child: CircularProgressIndicator()),
           );
         }
 
         final team = snapshot.data!;
 
         return Scaffold(
-          backgroundColor: const Color(0xFF0D1117),
+          backgroundColor: theme.colorScheme.surface,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
@@ -58,25 +59,26 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
               "TEAM ARMORY",
               style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2),
             ),
+            iconTheme: IconThemeData(color: theme.colorScheme.onSurface),
             actions: [
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.amber.withValues(alpha: 0.2), Colors.amber.withValues(alpha: 0.05)],
+                    colors: [theme.colorScheme.secondary.withValues(alpha: 0.2), theme.colorScheme.secondary.withValues(alpha: 0.05)],
                   ),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+                  border: Border.all(color: theme.colorScheme.secondary.withValues(alpha: 0.5)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.stars_rounded, color: Colors.amber, size: 16),
+                    Icon(Icons.stars_rounded, color: theme.colorScheme.secondary, size: 16),
                     const SizedBox(width: 8),
                     Text(
                       "${team.teamCurrency}",
-                      style: const TextStyle(
-                        color: Colors.amber,
+                      style: TextStyle(
+                        color: theme.colorScheme.secondary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -89,13 +91,15 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
             length: 2,
             child: Column(
               children: [
-                const TabBar(
-                  tabs: [
+                TabBar(
+                  tabs: const [
                     Tab(text: "ARMORY"),
                     Tab(text: "HISTORY"),
                   ],
-                  indicatorColor: Colors.amber,
-                  labelStyle: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                  indicatorColor: theme.colorScheme.primary,
+                  labelColor: theme.colorScheme.onSurface,
+                  unselectedLabelColor: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
                 ),
                 Expanded(
                   child: TabBarView(
@@ -103,10 +107,10 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
                       ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
-                          const Text(
+                          Text(
                             "ACTIVE TACTICAL MODIFIERS",
                             style: TextStyle(
-                              color: Colors.white54,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.54),
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.2,
@@ -114,9 +118,9 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
                           ),
                           const SizedBox(height: 16),
                           if (team.activeTeamBuffs.isEmpty)
-                            const Text(
+                            Text(
                               "No active buffs. Purchase one below to support your squad.",
-                              style: TextStyle(color: Colors.white38, fontSize: 13),
+                              style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.38), fontSize: 13),
                             )
                           else
                             ...team.activeTeamBuffs.entries.map((entry) {
@@ -129,10 +133,10 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
                               return _buildActiveBuffItem(buff['name'], timeLeft);
                             }),
                           const SizedBox(height: 32),
-                          const Text(
+                          Text(
                             "AVAILABLE UPGRADES",
                             style: TextStyle(
-                              color: Colors.white54,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.54),
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.2,
@@ -155,6 +159,7 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
   }
 
   Widget _buildActiveBuffItem(String name, Duration timeLeft) {
+    final theme = Theme.of(context);
     String timeStr = timeLeft.inHours > 0 
         ? "${timeLeft.inHours}h ${timeLeft.inMinutes % 60}m remaining"
         : "${timeLeft.inMinutes}m remaining";
@@ -164,14 +169,14 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blueAccent.withValues(alpha: 0.15), Colors.blueAccent.withValues(alpha: 0.05)],
+          colors: [theme.colorScheme.primary.withValues(alpha: 0.15), theme.colorScheme.primary.withValues(alpha: 0.05)],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.bolt_rounded, color: Colors.blueAccent, size: 20),
+          Icon(Icons.bolt_rounded, color: theme.colorScheme.primary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -179,11 +184,11 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
               children: [
                 Text(
                   name,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
                 ),
                 Text(
                   timeStr,
-                  style: const TextStyle(color: Colors.blueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: theme.colorScheme.primary, fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -196,11 +201,12 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
   Widget _buildShopItem(BuildContext context, Map<String, dynamic> buff, TeamModel team) {
     final bool canAfford = team.teamCurrency >= buff['cost'];
     final Color itemColor = _getBuffColor(buff['type']);
+    final theme = Theme.of(context);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: itemColor.withValues(alpha: 0.1)),
         boxShadow: [
@@ -236,8 +242,8 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
                         children: [
                           Text(
                             buff['name'],
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -252,19 +258,19 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.1),
+                        color: theme.colorScheme.secondary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+                        border: Border.all(color: theme.colorScheme.secondary.withValues(alpha: 0.2)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.stars_rounded, color: Colors.amber, size: 14),
+                          Icon(Icons.stars_rounded, color: theme.colorScheme.secondary, size: 14),
                           const SizedBox(width: 4),
                           Text(
                             "${buff['cost']}",
-                            style: const TextStyle(
-                              color: Colors.amber,
+                            style: TextStyle(
+                              color: theme.colorScheme.secondary,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -276,7 +282,7 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
                 const SizedBox(height: 16),
                 Text(
                   buff['description'],
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13, height: 1.4),
                 ),
               ],
             ),
@@ -285,7 +291,7 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.02),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.02),
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
             ),
             child: ElevatedButton(
@@ -293,7 +299,7 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: itemColor,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.white10,
+                disabledBackgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.12),
                 elevation: 0,
                 minimumSize: const Size(double.infinity, 48),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -321,22 +327,24 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
     try {
       await firebaseService.purchaseTeamBuff(team.id, buff);
       if (context.mounted) {
+        final theme = Theme.of(context);
         Navigator.pop(context); // Close loading
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("${buff['name']} activated for the whole team!"),
-            backgroundColor: Colors.green,
+            backgroundColor: theme.colorScheme.primary,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (e) {
       if (context.mounted) {
+        final theme = Theme.of(context);
         Navigator.pop(context); // Close loading
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Failed to purchase: $e"), 
-            backgroundColor: Colors.red,
+            backgroundColor: theme.colorScheme.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -345,6 +353,7 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
   }
 
   Widget _buildHistoryTab(FirebaseService firebaseService, String teamId) {
+    final theme = Theme.of(context);
     return StreamBuilder<List<ActivityFeedModel>>(
       stream: firebaseService.getTeamBuffHistory(teamId),
       builder: (context, snapshot) {
@@ -352,15 +361,15 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
         
         final history = snapshot.data!;
         if (history.isEmpty) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.history_toggle_off_rounded, color: Colors.white10, size: 64),
-                SizedBox(height: 16),
+                Icon(Icons.history_toggle_off_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.1), size: 64),
+                const SizedBox(height: 16),
                 Text(
                   "No activation history found.",
-                  style: TextStyle(color: Colors.white38),
+                  style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.38)),
                 ),
               ],
             ),
@@ -375,26 +384,26 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
             final event = history[index];
             return Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF161B22),
+                color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                border: Border.all(color: theme.colorScheme.onSurface.withValues(alpha: 0.05)),
               ),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: Colors.greenAccent.withValues(alpha: 0.1),
-                  child: const Icon(Icons.history_rounded, color: Colors.greenAccent, size: 20),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                  child: Icon(Icons.history_rounded, color: theme.colorScheme.primary, size: 20),
                 ),
                 title: Text(
                   event.itemId ?? "Unknown Buff",
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(
                   event.timestamp != null 
                       ? "${event.timestamp!.day}/${event.timestamp!.month} ${event.timestamp!.hour}:${event.timestamp!.minute.toString().padLeft(2, '0')}"
                       : "Unknown date",
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12),
                 ),
-                trailing: const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 16),
+                trailing: Icon(Icons.check_circle_outline, color: theme.colorScheme.primary, size: 16),
               ),
             );
           },

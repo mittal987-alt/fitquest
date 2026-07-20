@@ -22,6 +22,7 @@ import '../models/gear_model.dart';
 import '../models/anomaly_model.dart';
 import '../models/world_event_model.dart';
 import '../config/crafting_recipes.dart';
+import '../models/activity_feed_model.dart' as fit;
 import 'hacking_minigame_screen.dart';
 
 class MapScreen extends StatefulWidget {
@@ -86,10 +87,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _showCaptureOverlay = false;
   String _lastCaptureMsg = "";
 
-  // FIX: was never stored, so it could only ever self-cancel on its *next*
-  // scheduled tick after dispose (up to 2 minutes late) instead of
-  // immediately. Now cancelled explicitly in dispose(), same as every other
-  // subscription in this file.
   Timer? _regenTimer;
 
   @override
@@ -237,8 +234,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   void _loadMapStyle() async {
     try {
-      String style = await DefaultAssetBundle.of(context)
-          .loadString('assets/map_style.json');
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      String stylePath = isDark ? 'assets/map_style.json' : 'assets/map_style_light.json';
+      String style = await DefaultAssetBundle.of(context).loadString(stylePath);
       if (mounted) {
         setState(() {
           _mapStyleJson = style;
@@ -335,9 +333,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             antiCheatService.applyTeleportPenalty();
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Moving too fast! Territory capture paused."),
-                  backgroundColor: Colors.redAccent,
+                SnackBar(
+                  content: const Text("Moving too fast! Territory capture paused."),
+                  backgroundColor: Theme.of(context).colorScheme.error,
                 ),
               );
             }
@@ -373,9 +371,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               anomalyScanProgress = 0.0;
             });
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Signal Interrupted: Anomaly detection requires walking speed!"),
-                backgroundColor: Colors.orangeAccent,
+              SnackBar(
+                content: const Text("Signal Interrupted: Anomaly detection requires walking speed!"),
+                backgroundColor: Theme.of(context).colorScheme.secondary,
               ),
             );
           }
@@ -421,9 +419,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _updatePlayerIcon(String url) async {
+    final colorScheme = Theme.of(context).colorScheme;
     try {
       if (url.isEmpty) {
-        playerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
+        playerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
         return;
       }
 
@@ -441,12 +440,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
       // Glow Ring
       final Paint glowPaint = Paint()
-        ..color = Colors.cyan.withValues(alpha: 0.5)
+        ..color = colorScheme.primary.withValues(alpha: 0.5)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
       canvas.drawCircle(center, radius + 4, glowPaint);
 
       // Border Ring
-      final Paint borderPaint = Paint()..color = Colors.cyan;
+      final Paint borderPaint = Paint()..color = colorScheme.primary;
       canvas.drawCircle(center, radius, borderPaint);
 
       // Clip for Image
@@ -470,7 +469,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       }
     } catch (e) {
       debugPrint("Error creating avatar icon: $e");
-      playerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
+      playerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
     }
   }
 
@@ -496,7 +495,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           anomalyScanProgress = 0.0;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Signal Lost: Too far from anomaly!"), backgroundColor: Colors.redAccent),
+          SnackBar(content: const Text("Signal Lost: Too far from anomaly!"), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }
@@ -517,13 +516,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Mystery Discovery Unlocked: ${anomaly.type} rewards acquired!"),
-          backgroundColor: Colors.cyan,
+          backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
     }
   }
 
   void updateMarkers() {
+    final colorScheme = Theme.of(context).colorScheme;
     markers.clear();
     circles.clear();
     polylines.clear();
@@ -533,7 +533,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       Marker(
         markerId: const MarkerId("player"),
         position: currentPosition,
-        icon: playerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+        icon: playerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         anchor: const Offset(0.5, 0.5),
         zIndexInt: 5,
         flat: true,
@@ -545,7 +545,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       polylines.add(Polyline(
         polylineId: const PolylineId("ghost_trail"),
         points: breadcrumbs,
-        color: Colors.cyan.withValues(alpha: 0.3),
+        color: colorScheme.primary.withValues(alpha: 0.3),
         width: 5,
         jointType: JointType.round,
         startCap: Cap.roundCap,
@@ -560,7 +560,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         polylines.add(Polyline(
           polylineId: const PolylineId("nav_line"),
           points: [currentPosition, LatLng(b.latitude, b.longitude)],
-          color: Colors.orange,
+          color: colorScheme.secondary,
           width: 3,
           patterns: [PatternItem.dash(20), PatternItem.gap(10)],
         ));
@@ -585,8 +585,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             center: currentPosition,
             radius: 200,
             strokeWidth: 2,
-            strokeColor: Colors.cyan.withValues(alpha: 0.3),
-            fillColor: Colors.cyan.withValues(alpha: 0.05),
+            strokeColor: colorScheme.primary.withValues(alpha: 0.3),
+            fillColor: colorScheme.primary.withValues(alpha: 0.05),
           ),
         );
         break; // Show only one radar ring
@@ -599,7 +599,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         Marker(
           markerId: MarkerId("bounty_${bounty.id}"),
           position: LatLng(bounty.latitude, bounty.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
           onTap: () => showBountyDetails(bounty),
         ),
       );
@@ -611,7 +611,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         Marker(
           markerId: MarkerId("anomaly_${anomaly.id}"),
           position: anomaly.position,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
           onTap: () => _showAnomalyDetails(anomaly),
         ),
       );
@@ -674,6 +674,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         double dist = locationService.calculateDistance(
           startLat: currentPosition.latitude,
           startLng: currentPosition.longitude,
@@ -685,9 +688,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
         return Container(
           padding: const EdgeInsets.all(28),
-          decoration: const BoxDecoration(
-            color: Color(0xFF161B22),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -697,28 +700,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Icon(Icons.radar_rounded, size: 64, color: Color(0xFF8E2DE2)),
+              Icon(Icons.radar_rounded, size: 64, color: colorScheme.primary),
               const SizedBox(height: 16),
               Text(
                 "MYSTERY ${anomaly.type.toUpperCase()}",
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 "Keep moving to unlock these rewards.",
-                style: TextStyle(fontSize: 16, color: Colors.white70),
+                style: TextStyle(fontSize: 16, color: colorScheme.onSurface.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 24),
               if (canScan)
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                    gradient: LinearGradient(
+                      colors: [colorScheme.primary, colorScheme.tertiary],
                     ),
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -745,7 +748,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 Text(
                   "Located ${dist.toStringAsFixed(0)}m away. Move within 50m to start unlocking.",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold),
                 ),
             ],
           ),
@@ -759,6 +762,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         double dist = locationService.calculateDistance(
           startLat: currentPosition.latitude,
           startLng: currentPosition.longitude,
@@ -770,9 +776,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
         return Container(
           padding: const EdgeInsets.all(28),
-          decoration: const BoxDecoration(
-            color: Color(0xFF161B22),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -782,28 +788,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Icon(Icons.inventory_2_rounded, size: 64, color: Colors.amber),
+              Icon(Icons.inventory_2_rounded, size: 64, color: colorScheme.tertiary),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 "TREASURE CACHE",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 "A forgotten supply crate has been detected.",
-                style: TextStyle(fontSize: 16, color: Colors.white70),
+                style: TextStyle(fontSize: 16, color: colorScheme.onSurface.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 24),
               if (canClaim)
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Colors.amber, Colors.orange],
+                    gradient: LinearGradient(
+                      colors: [colorScheme.tertiary, colorScheme.secondary],
                     ),
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -825,9 +831,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         if (mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Treasure Claimed! XP and Materials added."),
-                              backgroundColor: Colors.green,
+                            SnackBar(
+                              content: const Text("Treasure Claimed! XP and Materials added."),
+                              backgroundColor: colorScheme.primary,
                             ),
                           );
                         }
@@ -841,7 +847,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 Text(
                   "Located ${dist.toStringAsFixed(0)}m away. Move within 30m to open.",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: colorScheme.secondary, fontWeight: FontWeight.bold),
                 ),
             ],
           ),
@@ -855,6 +861,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         double dist = locationService.calculateDistance(
           startLat: currentPosition.latitude,
           startLng: currentPosition.longitude,
@@ -866,9 +875,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
         return Container(
           padding: const EdgeInsets.all(28),
-          decoration: const BoxDecoration(
-            color: Color(0xFF161B22),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -878,28 +887,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Icon(Icons.settings_input_component_rounded, size: 64, color: Colors.greenAccent),
+              Icon(Icons.settings_input_component_rounded, size: 64, color: colorScheme.primary),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 "RARE MINERAL NODE",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 "Extraction site for Silicon, Nanites, and Energy Cores.",
-                style: TextStyle(fontSize: 16, color: Colors.white70),
+                style: TextStyle(fontSize: 16, color: colorScheme.onSurface.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 24),
               if (canMine)
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Colors.greenAccent, Colors.teal],
+                    gradient: LinearGradient(
+                      colors: [colorScheme.primary, colorScheme.primaryContainer],
                     ),
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -938,7 +947,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text("Mined 1x ${randomMat.toUpperCase()}!"),
-                              backgroundColor: Colors.teal,
+                              backgroundColor: colorScheme.primary,
                             ),
                           );
                         }
@@ -952,7 +961,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 Text(
                   "Located ${dist.toStringAsFixed(0)}m away. Move within 30m to mine.",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold),
                 ),
             ],
           ),
@@ -966,6 +975,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         double dist = locationService.calculateDistance(
           startLat: currentPosition.latitude,
           startLng: currentPosition.longitude,
@@ -977,9 +989,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
         return Container(
           padding: const EdgeInsets.all(28),
-          decoration: const BoxDecoration(
-            color: Color(0xFF161B22),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -989,26 +1001,26 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Icon(Icons.public_rounded, size: 64, color: Colors.deepPurpleAccent),
+              Icon(Icons.public_rounded, size: 64, color: colorScheme.secondary),
               const SizedBox(height: 16),
               Text(
                 event.title.toUpperCase(),
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
               Text(
                 event.description,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: Colors.white70),
+                style: TextStyle(fontSize: 16, color: colorScheme.onSurface.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 "TEAM LEADERBOARD",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white54, letterSpacing: 1),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.onSurface.withValues(alpha: 0.5), letterSpacing: 1),
               ),
               const SizedBox(height: 12),
               ...event.teamContributions.entries.take(3).map((e) => Padding(
@@ -1016,8 +1028,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("TEAM ${e.key.substring(0, 5)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    Text("${e.value} PT", style: const TextStyle(color: Colors.deepPurpleAccent, fontWeight: FontWeight.w900)),
+                    Text("TEAM ${e.key.substring(0, 5)}", style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
+                    Text("${e.value} PT", style: TextStyle(color: colorScheme.secondary, fontWeight: FontWeight.w900)),
                   ],
                 ),
               )),
@@ -1028,8 +1040,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: event.eventType == "Data Breach" 
-                        ? [Colors.cyanAccent, Colors.blueAccent]
-                        : [Colors.deepPurpleAccent, Colors.blueAccent],
+                        ? [colorScheme.primary, colorScheme.tertiary]
+                        : [colorScheme.secondary, colorScheme.primary],
                     ),
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -1073,9 +1085,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           if (mounted) {
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Contribution registered! Team rank updated."),
-                                backgroundColor: Colors.deepPurpleAccent,
+                              SnackBar(
+                                content: const Text("Contribution registered! Team rank updated."),
+                                backgroundColor: colorScheme.secondary,
                               ),
                             );
                           }
@@ -1097,7 +1109,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 Text(
                   "Located ${dist.toStringAsFixed(0)}m away. Move within 100m to participate.",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.deepPurpleAccent, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: colorScheme.secondary, fontWeight: FontWeight.bold),
                 ),
             ],
           ),
@@ -1111,6 +1123,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         double dist = locationService.calculateDistance(
           startLat: currentPosition.latitude,
           startLng: currentPosition.longitude,
@@ -1118,16 +1133,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           endLng: bounty.longitude,
         );
 
-        double radiusMult = currentPlayer?.getModifier('bounty_radius', allGear) ?? 1.0;
-        double effectiveRadius = 50 * radiusMult;
-
-        bool canClaim = dist < effectiveRadius;
-
+        final radiusMult = currentPlayer?.getModifier('bounty_radius', allGear) ?? 1.0;
+        final canClaim = dist < (100 * radiusMult);
         return Container(
           padding: const EdgeInsets.all(28),
-          decoration: const BoxDecoration(
-            color: Color(0xFF161B22),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1137,20 +1149,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Icon(Icons.stars_rounded, size: 64, color: Colors.orange),
+              Icon(Icons.stars_rounded, size: 64, color: colorScheme.secondary),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 "BOUNTY GOAL",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 "Reach this goal for rewards.",
-                style: TextStyle(fontSize: 16, color: Colors.white70),
+                style: TextStyle(fontSize: 16, color: colorScheme.onSurface.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: 24),
               Row(
@@ -1167,19 +1179,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   Expanded(
                     child: Container(
                       decoration: canClaim ? BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                        gradient: LinearGradient(
+                          colors: [colorScheme.primary, colorScheme.tertiary],
                         ),
                         borderRadius: BorderRadius.circular(16),
                       ) : null,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: canClaim ? Colors.transparent : Colors.white10,
-                          foregroundColor: canClaim ? Colors.white : Colors.white38,
+                          backgroundColor: canClaim ? Colors.transparent : (isDark ? Colors.white10 : Colors.black12),
+                          foregroundColor: canClaim ? Colors.white : (isDark ? Colors.white38 : Colors.black38),
                           shadowColor: Colors.transparent,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
+// ...
                         onPressed: canClaim ? () async {
                           if (antiCheatService.isVehicle(speedKmh)) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1200,9 +1213,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             bool hasStamina = await firebaseService.consumeStamina(user.uid, 15);
                             if (!hasStamina) {
                               scaffoldMessenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text("Insufficient Stamina to claim bounty!"),
-                                  backgroundColor: Colors.orange,
+                                SnackBar(
+                                  content: const Text("Insufficient Stamina to claim bounty!"),
+                                  backgroundColor: colorScheme.secondary,
                                 ),
                               );
                               return;
@@ -1210,7 +1223,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
                             await firebaseService.claimBounty(user.uid, bounty);
                             scaffoldMessenger.showSnackBar(
-                              const SnackBar(content: Text("Bounty Claimed!"), backgroundColor: Colors.green),
+                              SnackBar(content: const Text("Bounty Claimed!"), backgroundColor: colorScheme.primary),
                             );
                           }
                         } : null,
@@ -1250,7 +1263,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(
                     "Thermal Goggles Active (+${((radiusMult - 1) * 100).toInt()}% Range)",
-                    style: const TextStyle(color: Color(0xFF8E2DE2), fontSize: 11, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: colorScheme.primary, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ),
             ],
@@ -1261,19 +1274,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _rewardChip(IconData icon, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF8E2DE2).withValues(alpha: 0.1),
+        color: colorScheme.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF8E2DE2).withValues(alpha: 0.2)),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: const Color(0xFF8E2DE2)),
+          Icon(icon, size: 18, color: colorScheme.primary),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
         ],
       ),
     );
@@ -1330,9 +1344,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     if (!hasStamina) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Insufficient Stamina! Rest to recover energy."),
-            backgroundColor: Colors.orange,
+          SnackBar(
+            content: const Text("Insufficient Stamina! Rest to recover energy."),
+            backgroundColor: Theme.of(context).colorScheme.secondary,
           ),
         );
       }
@@ -1342,7 +1356,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     String ownerId = player.isInTeam ? (player.teamId ?? player.uid) : player.uid;
     String ownerType = player.isInTeam ? "team" : "solo";
     String ownerName = player.isInTeam ? player.team : player.name;
-    String tileColor = player.isInTeam ? "blue" : "orange";
+    String tileColor = player.isInTeam ? player.teamId ?? "blue" : "orange";
 
     myOwnedTileIds = allTiles.where((t) => t.ownerId == ownerId).map((t) => t.tileId).toSet();
     if (myOwnedTileIds.contains(tileId)) {
@@ -1364,6 +1378,29 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     await firebaseService.saveHexTile(newTile);
 
+    // Log the capture in the activity feed for functional stats
+    try {
+      final activity = fit.ActivityFeedModel(
+        id: "",
+        userId: uid,
+        teamId: player.teamId,
+        playerName: player.name,
+        type: fit.ActivityType.capture,
+        message: "captured a new territory sector",
+        timestamp: DateTime.now(),
+      );
+      await firebaseService.logActivity(activity);
+
+      // Increment totalLand for ranking
+      await firebaseService.firestore.collection("players").doc(uid).update({
+        "totalLand": FieldValue.increment(1),
+        "dailyHistory.${DateTime.now().toIso8601String().split('T')[0]}.captures": FieldValue.increment(1),
+      });
+    } catch (e) {
+      debugPrint("Error logging manual capture: $e");
+    }
+
+    if (!mounted) return;
     allTiles.removeWhere((t) => t.tileId == tileId);
     allTiles.add(newTile);
     lastCapturedTile = tileId;
@@ -1406,6 +1443,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     PlayerModel? player = await firebaseService.getPlayer(uid);
     if (player == null) return;
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     String? attackerId = player.isInTeam ? player.teamId : player.uid;
     if (attackerId == null) return;
 
@@ -1427,9 +1466,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         if (ownerData.activePowerUps.containsKey("shield") &&
             ownerData.activePowerUps["shield"]!.isAfter(DateTime.now())) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Colors.blueGrey,
-              content: Text("🛡️ PROTECTED: Territory Shield is Active!"),
+            SnackBar(
+              backgroundColor: colorScheme.secondary,
+              content: const Text("🛡️ PROTECTED: Territory Shield is Active!"),
             ),
           );
           return;
@@ -1465,7 +1504,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ownerType: player.isInTeam ? "team" : "solo",
         ownerId: attackerId,
         ownerName: player.isInTeam ? player.team : player.name,
-        color: player.isInTeam ? "blue" : "orange",
+        color: player.isInTeam ? player.teamId ?? "blue" : "orange",
         power: 100,
         capturedAt: DateTime.now().millisecondsSinceEpoch,
       );
@@ -1500,13 +1539,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     PlayerModel? player = await firebaseService.getPlayer(uid);
     if (player == null) return;
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     String? attackerId = player.isInTeam ? player.teamId : player.uid;
     if (attackerId == null) return;
 
     if (tile.ownerId != attackerId) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: Colors.redAccent, content: Text("You can only defend your own territory")),
+          SnackBar(backgroundColor: colorScheme.error, content: const Text("You can only defend your own territory")),
         );
       }
       return;
@@ -1515,7 +1556,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     if (tile.power >= 100) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: Colors.blueAccent, content: Text("Territory already at max power")),
+          SnackBar(backgroundColor: colorScheme.primary, content: const Text("Territory already at max power")),
         );
       }
       return;
@@ -1542,28 +1583,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _mapFloatingButton(IconData icon, VoidCallback onTap) {
+    final colorScheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: const Color(0xFF161B22).withValues(alpha: 0.9),
+          color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.9),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
+        child: Icon(icon, color: colorScheme.onSurface, size: 20),
       ),
     );
   }
 
   Widget _statMini(IconData icon, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: Colors.white38, size: 16),
+        Icon(icon, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6), size: 16),
         const SizedBox(height: 2),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+        Text(value, style: TextStyle(color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.w900)),
       ],
     );
   }
@@ -1573,79 +1616,86 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => Container(
-        padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
-        decoration: const BoxDecoration(
-          color: Color(0xFF161B22),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: Colors.white12,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Text("TODAY'S WALK", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _metricLarge(Icons.directions_walk_rounded, "${currentPlayer?.dailySteps ?? 0}", "Steps"),
-                _metricLarge(Icons.straighten_rounded, "${currentPlayer?.dailyDistance.toStringAsFixed(1)}", "km"),
-                _metricLarge(Icons.explore_rounded, "${(currentPlayer?.totalLand ?? 0) * 0.025}", "km² Area"),
-              ],
-            ),
-            const SizedBox(height: 32),
-            Container(
-              width: double.infinity,
-              height: 56,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                onPressed: () => Navigator.pop(context),
-                child: const Text("CLOSE DATA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
               ),
-            ),
-          ],
-        ),
-      ),
+              Text("TODAY'S WALK", style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _metricLarge(Icons.directions_walk_rounded, "${currentPlayer?.dailySteps ?? 0}", "Steps"),
+                  _metricLarge(Icons.straighten_rounded, "${currentPlayer?.dailyDistance.toStringAsFixed(1)}", "km"),
+                  _metricLarge(Icons.explore_rounded, "${(currentPlayer?.totalLand ?? 0) * 0.025}", "km² Area"),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Container(
+                width: double.infinity,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.tertiary]),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: Text("CLOSE DATA", style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _metricLarge(IconData icon, String value, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Icon(icon, color: const Color(0xFF8E2DE2), size: 32),
+        Icon(icon, color: colorScheme.primary, size: 32),
         const SizedBox(height: 12),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-        Text(label.toUpperCase(), style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        Text(value, style: TextStyle(color: colorScheme.onSurface, fontSize: 24, fontWeight: FontWeight.w900)),
+        Text(label.toUpperCase(), style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
       ],
     );
   }
+
 
   void showTileDetails(HexTileModel tile) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
           padding: const EdgeInsets.all(28),
-          decoration: const BoxDecoration(
-            color: Color(0xFF161B22),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1659,7 +1709,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1669,13 +1719,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   Icon(
                     tile.ownerType == "solo" ? Icons.person_rounded : Icons.groups_rounded,
                     size: 36,
-                    color: const Color(0xFF8E2DE2),
+                    color: colorScheme.primary,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
                       tile.ownerName,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
                     ),
                   ),
                 ],
@@ -1684,31 +1734,32 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: colorScheme.onSurface.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   tile.ownerType == "solo" ? "⚔️ Player Territory" : "🛡️ Team Territory",
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white54, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant, fontSize: 13),
                 ),
               ),
               const SizedBox(height: 24),
-              const Row(
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Defense Strength", style: TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.bold)),
-                  Text("XP REWARD: 100", style: TextStyle(fontSize: 12, color: Color(0xFF8E2DE2), fontWeight: FontWeight.w900)),
+                  Text("Defense Strength", style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold)),
+                  Text("XP REWARD: 100", style: TextStyle(fontSize: 12, color: colorScheme.primary, fontWeight: FontWeight.w900)),
                 ],
               ),
+
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: LinearProgressIndicator(
                   value: tile.power / 100,
                   minHeight: 12,
-                  backgroundColor: Colors.white10,
+                  backgroundColor: isDark ? Colors.white10 : Colors.black12,
                   valueColor: AlwaysStoppedAnimation(
-                    tile.power > 70 ? Colors.greenAccent : tile.power > 40 ? Colors.orangeAccent : Colors.redAccent,
+                    tile.power > 70 ? colorScheme.primary : tile.power > 40 ? colorScheme.secondary : colorScheme.error,
                   ),
                 ),
               ),
@@ -1718,10 +1769,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                        foregroundColor: Colors.redAccent,
+                        backgroundColor: colorScheme.error.withValues(alpha: 0.1),
+                        foregroundColor: colorScheme.error,
                         elevation: 0,
-                        side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.2), width: 1.5),
+                        side: BorderSide(color: colorScheme.error.withValues(alpha: 0.2), width: 1.5),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
@@ -1753,7 +1804,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         if (!hasStamina) {
                           if (navigator.mounted) {
                             scaffoldMessenger.showSnackBar(
-                              const SnackBar(content: Text("Insufficient Stamina to attack!"), backgroundColor: Colors.orange),
+                              SnackBar(content: const Text("Insufficient Stamina to attack!"), backgroundColor: colorScheme.secondary),
                             );
                           }
                           return;
@@ -1769,10 +1820,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8E2DE2).withValues(alpha: 0.1),
-                        foregroundColor: const Color(0xFF8E2DE2),
+                        backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
+                        foregroundColor: colorScheme.primary,
                         elevation: 0,
-                        side: BorderSide(color: const Color(0xFF8E2DE2).withValues(alpha: 0.2), width: 1.5),
+                        side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.2), width: 1.5),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
@@ -1790,7 +1841,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         if (!hasStamina) {
                           if (navigator.mounted) {
                             scaffoldMessenger.showSnackBar(
-                              const SnackBar(content: Text("Insufficient Stamina to fortify!"), backgroundColor: Colors.orange),
+                              SnackBar(content: const Text("Insufficient Stamina to fortify!"), backgroundColor: colorScheme.secondary),
                             );
                           }
                           return;
@@ -1802,6 +1853,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       label: const Text("FORTIFY", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1)),
                     ),
                   ),
+
                 ],
               ),
             ],
@@ -1845,18 +1897,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       if (tiles.isEmpty) return;
 
       var sampleTile = tiles.first;
-      Color territoryColor = Colors.blueGrey;
-      if (sampleTile.ownerType == "solo") {
-        territoryColor = Colors.orange;
-      } else {
-        switch (sampleTile.color) {
-          case "blue": territoryColor = Colors.blue; break;
-          case "red": territoryColor = Colors.red; break;
-          case "green": territoryColor = Colors.green; break;
-          case "yellow": territoryColor = Colors.orange; break;
-          case "purple": territoryColor = Colors.purple; break;
-        }
-      }
+      Color territoryColor = territoryService.getTeamColor(sampleTile.color, context);
 
       List<String> tileIds = tiles.map((t) => t.tileId).toList();
 
@@ -1906,10 +1947,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     worldEventsStream?.cancel();
     pulseSubscription?.cancel();
     _captureAnimController.dispose();
-    // FIX: these two were started in initState() (listenToPlayer(),
-    // listenToGear()) but never cancelled here, unlike every other
-    // subscription in this file — a real leak once this screen's owning
-    // widget is actually disposed (e.g. on sign-out).
     playerStream?.cancel();
     gearStream?.cancel();
     _regenTimer?.cancel();
@@ -1932,29 +1969,43 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Widget _statBadge(IconData icon, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.7),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.cyanAccent, size: 16),
+          Icon(icon, color: colorScheme.primary, size: 16),
           const SizedBox(width: 8),
           Text(
             label,
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final currentTileId = territoryService.getHexId(currentPosition.latitude, currentPosition.longitude);
+    
+    HexTileModel? currentTile;
+    try {
+      currentTile = allTiles.firstWhere((t) => t.tileId == currentTileId);
+    } catch (_) {}
+
+    final ownerLabel = currentTile != null 
+        ? " | ${currentTile.ownerType == 'team' ? 'TEAM: ' : ''}${currentTile.ownerName.toUpperCase()}" 
+        : " | NEUTRAL";
+
     return Scaffold(
       body: Stack(
         children: [
@@ -1986,21 +2037,34 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF161B22).withValues(alpha: 0.9),
+                    color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                    border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.location_on_rounded, color: Color(0xFF8E2DE2), size: 18),
+                      Icon(Icons.location_on_rounded, color: colorScheme.primary, size: 18),
                       const SizedBox(width: 8),
                       Text(
-                        "SECTOR ${territoryService.getHexId(currentPosition.latitude, currentPosition.longitude).substring(0, 6)}",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1),
+                        "SECTOR ${currentTileId.substring(0, 6)}$ownerLabel",
+                        style: TextStyle(
+                          color: colorScheme.onSurface, 
+                          fontWeight: FontWeight.w900, 
+                          fontSize: 12, 
+                          letterSpacing: 1
+                        ),
                       ),
                     ],
                   ),
                 ),
+
                 Row(
                   children: [
                     _mapFloatingButton(Icons.layers_rounded, () {
@@ -2027,15 +2091,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                      gradient: LinearGradient(
+                        colors: [colorScheme.primary, colorScheme.tertiary],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(50),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF8E2DE2).withValues(alpha: 0.4),
+                          color: colorScheme.primary.withValues(alpha: 0.4),
                           blurRadius: 24,
                           spreadRadius: 8,
                         ),
@@ -2071,7 +2135,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ),
 
-          if (scanningAnomaly != null)
+
             Positioned(
               top: MediaQuery.of(context).padding.top + 80,
               left: 16,
@@ -2079,9 +2143,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black87,
+                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+                  border: Border.all(color: colorScheme.primary.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -2089,22 +2153,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("UNLOCKING MYSTERY", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w900, fontSize: 12)),
-                        Text("${(anomalyScanProgress * 100).toStringAsFixed(1)}%", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text("UNLOCKING MYSTERY", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.w900, fontSize: 12)),
+                        Text("${(anomalyScanProgress * 100).toStringAsFixed(1)}%", style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
                     const SizedBox(height: 12),
                     LinearProgressIndicator(
                       value: anomalyScanProgress,
-                      backgroundColor: Colors.white10,
-                      valueColor: const AlwaysStoppedAnimation(Colors.cyanAccent),
+                      backgroundColor: colorScheme.surfaceContainer,
+                      valueColor: AlwaysStoppedAnimation(colorScheme.primary),
                     ),
-                    const SizedBox(height: 8),
-                    const Text("Physical movement required to unlock this reward.", style: TextStyle(color: Colors.white54, fontSize: 10)),
+                    Text("Physical movement required to unlock this reward.", style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 10)),
                   ],
                 ),
               ),
             ),
+
 
           if (antiCheatService.isCaptureBlocked)
             Positioned(
@@ -2114,7 +2178,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent,
+                  color: colorScheme.error,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -2124,20 +2188,21 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     )
                   ],
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.speed_rounded, color: Colors.white, size: 24),
-                    SizedBox(width: 14),
+                    Icon(Icons.speed_rounded, color: colorScheme.onError, size: 24),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Text(
                         "MOVING TOO FAST! Territory capture paused.",
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+                        style: TextStyle(color: colorScheme.onError, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+
 
           Positioned(
             left: 16,
@@ -2152,9 +2217,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161B22),
+                  color: colorScheme.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1.5),
+                  border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5), width: 1.5),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.4),
@@ -2171,7 +2236,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white12,
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -2180,12 +2245,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF8E2DE2).withValues(alpha: 0.1),
+                            color: colorScheme.primary.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             speedKmh > 1.0 ? Icons.directions_run_rounded : Icons.accessibility_new_rounded,
-                            color: const Color(0xFF8E2DE2),
+                            color: colorScheme.primary,
                             size: 28,
                           ),
                         ),
@@ -2199,8 +2264,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 children: [
                                   Text(
                                     antiCheatService.getMovementStatus(speedKmh).toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: colorScheme.onSurface,
                                       fontSize: 16,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: 1.5,
@@ -2211,8 +2276,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                       margin: const EdgeInsets.only(left: 8),
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                                        gradient: LinearGradient(
+                                          colors: [colorScheme.primary, colorScheme.tertiary],
                                         ),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
@@ -2226,8 +2291,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               const SizedBox(height: 3),
                               Text(
                                 "${speedKmh.toStringAsFixed(1)} KM/H",
-                                style: const TextStyle(
-                                  color: Colors.white54,
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -2243,6 +2308,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ],
                 ),
               ),
+
             ),
           ),
         ],

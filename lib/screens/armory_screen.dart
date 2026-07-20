@@ -7,52 +7,50 @@ import '../services/firebase_service.dart';
 class ArmoryScreen extends StatelessWidget {
   const ArmoryScreen({super.key});
 
-  static const Color _bgColor = Color(0xFF0D1117);
-  static const Color _cardColor = Color(0xFF161B22);
-  static const Color _accentColor = Color(0xFF8E2DE2);
-
   @override
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
     final uid = firebaseService.auth.currentUser?.uid;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     if (uid == null) {
-      return const Scaffold(
-        backgroundColor: _bgColor,
+      return Scaffold(
+        backgroundColor: colorScheme.surface,
         body: Center(
           child: Text(
             "NOT LOGGED IN",
-            style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold),
+            style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.38), fontWeight: FontWeight.bold),
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: _bgColor,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           "OPERATOR ARMORY",
           style: TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 2,
             fontSize: 18,
-            color: Colors.white,
+            color: colorScheme.onSurface,
           ),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: colorScheme.onSurface),
       ),
       body: StreamBuilder<PlayerModel?>(
         stream: firebaseService.getPlayerStream(uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: _accentColor));
+            return Center(child: CircularProgressIndicator(color: colorScheme.primary));
           }
           if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: Text("FAILED TO LOAD DATA", style: TextStyle(color: Colors.redAccent)));
+            return Center(child: Text("FAILED TO LOAD DATA", style: TextStyle(color: colorScheme.error)));
           }
 
           final player = snapshot.data!;
@@ -66,12 +64,12 @@ class ArmoryScreen extends StatelessWidget {
                   margin: const EdgeInsets.all(20),
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: _cardColor,
+                    color: colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                    border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
+                        color: Colors.black.withValues(alpha: theme.brightness == Brightness.dark ? 0.4 : 0.05),
                         blurRadius: 15,
                         offset: const Offset(0, 8),
                       )
@@ -83,39 +81,39 @@ class ArmoryScreen extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             "ACCUMULATED XP",
-                            style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             "${player.xp} XP",
-                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900),
+                            style: TextStyle(color: colorScheme.onSurface, fontSize: 28, fontWeight: FontWeight.w900),
                           ),
                         ],
                       ),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: _accentColor.withValues(alpha: 0.1),
+                          color: colorScheme.primary.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.shield_rounded, color: _accentColor, size: 32),
+                        child: Icon(Icons.shield_rounded, color: colorScheme.primary, size: 32),
                       ),
                     ],
                   ),
                 ),
 
-                const TabBar(
-                  tabs: [
+                TabBar(
+                  tabs: const [
                     Tab(text: "EQUIPMENT"),
                     Tab(text: "PURCHASE"),
                   ],
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white38,
-                  indicatorColor: _accentColor,
+                  labelColor: colorScheme.onSurface,
+                  unselectedLabelColor: colorScheme.onSurfaceVariant,
+                  indicatorColor: colorScheme.primary,
                   indicatorWeight: 3,
-                  labelStyle: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+                  labelStyle: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
                 ),
 
                 Expanded(
@@ -136,15 +134,15 @@ class ArmoryScreen extends StatelessWidget {
 
   Widget _buildEquipmentTab(BuildContext context, PlayerModel player, FirebaseService service) {
     if (player.ownedGear.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inventory_2_outlined, size: 64, color: Colors.white10),
-            SizedBox(height: 16),
+            Icon(Icons.inventory_2_outlined, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
+            const SizedBox(height: 16),
             Text(
               "NO GEAR OWNED",
-              style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w900, letterSpacing: 1),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38), fontWeight: FontWeight.w900, letterSpacing: 1),
             ),
           ],
         ),
@@ -167,7 +165,26 @@ class ArmoryScreen extends StatelessWidget {
           isEquipped: isEquipped,
           onAction: () async {
             if (!isEquipped) {
-              await service.equipGear(player.uid, gear);
+              try {
+                await service.equipGear(player.uid, gear);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("EQUIPPED: ${gear.name.toUpperCase()}"),
+                    backgroundColor: colorScheme.primary,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("EQUIP FAILED: $e"),
+                    backgroundColor: colorScheme.error,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
             }
           },
         );
@@ -192,7 +209,26 @@ class ArmoryScreen extends StatelessWidget {
           canAfford: canAfford,
           onAction: () async {
             if (canAfford) {
-              await service.purchaseGear(player.uid, gear);
+              try {
+                await service.purchaseGear(player.uid, gear);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("PURCHASED: ${gear.name.toUpperCase()}"),
+                    backgroundColor: colorScheme.primary,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("PURCHASE FAILED: $e"),
+                    backgroundColor: colorScheme.error,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
             }
           },
         );
@@ -218,17 +254,16 @@ class _GearListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const cardColor = Color(0xFF161B22);
-    const accentColor = Color(0xFF8E2DE2);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: cardColor,
+        color: colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isEquipped ? accentColor.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.05),
+          color: isEquipped ? colorScheme.primary.withValues(alpha: 0.5) : colorScheme.outlineVariant.withValues(alpha: 0.5),
           width: isEquipped ? 2 : 1.5,
         ),
       ),
@@ -237,13 +272,13 @@ class _GearListItem extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: (isEquipped ? accentColor : Colors.white10).withValues(alpha: 0.1),
+              color: (isEquipped ? colorScheme.primary : colorScheme.onSurface).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: (isEquipped ? accentColor : Colors.white10).withValues(alpha: 0.2)),
+              border: Border.all(color: (isEquipped ? colorScheme.primary : colorScheme.onSurface).withValues(alpha: 0.2)),
             ),
             child: Icon(
               _getIcon(gear.icon),
-              color: isEquipped ? accentColor : Colors.white38,
+              color: isEquipped ? colorScheme.primary : colorScheme.onSurfaceVariant,
               size: 28,
             ),
           ),
@@ -254,19 +289,19 @@ class _GearListItem extends StatelessWidget {
               children: [
                 Text(
                   gear.name.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white, letterSpacing: 0.5),
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: colorScheme.onSurface, letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   gear.description,
-                  style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13, height: 1.4),
                 ),
                 if (!isOwned) ...[
                   const SizedBox(height: 8),
                   Text(
                     "${gear.price} XP",
                     style: TextStyle(
-                      color: canAfford ? accentColor : Colors.redAccent,
+                      color: canAfford ? colorScheme.primary : colorScheme.error,
                       fontWeight: FontWeight.w900,
                       fontSize: 14,
                     ),
@@ -279,11 +314,11 @@ class _GearListItem extends StatelessWidget {
           ElevatedButton(
             onPressed: (isOwned && isEquipped) ? null : onAction,
             style: ElevatedButton.styleFrom(
-              backgroundColor: isEquipped ? Colors.greenAccent.withValues(alpha: 0.2) : (isOwned ? accentColor.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05)),
-              foregroundColor: isEquipped ? Colors.greenAccent : (isOwned ? accentColor : Colors.white),
+              backgroundColor: isEquipped ? colorScheme.primary.withValues(alpha: 0.2) : (isOwned ? colorScheme.primary.withValues(alpha: 0.1) : colorScheme.onSurface.withValues(alpha: 0.05)),
+              foregroundColor: isEquipped ? colorScheme.primary : (isOwned ? colorScheme.primary : colorScheme.onSurface),
               elevation: 0,
               side: BorderSide(
-                color: isEquipped ? Colors.greenAccent.withValues(alpha: 0.3) : (isOwned ? accentColor.withValues(alpha: 0.3) : Colors.white10),
+                color: isEquipped ? colorScheme.primary.withValues(alpha: 0.3) : (isOwned ? colorScheme.primary.withValues(alpha: 0.3) : colorScheme.onSurface.withValues(alpha: 0.1)),
                 width: 1.5,
               ),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
