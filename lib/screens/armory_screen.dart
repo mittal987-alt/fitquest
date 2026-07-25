@@ -345,6 +345,9 @@ class _GearListItem extends StatelessWidget {
       case 'vest_icon': return Icons.accessibility_new_rounded;
       case 'sleeve_icon': return Icons.sports_handball_rounded;
       case 'mask_icon': return Icons.air_rounded;
+      case 'titan_boots': return Icons.electric_bolt_rounded;
+      case 'eye_icon': return Icons.remove_red_eye_rounded;
+      case 'quantum_icon': return Icons.auto_awesome_rounded;
       default: return Icons.construction_rounded;
     }
   }

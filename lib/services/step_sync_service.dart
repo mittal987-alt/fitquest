@@ -68,9 +68,11 @@ class StepSyncService {
         // SPEED-BASED ANTI-CHEAT
         // If speed is > 12 km/h (vehicle range), ignore hardware step increments.
         if (locationService.isVehicle(_currentSpeedKmh)) {
+          pedometerService.setPaused(true);
           doublePrint("VEHICLE DETECTED (${_currentSpeedKmh.toStringAsFixed(1)} km/h): Steps suppressed.");
           return;
         }
+        pedometerService.setPaused(false);
 
         if (_isProcessing) return;
         _isProcessing = true;
