@@ -488,25 +488,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: _kSectionGap),
 
-                      _sectionHeader(theme, "Today's Mission"),
+                      _sectionHeader(theme, "Today's Missions"),
                       if (player != null && player.isInTeam && player.teamId != null && player.activeTeamChallengeId != null) ...[
                          StreamBuilder<TeamChallengeModel?>(
                            stream: firebaseService.getActiveTeamChallengeStream(player.teamId!, player.activeTeamChallengeId!),
                            builder: (context, snapshot) {
                              if (!snapshot.hasData || snapshot.data == null) return const SizedBox.shrink();
                              final challenge = snapshot.data!;
+                             final isClaimed = challenge.claimedMembers.contains(player.uid);
+                             
                              return Column(
                                children: [
                                  _buildQuest(
                                    theme: theme,
                                    player: player,
                                    id: challenge.id,
-                                   title: challenge.title,
+                                   title: "[TEAM] ${challenge.title}",
                                    target: challenge.target,
                                    current: challenge.progress,
-                                   reward: challenge.xpReward, // Mapping to xpReward if needed or showing both
+                                   reward: challenge.xpReward,
                                    icon: challenge.type == ChallengeType.steps ? Icons.group_rounded : Icons.explore_rounded,
                                    color: Colors.orangeAccent,
+                                   isTeamQuest: true,
+                                   isClaimedOverride: isClaimed,
                                  ),
                                  const SizedBox(height: 12),
                                ],
@@ -556,9 +560,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       _sectionHeader(theme, "Quick Actions"),
                       Row(
                         children: [
-                          Expanded(child: _buildOpButton(theme, "START WALK", Icons.directions_walk_rounded, Colors.greenAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ActivityScreen(player: player))))),
+                          Expanded(child: _buildOpButton(theme, "START WALK", Icons.directions_walk_rounded, Colors.greenAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ActivityScreen(player: player, initialMode: ActivityMode.walk))))),
                           const SizedBox(width: 12),
-                          Expanded(child: _buildOpButton(theme, "ARMORY", Icons.shield_rounded, Colors.purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArmoryScreen())))),
+                          Expanded(child: _buildOpButton(theme, "TRAINING", Icons.fitness_center_rounded, Colors.orangeAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ActivityScreen(player: player, initialMode: ActivityMode.training))))),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -936,9 +940,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildQuest({required ThemeData theme, required PlayerModel player, required String id, required String title, required double target, required double current, required int reward, required IconData icon, required Color color}) {
+  Widget _buildQuest({
+    required ThemeData theme,
+    required PlayerModel player,
+    required String id,
+    required String title,
+    required double target,
+    required double current,
+    required int reward,
+    required IconData icon,
+    required Color color,
+    bool isTeamQuest = false,
+    bool? isClaimedOverride,
+  }) {
     final bool isCompleted = current >= target;
-    final bool isClaimed = player.claimedQuests.contains(id);
+    final bool isClaimed = isClaimedOverride ?? player.claimedQuests.contains(id);
     final double progress = (current / target).clamp(0.0, 1.0);
     final colorScheme = theme.colorScheme;
 
@@ -981,7 +997,11 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.card_giftcard_rounded, color: color),
               onPressed: () async {
                 _confettiController.play();
-                await firebaseService.claimQuestReward(player.uid, id, reward);
+                if (isTeamQuest && player.teamId != null) {
+                  await firebaseService.claimTeamChallengeReward(player.teamId!, id, player.uid);
+                } else {
+                  await firebaseService.claimQuestReward(player.uid, id, reward);
+                }
               },
             )
           else

@@ -368,11 +368,11 @@ class ProfileScreen extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _statItem(context, "${player.totalSteps}", "STEPS", icon: Icons.directions_walk_rounded, color: Colors.greenAccent),
+        _statItem(context, "${player.dailySteps}", "DAILY", icon: Icons.today_rounded, color: Colors.orangeAccent),
+        _statDivider(context),
+        _statItem(context, "${player.totalSteps}", "TOTAL STEPS", icon: Icons.directions_walk_rounded, color: Colors.greenAccent),
         _statDivider(context),
         _statItem(context, "${player.xp}", "XP", icon: Icons.bolt_rounded, color: Colors.amberAccent),
-        _statDivider(context),
-        _statItem(context, "${player.currency}", "CREDITS", icon: Icons.monetization_on_rounded, color: Colors.cyanAccent),
       ],
     );
   }

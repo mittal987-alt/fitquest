@@ -17,7 +17,8 @@ enum ActivityMode { walk, training }
 
 class ActivityScreen extends StatefulWidget {
   final PlayerModel? player;
-  const ActivityScreen({super.key, this.player});
+  final ActivityMode initialMode;
+  const ActivityScreen({super.key, this.player, this.initialMode = ActivityMode.walk});
 
   @override
   State<ActivityScreen> createState() => _ActivityScreenState();
@@ -29,9 +30,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
   StreamSubscription<int>? _pedometerSubscription;
   StreamSubscription<Position>? _positionSubscription;
   
-  ActivityMode _selectedMode = ActivityMode.walk;
+  late ActivityMode _selectedMode;
   ActivityModel? _trainingModel;
-  final PageController _exercisePageController = PageController();
   int _currentExerciseIndex = 0;
 
   // Timer state
@@ -67,32 +67,48 @@ class _ActivityScreenState extends State<ActivityScreen> {
     _restTimer?.cancel();
     _pedometerSubscription?.cancel();
     _positionSubscription?.cancel();
-    _exercisePageController.dispose();
     super.dispose();
   }
 
   void _loadTrainingModel() {
+    double? bmi;
+    String? goal;
+    int trustScore = 100;
+    int level = 1;
+
     if (widget.player != null) {
-      double? bmi;
       if (widget.player!.heightCm != null && widget.player!.weightKg != null && widget.player!.heightCm! > 0) {
         double meters = widget.player!.heightCm! / 100;
         bmi = widget.player!.weightKg! / (meters * meters);
       }
-      _trainingModel = ActivityModel.fromBmiAndGoal(
-        bmi,
-        widget.player!.fitnessGoal,
-        trustScore: widget.player!.trustScore,
-        level: widget.player!.level,
-      );
+      goal = widget.player!.fitnessGoal;
+      trustScore = widget.player!.trustScore;
+      level = widget.player!.level;
     }
+
+    _trainingModel = ActivityModel.fromBmiAndGoal(
+      bmi,
+      goal,
+      trustScore: trustScore,
+      level: level,
+    );
   }
 
   @override
   void initState() {
     super.initState();
+    _selectedMode = widget.initialMode;
     _loadTrainingModel();
     _initLocation();
     _initPedometer();
+  }
+
+  @override
+  void didUpdateWidget(covariant ActivityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.player != oldWidget.player && _trainingModel == null) {
+      _loadTrainingModel();
+    }
   }
 
   void _initPedometer() {
@@ -339,85 +355,77 @@ class _ActivityScreenState extends State<ActivityScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 120,
-          child: PageView.builder(
-            controller: _exercisePageController,
-            onPageChanged: (index) => setState(() => _currentExerciseIndex = index),
-            itemCount: _trainingModel!.exerciseGuide.length,
-            itemBuilder: (context, index) {
-              return AnimatedOpacity(
+        Column(
+          children: _trainingModel!.exerciseGuide.asMap().entries.map((entry) {
+            int index = entry.key;
+            var exercise = entry.value;
+            bool isCurrent = _currentExerciseIndex == index;
+            
+            return GestureDetector(
+              onTap: () => setState(() => _currentExerciseIndex = index),
+              child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 300),
-                opacity: _currentExerciseIndex == index ? 1.0 : 0.5,
-                child: _buildExerciseTile(theme, _trainingModel!.exerciseGuide[index]),
-              );
-            },
-          ),
+                opacity: isCurrent ? 1.0 : 0.6,
+                child: _buildExerciseTile(theme, exercise, isCurrent),
+              ),
+            );
+          }).toList(),
         ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              onPressed: _currentExerciseIndex > 0 
-                ? () => _exercisePageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut)
-                : null,
-              icon: Icon(Icons.arrow_back_ios_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.2)),
-            ),
-            const SizedBox(width: 20),
-            ElevatedButton(
+        const SizedBox(height: 24),
+        if (_isActive && !_isResting)
+          Center(
+            child: ElevatedButton(
               onPressed: () {
                 if (_currentExerciseIndex < _trainingModel!.exerciseGuide.length - 1) {
                   _startRestTimer(_trainingModel!.restIntervalSeconds);
-                  _exercisePageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  setState(() => _currentExerciseIndex++);
                 }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               ),
               child: Text(
-                _currentExerciseIndex < _trainingModel!.exerciseGuide.length - 1 ? "NEXT EXERCISE" : "FINAL SET",
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                _currentExerciseIndex < _trainingModel!.exerciseGuide.length - 1 ? "NEXT EXERCISE" : "FINISH SETS",
+                style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
               ),
             ),
-            const SizedBox(width: 20),
-            IconButton(
-              onPressed: _currentExerciseIndex < _trainingModel!.exerciseGuide.length - 1
-                ? () => _exercisePageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut)
-                : null,
-              icon: Icon(Icons.arrow_forward_ios_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.2)),
-            ),
-          ],
-        ),
+          ),
       ],
     );
   }
 
-  Widget _buildExerciseTile(ThemeData theme, Map<String, String> exercise) {
+  Widget _buildExerciseTile(ThemeData theme, Map<String, String> exercise, bool isCurrent) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.colorScheme.onSurface.withValues(alpha: 0.05)),
+        border: Border.all(
+          color: isCurrent ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.05),
+          width: isCurrent ? 2 : 1,
+        ),
+        boxShadow: isCurrent ? [
+          BoxShadow(color: theme.colorScheme.primary.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, 4))
+        ] : null,
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            width: 80,
+            padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              color: isCurrent ? theme.colorScheme.primary.withValues(alpha: 0.1) : theme.colorScheme.onSurface.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               exercise['target'] ?? "GO",
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: theme.colorScheme.primary,
+                color: isCurrent ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.4),
                 fontWeight: FontWeight.w900,
                 fontSize: 12,
               ),
@@ -431,15 +439,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
               children: [
                 Text(
                   exercise['name']?.toUpperCase() ?? "EXERCISE",
-                  style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w900, fontSize: 16),
+                  style: TextStyle(
+                    color: isCurrent ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w900, 
+                    fontSize: 16
+                  ),
                 ),
                 Text(
                   exercise['tip'] ?? "",
-                  style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 12),
+                  style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontSize: 11),
                 ),
               ],
             ),
           ),
+          if (isCurrent)
+            Icon(Icons.play_circle_fill_rounded, color: theme.colorScheme.primary),
         ],
       ),
     );

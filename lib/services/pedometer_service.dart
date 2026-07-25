@@ -169,7 +169,7 @@ class PedometerService {
 
   /// Bootstraps tracking streams. Connects to device sensors or initializes
   /// simulation routines in emulator scenarios.
-  void startTracking({bool useSimulator = false, PlayerModel? playerContext, int initialSteps = 0}) {
+  void startTracking({bool useSimulator = false, bool shouldBindHardware = false, PlayerModel? playerContext, int initialSteps = 0}) {
     _playerContext = playerContext;
     _todayCumulativeSteps = initialSteps;
     _hourlyStepsBuffer.clear();
@@ -177,7 +177,7 @@ class PedometerService {
 
     if (useSimulator) {
       _startStepSimulator(playerContext);
-    } else {
+    } else if (shouldBindHardware) {
       _bindHardwareSensors();
     }
   }
@@ -378,7 +378,7 @@ class PedometerService {
   // COMPATIBILITY HELPERS (PREVIOUSLY PRESENT)
   // ==========================================
 
-  void startListening() => startTracking(useSimulator: false);
+  void startListening() => startTracking(useSimulator: false, shouldBindHardware: true);
   void stopListening() => dispose();
 
   double calculateCalories() => _todayCumulativeSteps * GameplayRules.caloriesPerStep;

@@ -133,6 +133,7 @@ class ArmoryScreen extends StatelessWidget {
   }
 
   Widget _buildEquipmentTab(BuildContext context, PlayerModel player, FirebaseService service) {
+    final colorScheme = Theme.of(context).colorScheme;
     if (player.ownedGear.isEmpty) {
       return Center(
         child: Column(
@@ -193,6 +194,7 @@ class ArmoryScreen extends StatelessWidget {
   }
 
   Widget _buildPurchaseTab(BuildContext context, PlayerModel player, FirebaseService service) {
+    final colorScheme = Theme.of(context).colorScheme;
     final availableItems = allGear.where((g) => !player.ownedGear.contains(g.id)).toList();
 
     return ListView.builder(
