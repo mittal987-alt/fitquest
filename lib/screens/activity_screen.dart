@@ -11,6 +11,8 @@ import '../models/player_model.dart';
 import '../models/activity_model.dart';
 import '../services/firebase_service.dart';
 import '../services/pedometer_service.dart';
+import '../services/location_service.dart';
+import '../config/gameplay_rules.dart';
 import '../features/tactical/widgets/activity_heatmap.dart';
 
 enum ActivityMode { walk, training }
