@@ -49,6 +49,12 @@ class WeeklyStepChart extends StatelessWidget {
       );
     }
 
+    double maxY = targetSteps * 1.2;
+    if (barGroups.isNotEmpty) {
+      double maxSteps = barGroups.map((e) => e.barRods[0].toY).reduce((a, b) => a > b ? a : b);
+      if (maxSteps * 1.2 > maxY) maxY = maxSteps * 1.2;
+    }
+
     return Container(
       height: 200,
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -60,7 +66,7 @@ class WeeklyStepChart extends StatelessWidget {
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: (barGroups.map((e) => e.barRods[0].toY).reduce((a, b) => a > b ? a : b) * 1.2).clamp(targetSteps * 1.2, double.infinity),
+          maxY: maxY,
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
               tooltipBgColor: Colors.white,
@@ -93,7 +99,7 @@ class WeeklyStepChart extends StatelessWidget {
               sideTitles: SideTitles(
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
-                  if (value.toInt() >= labels.length) return const SizedBox.shrink();
+                  if (value.toInt() < 0 || value.toInt() >= labels.length) return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(

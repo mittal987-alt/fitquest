@@ -35,7 +35,7 @@ class EnergyBoostBadge extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.blueAccent.withValues(alpha: 0.3),
+                color: Colors.blueAccent.withValues(alpha: 0.3 * 255),
                 blurRadius: 8,
                 spreadRadius: 1,
               )

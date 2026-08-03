@@ -53,7 +53,7 @@ class PlayerTile extends StatelessWidget {
                 height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(
+                    border: Border.all(
                     color: rankColor.withValues(alpha: 0.3),
                     width: 2,
                   ),
@@ -63,7 +63,7 @@ class PlayerTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(30),
                         child: Image.network(player.avatar, fit: BoxFit.cover),
                       )
-                    : CircleAvatar(
+                        : CircleAvatar(
                         backgroundColor: rankColor.withValues(alpha: 0.1),
                         child: Icon(Icons.person_rounded, color: rankColor, size: 30),
                       ),

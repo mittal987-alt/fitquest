@@ -76,6 +76,7 @@ class FirebaseService {
       "dailyDistance": FieldValue.increment(distance),
       "dailyCalories": FieldValue.increment(calories),
       "xp": FieldValue.increment(steps ~/ 10),
+      "lastActiveDate": FieldValue.serverTimestamp(),
     });
   }
 
@@ -727,6 +728,7 @@ class FirebaseService {
       "weeklySteps": FieldValue.increment(deltaSteps),
       "dailyCalories": FieldValue.increment(calories),
       "dailyDistance": FieldValue.increment(distance),
+      "lastActiveDate": FieldValue.serverTimestamp(),
       "xp": FieldValue.increment(xp),
       "currentStamina": FieldValue.increment(apRegained),
       "lastSyncTime": FieldValue.serverTimestamp(),

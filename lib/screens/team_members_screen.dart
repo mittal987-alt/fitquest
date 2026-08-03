@@ -137,7 +137,7 @@ class TeamMembersScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: playerIsLeader
                                 ? colorScheme.tertiary.withValues(alpha: 0.1)
-                                : team.getTeamColor(context).withValues(alpha: 0.05),
+                                            : team.getTeamColor(context).withValues(alpha: 0.05),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: playerIsLeader ? colorScheme.tertiary : team.getTeamColor(context).withValues(alpha: 0.4),
@@ -210,7 +210,7 @@ class TeamMembersScreen extends StatelessWidget {
                                       player.activePowerUps['energy_boost']!.isAfter(DateTime.now()))
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
+                                        decoration: BoxDecoration(
                                         color: Colors.greenAccent.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.4)),

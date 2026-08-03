@@ -224,7 +224,7 @@ class _TeamScreenState extends State<TeamScreen> {
     return Container(
       margin: const EdgeInsets.all(24),
       padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
+        decoration: BoxDecoration(
         color: colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(32),
         border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
@@ -340,14 +340,14 @@ class _TeamScreenState extends State<TeamScreen> {
                   Row(
                     children: [
                       Text(
-                        "TEAM ID: ${team.id.toUpperCase()}", 
-                        style: TextStyle(
-                          color: colorScheme.onPrimary.withValues(alpha: 0.6), 
-                          fontSize: 10, 
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        )
-                      ),
+                          "TEAM ID: ${team.id.toUpperCase()}", 
+                          style: TextStyle(
+                            color: colorScheme.onPrimary.withValues(alpha: 0.6),
+                            fontSize: 10, 
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          )
+                        ),
                       const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () {
@@ -360,7 +360,7 @@ class _TeamScreenState extends State<TeamScreen> {
                             ),
                           );
                         },
-                        child: Container(
+                          child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             color: colorScheme.onPrimary.withValues(alpha: 0.1),

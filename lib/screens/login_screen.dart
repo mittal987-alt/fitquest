@@ -101,9 +101,9 @@ class _LoginScreenState extends State<LoginScreen> {
         return StatefulBuilder(
           builder: (builderContext, setDialogState) => AlertDialog(
             backgroundColor: colorScheme.surface,
-            shape: RoundedRectangleBorder(
+              shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+              side: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1 * 255)),
             ),
             title: Text(
               "SECURE PHONE LINK",
@@ -123,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           labelText: "Phone Number",
                           labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
                           hintText: "+1234567890",
-                          hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                          hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5 * 255)),
                           prefixIcon: Icon(Icons.phone_rounded, color: colorScheme.primary),
                           enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.outlineVariant)),
                           focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: colorScheme.primary)),
@@ -287,7 +287,7 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.all(24),
           child: Container(
             padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
+                decoration: BoxDecoration(
               color: colorScheme.surface,
               borderRadius: BorderRadius.circular(28),
               border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05), width: 1.5),

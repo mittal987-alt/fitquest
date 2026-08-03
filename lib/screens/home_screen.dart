@@ -79,8 +79,8 @@ class _HomeScreenState extends State<HomeScreen> {
         width: borderWidth,
       ),
       boxShadow: [
-        if (theme.brightness == Brightness.light)
-          BoxShadow(
+          if (theme.brightness == Brightness.light)
+            BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
@@ -240,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _confettiController.dispose();
     _pulseSubscription?.cancel();
     _driftSubscription?.cancel();
-    movementTrackingService.disposeTracking();
+    stepSyncService.stopTracking();
     super.dispose();
   }
 

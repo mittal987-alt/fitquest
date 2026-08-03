@@ -64,12 +64,12 @@ class _TeamShopScreenState extends State<TeamShopScreen> {
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [theme.colorScheme.secondary.withValues(alpha: 0.2), theme.colorScheme.secondary.withValues(alpha: 0.05)],
+                    colors: [theme.colorScheme.secondary.withValues(alpha: 0.2 * 255), theme.colorScheme.secondary.withValues(alpha: 0.05 * 255)],
                   ),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: theme.colorScheme.secondary.withValues(alpha: 0.5)),
+                  border: Border.all(color: theme.colorScheme.secondary.withValues(alpha: 0.5 * 255)),
                 ),
                 child: Row(
                   children: [

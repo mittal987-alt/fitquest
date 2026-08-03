@@ -21,9 +21,9 @@ class ActivityFeedWidget extends StatelessWidget {
           child: Column(
             children: [
               Icon(
-                Icons.history_rounded, 
-                color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1), 
-                size: 48
+                Icons.history_rounded,
+                color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1),
+                size: 48,
               ),
               const SizedBox(height: 16),
               Text(

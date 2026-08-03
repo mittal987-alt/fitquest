@@ -48,10 +48,10 @@ class TacticalPingFeed extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+                  border: Border.all(color: Colors.black.withValues(alpha: 0.05 * 255)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.01),
+                      color: Colors.black.withValues(alpha: 0.01 ),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     )

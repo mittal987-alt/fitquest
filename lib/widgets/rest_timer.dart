@@ -48,7 +48,7 @@ class _RestTimerState extends State<RestTimer> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _currentSeconds > 0 ? Colors.amber.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
+        color: _currentSeconds > 0 ? Colors.amber.withValues(alpha: 0.1 * 255) : Colors.green.withValues(alpha: 0.1 * 255),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
