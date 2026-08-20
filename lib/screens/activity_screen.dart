@@ -642,6 +642,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   Widget _buildActionButtons(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     if (!_hasStarted) {
       return _actionButton(
         theme,

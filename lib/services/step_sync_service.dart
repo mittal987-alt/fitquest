@@ -163,7 +163,6 @@ class StepSyncService {
           }
 
           // 3. CLOUD SYNC THROTTLE (Limit Firestore writes to once every 30 seconds)
-          final now = DateTime.now();
           if (lastSyncTime != null && now.difference(lastSyncTime!).inSeconds < 30) {
             _isProcessing = false;
             return;
