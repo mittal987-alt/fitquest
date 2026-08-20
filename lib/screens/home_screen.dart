@@ -119,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (player != null) {
           pedometerService.startTracking(playerContext: player, initialSteps: player.dailySteps);
           _subscribeToTacticalPulse();
+          _subscribeToLiveSteps(); // New listener for real-time UI
           movementTrackingService.startTracking(player.uid);
           if (player.teamId != null && mounted) {
             context.read<RaidController>().initTeamRaid(player.teamId!);
@@ -129,6 +130,12 @@ class _HomeScreenState extends State<HomeScreen> {
       stepSyncService.startTracking();
       _subscribeToDriftEvents();
     }
+  }
+
+  void _subscribeToLiveSteps() {
+    pedometerService.stepStream.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _subscribeToDriftEvents() {
@@ -264,9 +271,13 @@ class _HomeScreenState extends State<HomeScreen> {
             pedometerService.updatePlayerContext(player);
           }
 
-          final int liveSteps = player?.dailySteps ?? 0;
-          final int liveCalories = player?.dailyCalories ?? 0;
-          final double liveDistance = player?.dailyDistance ?? 0.0;
+          final int liveSteps = (player == null) ? 0 : 
+              (pedometerService.todayCumulativeSteps > player.dailySteps 
+                  ? pedometerService.todayCumulativeSteps 
+                  : player.dailySteps);
+          
+          final int liveCalories = (liveSteps * 0.04).toInt(); 
+          final double liveDistance = liveSteps * 0.00075;
           final int liveMinutes = (liveSteps / 100).floor(); 
           final int streak = player?.streakCount ?? 0;
           final int xp = player?.xp ?? 0;
@@ -342,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               Row(
                                 children: [
                                   const Text("🔥 ", style: TextStyle(fontSize: 18)),
-                                  Text("$streak DAY STREAK", style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
+                                  Text("$streak DAY STREAK", style: TextStyle(color: colorScheme.xp, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
                                 ],
                               ),
                             ],
@@ -368,10 +379,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
-                                _metricItem(theme, Icons.directions_walk_rounded, "$liveSteps", "Steps", Colors.cyan),
-                                _metricItem(theme, Icons.straighten_rounded, liveDistance.toStringAsFixed(1), "km", Colors.greenAccent),
-                                _metricItem(theme, Icons.local_fire_department_rounded, "$liveCalories", "kcal", Colors.orangeAccent),
-                                _metricItem(theme, Icons.timer_rounded, "$liveMinutes", "mins", Colors.purpleAccent),
+                                _metricItem(theme, Icons.directions_walk_rounded, "$liveSteps", "Steps", colorScheme.info),
+                                _metricItem(theme, Icons.straighten_rounded, liveDistance.toStringAsFixed(1), "km", colorScheme.success),
+                                _metricItem(theme, Icons.local_fire_department_rounded, "$liveCalories", "kcal", colorScheme.xp),
+                                _metricItem(theme, Icons.timer_rounded, "$liveMinutes", "mins", colorScheme.rare),
                               ],
                             ),
                           ],
@@ -398,10 +409,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                          activity.timestamp!.month == now.month &&
                                          activity.timestamp!.day == now.day;
                                 }).length ?? 0;
-                                return _territoryItem(theme, (todayCaptures * 0.025).toStringAsFixed(2), "Today (km²)", Colors.cyan);
+                                return _territoryItem(theme, (todayCaptures * 0.025).toStringAsFixed(2), "Today (km²)", colorScheme.info);
                               }
                             ),
-                            _territoryItem(theme, ((player?.totalLand ?? 0) * 0.025).toStringAsFixed(2), "Total Area", Colors.blueAccent),
+                            _territoryItem(theme, ((player?.totalLand ?? 0) * 0.025).toStringAsFixed(2), "Total Area", colorScheme.primary),
                             if (player != null && player.isInTeam && player.teamId != null)
                               StreamBuilder<List<TeamModel>>(
                                 stream: firebaseService.getTeamLeaderboardGlobal(),
@@ -411,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     final globalTeams = snapshot.data!;
                                     rank = globalTeams.indexWhere((t) => t.id == player.teamId) + 1;
                                   }
-                                  return _territoryItem(theme, rank > 0 ? "#$rank" : "--", "Team Rank", Colors.orangeAccent);
+                                  return _territoryItem(theme, rank > 0 ? "#$rank" : "--", "Team Rank", colorScheme.xp);
                                 },
                               )
                             else
@@ -421,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     : firebaseService.getPlayerRankStream(player.totalLand),
                                 builder: (context, snapshot) {
                                   final rank = snapshot.data ?? 0;
-                                  return _territoryItem(theme, rank > 0 ? "#$rank" : "--", "Solo Rank", Colors.orangeAccent);
+                                  return _territoryItem(theme, rank > 0 ? "#$rank" : "--", "Solo Rank", colorScheme.xp);
                                 }
                               ),
                           ],
@@ -508,7 +519,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                    current: challenge.progress,
                                    reward: challenge.xpReward,
                                    icon: challenge.type == ChallengeType.steps ? Icons.group_rounded : Icons.explore_rounded,
-                                   color: Colors.orangeAccent,
+                                   color: colorScheme.xp,
                                    isTeamQuest: true,
                                    isClaimedOverride: isClaimed,
                                  ),
@@ -528,7 +539,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           current: liveDistance * 1000,
                           reward: 100,
                           icon: Icons.directions_run_rounded,
-                          color: Colors.orangeAccent,
+                          color: colorScheme.xp,
                         ),
                         const SizedBox(height: 12),
                         _buildQuest(
@@ -540,7 +551,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           current: (player.dailyHistory[DateTime.now().toString().split(' ')[0]]?['captures'] ?? 0).toDouble(),
                           reward: 250,
                           icon: Icons.explore_rounded,
-                          color: Colors.cyanAccent,
+                          color: colorScheme.info,
                         ),
                         const SizedBox(height: 12),
                         _buildQuest(
@@ -552,7 +563,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           current: (xp % 1000).toDouble(),
                           reward: 500,
                           icon: Icons.bolt_rounded,
-                          color: Colors.purpleAccent,
+                          color: colorScheme.rare,
                         ),
                       ],
                       const SizedBox(height: _kSectionGap),
@@ -560,25 +571,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       _sectionHeader(theme, "Quick Actions"),
                       Row(
                         children: [
-                          Expanded(child: _buildOpButton(theme, "START WALK", Icons.directions_walk_rounded, Colors.greenAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ActivityScreen(player: player, initialMode: ActivityMode.walk))))),
+                          Expanded(child: _buildOpButton(theme, "START WALK", Icons.directions_walk_rounded, colorScheme.success, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ActivityScreen(player: player, initialMode: ActivityMode.walk))))),
                           const SizedBox(width: 12),
-                          Expanded(child: _buildOpButton(theme, "TRAINING", Icons.fitness_center_rounded, Colors.orangeAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ActivityScreen(player: player, initialMode: ActivityMode.training))))),
+                          Expanded(child: _buildOpButton(theme, "TRAINING", Icons.fitness_center_rounded, colorScheme.xp, () => Navigator.push(context, MaterialPageRoute(builder: (context) => ActivityScreen(player: player, initialMode: ActivityMode.training))))),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: _buildOpButton(theme, "RANKINGS", Icons.leaderboard_rounded, Colors.amberAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())))),
+                          Expanded(child: _buildOpButton(theme, "RANKINGS", Icons.leaderboard_rounded, colorScheme.gold, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())))),
                           const SizedBox(width: 12),
-                          Expanded(child: _buildOpButton(theme, "NETWORK", Icons.hub_rounded, Colors.blueAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen())))),
+                          Expanded(child: _buildOpButton(theme, "NETWORK", Icons.hub_rounded, colorScheme.primary, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen())))),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: _buildOpButton(theme, "ACHIEVEMENTS", Icons.workspace_premium_rounded, Colors.purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AchievementsScreen())))),
+                          Expanded(child: _buildOpButton(theme, "ACHIEVEMENTS", Icons.workspace_premium_rounded, colorScheme.rare, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AchievementsScreen())))),
                           const SizedBox(width: 12),
-                          Expanded(child: _buildOpButton(theme, "CRAFTING", Icons.precision_manufacturing_rounded, Colors.orangeAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CraftingScreen())))),
+                          Expanded(child: _buildOpButton(theme, "CRAFTING", Icons.precision_manufacturing_rounded, colorScheme.xp, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CraftingScreen())))),
                         ],
                       ),
                       const SizedBox(height: 12),

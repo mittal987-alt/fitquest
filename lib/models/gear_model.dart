@@ -135,7 +135,7 @@ final List<GearModel> allGear = [
     name: 'Quantum Comm',
     description: 'Legendary comms. +20% Raid XP and Agility.',
     slot: GearSlot.communication,
-    modifiers: {'event_xp_mult': 1.2, 'agility': 8.0, 'raid_damage_mult': 1.1},
+    modifiers: {'event_xp_mult': 1.2, 'agility': 8.0, 'raid_dmg_mult': 1.1},
     price: 15000,
     icon: 'quantum_icon',
   ),

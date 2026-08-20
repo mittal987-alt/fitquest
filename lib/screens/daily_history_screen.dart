@@ -4,6 +4,7 @@ import '../models/player_model.dart';
 import '../features/tactical/widgets/activity_heatmap.dart';
 import '../services/pedometer_service.dart';
 import '../widgets/weekly_step_chart.dart';
+import '../config/game_theme.dart';
 
 class DailyHistoryScreen extends StatelessWidget {
   final PlayerModel player;
@@ -100,7 +101,8 @@ class DailyHistoryScreen extends StatelessWidget {
                         player.streakCount, 
                         displayKeys.length, 
                         bestDay,
-                        kCardRadius
+                        kCardRadius,
+                        colorScheme
                       ),
                       const SizedBox(height: kSectionGap),
                       WeeklyStepChart(
@@ -134,7 +136,8 @@ class DailyHistoryScreen extends StatelessWidget {
     int streak, 
     int days, 
     String? bestDay,
-    double radius
+    double radius,
+    ColorScheme colorScheme
   ) {
     String bestDayStr = "N/A";
     if (bestDay != null) {
@@ -146,15 +149,15 @@ class DailyHistoryScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+        gradient: LinearGradient(
+          colors: [colorScheme.primary, colorScheme.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4A00E0).withValues(alpha: 0.3),
+            color: colorScheme.secondary.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
           )
@@ -173,11 +176,11 @@ class DailyHistoryScreen extends StatelessWidget {
               Row(
                 children: [
                   if (streak > 0) ...[
-                    const Icon(Icons.local_fire_department_rounded, color: Colors.orangeAccent, size: 16),
+                    Icon(Icons.local_fire_department_rounded, color: colorScheme.xp, size: 16),
                     const SizedBox(width: 4),
-                    Text(
-                      "$streak DAY STREAK",
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                    const Text(
+                      "STREAK ACTIVE",
+                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                     ),
                     const SizedBox(width: 12),
                   ],
@@ -200,9 +203,9 @@ class DailyHistoryScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _summaryStat("RELIABILITY", grade, Icons.verified_user_rounded, color: Colors.cyanAccent),
-              _summaryStat("COMPLIANCE", "${compliance.toInt()}%", Icons.analytics_rounded),
-              _summaryStat("DISTANCE", "${totalDistance.toStringAsFixed(1)} KM", Icons.map_rounded),
+              _summaryStat("RELIABILITY", grade, Icons.verified_user_rounded, colorScheme, color: colorScheme.info),
+              _summaryStat("COMPLIANCE", "${compliance.toInt()}%", Icons.analytics_rounded, colorScheme),
+              _summaryStat("DISTANCE", "${totalDistance.toStringAsFixed(1)} KM", Icons.map_rounded, colorScheme),
             ],
           ),
           const Padding(
@@ -212,9 +215,9 @@ class DailyHistoryScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _summaryStat("TOTAL STEPS", NumberFormat.compact().format(totalSteps), Icons.directions_walk),
-              _summaryStat("XP ACCRUED", NumberFormat.compact().format(totalXp), Icons.bolt),
-              _summaryStat("PEAK DAY", bestDayStr, Icons.star),
+              _summaryStat("TOTAL STEPS", NumberFormat.compact().format(totalSteps), Icons.directions_walk, colorScheme),
+              _summaryStat("XP ACCRUED", NumberFormat.compact().format(totalXp), Icons.bolt, colorScheme),
+              _summaryStat("PEAK DAY", bestDayStr, Icons.star, colorScheme),
             ],
           ),
         ],
@@ -230,17 +233,18 @@ class DailyHistoryScreen extends StatelessWidget {
     return "D-RANK";
   }
 
-  Widget _summaryStat(String label, String value, IconData icon, {Color color = Colors.white60}) {
+  Widget _summaryStat(String label, String value, IconData icon, ColorScheme colorScheme, {Color? color}) {
+    final effectiveColor = color ?? Colors.white60;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, color: color == Colors.white60 ? Colors.cyanAccent : color, size: 14),
+            Icon(icon, color: effectiveColor == Colors.white60 ? colorScheme.info : effectiveColor, size: 14),
             const SizedBox(width: 4),
             Text(
               label,
-              style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+              style: TextStyle(color: effectiveColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
             ),
           ],
         ),
@@ -335,14 +339,14 @@ class DailyHistoryScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      _tierBadge(fitnessLevel),
+                      _tierBadge(fitnessLevel, colorScheme),
                       const SizedBox(width: 8),
                       Text(
                         goalReached ? "STATUS: OPTIMAL" : "STATUS: NOMINAL",
                         style: TextStyle(
                           fontWeight: FontWeight.w900, 
                           fontSize: 9, 
-                          color: goalReached ? Colors.greenAccent : colorScheme.onSurfaceVariant.withValues(alpha: 0.4), 
+                          color: goalReached ? colorScheme.success : colorScheme.onSurfaceVariant.withValues(alpha: 0.4), 
                           letterSpacing: 0.5
                         ),
                       ),
@@ -352,7 +356,7 @@ class DailyHistoryScreen extends StatelessWidget {
               ),
               _statusBox(
                 goalReached ? "GOAL MET" : "GOAL NOT MET",
-                goalReached ? Colors.greenAccent : colorScheme.primary,
+                goalReached ? colorScheme.success : colorScheme.primary,
               ),
             ],
           ),
@@ -360,10 +364,10 @@ class DailyHistoryScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _statItem(context, Icons.directions_walk_rounded, "$steps", "STEPS", Colors.orangeAccent),
-              _statItem(context, Icons.local_fire_department_rounded, calories.toStringAsFixed(0), "KCAL", Colors.redAccent),
+              _statItem(context, Icons.directions_walk_rounded, "$steps", "STEPS", colorScheme.xp),
+              _statItem(context, Icons.local_fire_department_rounded, calories.toStringAsFixed(0), "KCAL", colorScheme.health),
               _statItem(context, Icons.map_rounded, distance.toStringAsFixed(1), "KM", colorScheme.primary),
-              _statItem(context, Icons.bolt_rounded, "+$xp", "XP", Colors.amberAccent),
+              _statItem(context, Icons.bolt_rounded, "+$xp", "XP", colorScheme.gold),
             ],
           ),
           const SizedBox(height: 24),
@@ -384,7 +388,7 @@ class DailyHistoryScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: goalReached 
-                        ? [Colors.greenAccent.withValues(alpha: 0.6), Colors.greenAccent] 
+                        ? [colorScheme.success.withValues(alpha: 0.6), colorScheme.success] 
                         : [colorScheme.primary.withValues(alpha: 0.6), colorScheme.primary],
                     ),
                     borderRadius: BorderRadius.circular(4),
@@ -398,7 +402,7 @@ class DailyHistoryScreen extends StatelessWidget {
                padding: const EdgeInsets.only(top: 6),
                child: Text(
                  "SURPASSED TARGET BY ${(steps - player.dailyStepTarget)} STEPS!",
-                 style: const TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                 style: TextStyle(color: colorScheme.success, fontSize: 9, fontWeight: FontWeight.bold),
                ),
              ),
           const SizedBox(height: 24),
@@ -443,22 +447,22 @@ class DailyHistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _tierBadge(String tier) {
+  Widget _tierBadge(String tier, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.cyanAccent.withValues(alpha: 0.05),
+        color: colorScheme.info.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.1)),
+        border: Border.all(color: colorScheme.info.withValues(alpha: 0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.shield_rounded, size: 10, color: Colors.cyanAccent),
+          Icon(Icons.shield_rounded, size: 10, color: colorScheme.info),
           const SizedBox(width: 4),
           Text(
             tier.toUpperCase(),
-            style: const TextStyle(color: Colors.cyanAccent, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+            style: TextStyle(color: colorScheme.info, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
           ),
         ],
       ),

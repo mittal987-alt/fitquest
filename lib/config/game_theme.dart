@@ -15,4 +15,10 @@ extension GameTheme on ColorScheme {
 
   /// Success Green - used for completed goals and positive outcomes.
   Color get success => const Color(0xFF4CAF50);
+
+  /// Info Cyan - used for steps, scanning, and informational overlays.
+  Color get info => const Color(0xFF00BCD4);
+
+  /// Rare/Achievement Purple - used for achievements and high-tier items.
+  Color get rare => const Color(0xFF9C27B0);
 }

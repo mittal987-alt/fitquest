@@ -16,7 +16,8 @@ enum ActivityType {
   walkSessionStarted,
   walkSessionEnded,
   trainingSessionStarted,
-  trainingSessionEnded
+  trainingSessionEnded,
+  worldEventFinished
 }
 
 class ActivityFeedModel {

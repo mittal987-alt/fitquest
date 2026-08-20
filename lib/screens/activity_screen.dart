@@ -13,6 +13,7 @@ import '../services/firebase_service.dart';
 import '../services/pedometer_service.dart';
 import '../services/location_service.dart';
 import '../config/gameplay_rules.dart';
+import '../config/game_theme.dart';
 import '../features/tactical/widgets/activity_heatmap.dart';
 
 enum ActivityMode { walk, training }
@@ -60,8 +61,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
   // Map state
   GoogleMapController? _mapController;
   LatLng _currentPosition = const LatLng(0, 0);
-
-  static const Color _kPrimaryPurple = Colors.blueAccent;
 
   @override
   void dispose() {
@@ -341,15 +340,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.orangeAccent.withValues(alpha: 0.1),
+                    color: theme.colorScheme.xp.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.3)),
+                    border: Border.all(color: theme.colorScheme.xp.withValues(alpha: 0.3)),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.timer_outlined, color: Colors.orangeAccent, size: 14),
-                      SizedBox(width: 4),
-                      Text("REST", style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 10)),
+                      Icon(Icons.timer_outlined, color: theme.colorScheme.xp, size: 14),
+                      const SizedBox(width: 4),
+                      Text("REST", style: TextStyle(color: theme.colorScheme.xp, fontWeight: FontWeight.bold, fontSize: 10)),
                     ],
                   ),
                 ),
@@ -512,26 +511,27 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   Widget _buildTimerDisplay(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     return Column(
       children: [
         if (_isResting) ...[
           Text(
             "${(_restSecondsRemaining ~/ 60).toString().padLeft(2, '0')}:${(_restSecondsRemaining % 60).toString().padLeft(2, '0')}",
-            style: const TextStyle(
-              color: Colors.orangeAccent,
+            style: TextStyle(
+              color: colorScheme.xp,
               fontSize: 90,
               fontWeight: FontWeight.w900,
               letterSpacing: -4,
             ),
           ),
-          const Text(
+          Text(
             "REST INTERVAL ACTIVE",
-            style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 2),
+            style: TextStyle(color: colorScheme.xp, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 2),
           ),
           const SizedBox(height: 8),
           TextButton(
             onPressed: _stopRestTimer,
-            child: Text("SKIP REST", style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontWeight: FontWeight.bold)),
+            child: Text("SKIP REST", style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.4), fontWeight: FontWeight.bold)),
           ),
         ] else ...[
           Text(
@@ -592,6 +592,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   Widget _buildSecondaryStatsGrid(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -600,10 +601,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
       mainAxisSpacing: 16,
       childAspectRatio: 1.4,
       children: [
-        _secondaryStatTile(theme, "DISTANCE", "${_distanceKm.toStringAsFixed(1)} KM", theme.colorScheme.onSurface, "📏"),
-        _secondaryStatTile(theme, "CALORIES", "${_calories.toInt()} KCAL", theme.colorScheme.onSurface, "🔥"),
-        _secondaryStatTile(theme, "SPEED", "${_speedKmh.toStringAsFixed(1)} KM/H", theme.colorScheme.onSurface, "🚶"),
-        _secondaryStatTile(theme, "CAPTURED", "${_areaCapturedKm2.toStringAsFixed(3)} KM²", theme.colorScheme.onSurface, "🟩"),
+        _secondaryStatTile(theme, "DISTANCE", "${_distanceKm.toStringAsFixed(1)} KM", colorScheme.onSurface, "📏"),
+        _secondaryStatTile(theme, "CALORIES", "${_calories.toInt()} KCAL", colorScheme.onSurface, "🔥"),
+        _secondaryStatTile(theme, "SPEED", "${_speedKmh.toStringAsFixed(1)} KM/H", colorScheme.onSurface, "🚶"),
+        _secondaryStatTile(theme, "CAPTURED", "${_areaCapturedKm2.toStringAsFixed(3)} KM²", colorScheme.onSurface, "🟩"),
       ],
     );
   }
@@ -661,10 +662,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 theme,
                 "SNAP MEMORY",
                 Icons.camera_alt_rounded,
-                Colors.cyanAccent.withValues(alpha: 0.1),
+                colorScheme.info.withValues(alpha: 0.1),
                 _takePhoto,
-                textColor: Colors.cyanAccent,
-                borderColor: Colors.cyanAccent,
+                textColor: colorScheme.info,
+                borderColor: colorScheme.info,
               ),
             ),
             const SizedBox(width: 16),
@@ -673,10 +674,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 theme,
                 "RESET",
                 Icons.refresh_rounded,
-                Colors.orangeAccent.withValues(alpha: 0.1),
+                colorScheme.xp.withValues(alpha: 0.1),
                 _resetSession,
-                textColor: Colors.orangeAccent,
-                borderColor: Colors.orangeAccent,
+                textColor: colorScheme.xp,
+                borderColor: colorScheme.xp,
               ),
             ),
           ],
@@ -690,17 +691,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       theme,
                       "PAUSE",
                       Icons.pause_rounded,
-                      theme.colorScheme.onSurface.withValues(alpha: 0.1),
+                      colorScheme.onSurface.withValues(alpha: 0.1),
                       () => setState(() => _isActive = false),
-                      textColor: theme.colorScheme.onSurface,
+                      textColor: colorScheme.onSurface,
                     )
                   : _actionButton(
                       theme,
                       "RESUME",
                       Icons.play_arrow_rounded,
-                      theme.colorScheme.primary,
+                      colorScheme.primary,
                       () => setState(() => _isActive = true),
-                      textColor: theme.colorScheme.onPrimary,
+                      textColor: colorScheme.onPrimary,
                     ),
             ),
             const SizedBox(width: 16),
@@ -709,10 +710,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 theme,
                 "SAVE & STOP",
                 Icons.check_circle_rounded,
-                Colors.greenAccent.withValues(alpha: 0.1),
+                colorScheme.success.withValues(alpha: 0.1),
                 _finishWalk,
-                textColor: Colors.greenAccent,
-                borderColor: Colors.greenAccent,
+                textColor: colorScheme.success,
+                borderColor: colorScheme.success,
               ),
             ),
           ],
@@ -788,8 +789,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           longitude: pos.longitude,
         ));
       });
+      final colorScheme = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("MEMORY CAPTURED!"), backgroundColor: Colors.cyan),
+        SnackBar(content: const Text("MEMORY CAPTURED!"), backgroundColor: colorScheme.info),
       );
     }
   }

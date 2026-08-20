@@ -151,12 +151,14 @@ class AntiCheatService {
 
   bool get isCaptureBlocked => captureBlocked;
 
-  bool isVehicle(double speedKmH) => speedKmH > 12.0;
-  bool isWalking(double speedKmH) => speedKmH >= 0.1 && speedKmH <= 12.0;
+  bool isVehicle(double speedKmH) => speedKmH > 15.0;
+  bool isWalking(double speedKmH) => speedKmH >= 3.0 && speedKmH <= 10.0;
 
   String getMovementStatus(double speedKmH) {
-    if (speedKmH < 0.1) return "🧍 STANDING";
-    if (speedKmH >= 0.1 && speedKmH <= 12.0) return "🚶 WALKING";
+    if (speedKmH < 1.0) return "🧍 STANDING";
+    if (speedKmH < 3.0) return "🐢 STROLLING";
+    if (speedKmH <= 10.0) return "🚶 WALKING";
+    if (speedKmH <= 15.0) return "🏃 RUNNING";
     return "🚗 VEHICLE SPEED";
   }
 
@@ -203,9 +205,11 @@ class AntiCheatService {
     double distanceMultiplier = 1.0,
   }) {
     // Base radius (~222m) multiplied by augmentation factor
-    // FIX: had a stray `* 2.0` that made the real base radius 444m instead
-    // of the ~222m the comment describes. Confirmed 222m is correct.
     double maxValidProximity = (0.002 * 111000) * distanceMultiplier;
-    return userIsWalking && !captureBlocked && (distanceToTileMeters < maxValidProximity);
+    bool isNearEnough = distanceToTileMeters < maxValidProximity;
+    
+    // STRICTER RULE: Must be walking at specific speed.
+    // Removed allowCloseCapture (15m override) to ensure physical activity.
+    return !captureBlocked && isNearEnough && userIsWalking;
   }
 }

@@ -21,6 +21,7 @@ import '../models/team_model.dart';
 import '../models/gear_model.dart';
 import '../models/anomaly_model.dart';
 import '../models/world_event_model.dart';
+import '../config/gameplay_rules.dart';
 import '../config/crafting_recipes.dart';
 import '../models/activity_feed_model.dart' as fit;
 import 'hacking_minigame_screen.dart';
@@ -379,7 +380,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           }
         }
 
-        if (isWalking) {
+        if (!antiCheatService.isVehicle(speedKmh)) {
           antiCheatService.resetCaptureBlock();
           await captureTile();
         }
@@ -1378,28 +1379,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     await firebaseService.saveHexTile(newTile);
 
-    // Log the capture in the activity feed for functional stats
-    try {
-      final activity = fit.ActivityFeedModel(
-        id: "",
-        userId: uid,
-        teamId: player.teamId,
-        playerName: player.name,
-        type: fit.ActivityType.capture,
-        message: "captured a new territory sector",
-        timestamp: DateTime.now(),
-      );
-      await firebaseService.logActivity(activity);
-
-      // Increment totalLand for ranking
-      await firebaseService.firestore.collection("players").doc(uid).update({
-        "totalLand": FieldValue.increment(1),
-        "dailyHistory.${DateTime.now().toIso8601String().split('T')[0]}.captures": FieldValue.increment(1),
-      });
-    } catch (e) {
-      debugPrint("Error logging manual capture: $e");
-    }
-
     if (!mounted) return;
     allTiles.removeWhere((t) => t.tileId == tileId);
     allTiles.add(newTile);
@@ -1489,10 +1468,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       }
     }
 
-    int damage = 20 + (player.effectiveStrength ~/ 2);
-    if (isStronghold) {
-      damage = (damage / 2).floor();
-    }
+    int damage = GameplayRules.calculateCaptureDamage(player.effectiveStrength, isStronghold);
 
     int newPower = tile.power - damage;
 
@@ -1562,7 +1538,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       return;
     }
 
-    int repair = 10 + (player.effectiveEndurance ~/ 2);
+    int repair = GameplayRules.calculateCaptureRepair(player.effectiveEndurance);
     int newPower = (tile.power + repair).clamp(0, 100);
 
     HexTileModel defendedTile = HexTileModel(

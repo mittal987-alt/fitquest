@@ -19,7 +19,7 @@ class StepSyncService {
   final TacticalRelayController challengeController = TacticalRelayController();
   final LocationService locationService = LocationService();
   final PedometerService pedometerService = PedometerService();
-  
+
   StreamSubscription<StepCount>? stepStream;
   StreamSubscription? _locationSubscription;
   DateTime? lastSyncTime;
@@ -30,7 +30,7 @@ class StepSyncService {
 
   bool _isProcessing = false;
   PlayerModel? cachedPlayer;
-  
+
   // Local anchor to track steps between cloud sync pulses
   int? _lastLocalHardwareSteps;
 
@@ -55,21 +55,27 @@ class StepSyncService {
     // Start Location Stream for Speed-based Anti-Cheat
     if (statuses[Permission.locationWhenInUse]!.isGranted) {
       _locationSubscription = locationService.getLocationStream().listen((position) {
-        _currentSpeedKmh = locationService.getSpeedKmh(position);
-        // doublePrint("SPEED CHECK: ${_currentSpeedKmh.toStringAsFixed(1)} km/h");
+        // Use smoothed speed to filter out GPS noise spikes
+        _currentSpeedKmh = locationService.getSmoothedSpeedKmh(position);
       });
     }
 
     stepStream = Pedometer.stepCountStream.listen(
-      (StepCount event) async {
+          (StepCount event) async {
         final uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid == null) return;
 
         // SPEED-BASED ANTI-CHEAT
-        // If speed is > 12 km/h (vehicle range), ignore hardware step increments.
-        if (locationService.isVehicle(_currentSpeedKmh)) {
+        // Use confirmed vehicle status to prevent false-positive suppression from jumpy GPS
+        if (locationService.isVehicleConfirmed(_currentSpeedKmh)) {
           pedometerService.setPaused(true);
-          doublePrint("VEHICLE DETECTED (${_currentSpeedKmh.toStringAsFixed(1)} km/h): Steps suppressed.");
+          
+          // CRITICAL: We must update our local anchor even when steps are suppressed, 
+          // otherwise we'll "catch up" and award all vehicle-generated steps 
+          // as soon as the user slows down.
+          _lastLocalHardwareSteps = event.steps;
+          
+          doublePrint("VEHICLE CONFIRMED (${_currentSpeedKmh.toStringAsFixed(1)} km/h): Steps suppressed.");
           return;
         }
         pedometerService.setPaused(false);
@@ -87,6 +93,21 @@ class StepSyncService {
               return;
             }
             cachedPlayer = player;
+          }
+
+          // --- DAILY RESET CHECK ---
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          if (player.lastActiveDate == null || player.lastActiveDate!.isBefore(today)) {
+            doublePrint("NEW DAY DETECTED: Triggering daily reset sequence.");
+            await firebaseService.checkAndResetDailyStats(uid);
+            player = await firebaseService.getPlayer(uid);
+            if (player == null) {
+              _isProcessing = false;
+              return;
+            }
+            cachedPlayer = player;
+            _lastLocalHardwareSteps = player.lastHardwareStepCount;
           }
 
           int currentHardwareSteps = event.steps;
@@ -108,14 +129,20 @@ class StepSyncService {
           int deltaSteps = currentHardwareSteps - lastHardwareSteps;
 
           // DRIFT PROTECTION
-          int driftThreshold = (lastSyncTime == null || DateTime.now().difference(lastSyncTime!).inMinutes > 30) 
-              ? 15000 
-              : 2000;
+          // We scale the drift threshold based on the time elapsed since the last cloud sync.
+          // This prevents losing valid steps taken while the app was closed/minimized.
+          int minutesSinceLastSync = player.lastSyncTime != null 
+              ? DateTime.now().difference(player.lastSyncTime!).inMinutes 
+              : 1440; // Default to 24h if unknown to allow bulk sync
+
+          int driftThreshold = (minutesSinceLastSync > 30)
+              ? (minutesSinceLastSync * 250).clamp(15000, 100000) 
+              : 3000;
 
           if (deltaSteps > driftThreshold) {
-             doublePrint("ANOMALOUS DRIFT REJECTED: +$deltaSteps steps ignored.");
-             _showDriftNotification(deltaSteps, driftThreshold, currentHardwareSteps);
-             await firebaseService.updateLastHardwareSteps(
+            doublePrint("ANOMALOUS DRIFT REJECTED: +$deltaSteps steps ignored.");
+            _showDriftNotification(deltaSteps, driftThreshold, currentHardwareSteps);
+            await firebaseService.updateLastHardwareSteps(
               uid: uid,
               hardwareSteps: currentHardwareSteps,
             );
@@ -128,7 +155,7 @@ class StepSyncService {
           // 2. LOCAL ENGINE PULSE (Immediate feedback)
           _lastLocalHardwareSteps ??= lastHardwareSteps;
           int pulseDelta = currentHardwareSteps - _lastLocalHardwareSteps!;
-          
+
           if (pulseDelta > 0) {
             pedometerService.registerSteps(pulseDelta, playerContext: player);
             _lastLocalHardwareSteps = currentHardwareSteps;
@@ -144,7 +171,7 @@ class StepSyncService {
 
           if (deltaSteps > 0) {
             _syncStatusController.add(true);
-            
+
             // Unified Telemetry Sync (Batching multiple field increments including team steps)
             await firebaseService.syncTelemetry(
               uid: uid,
@@ -152,7 +179,7 @@ class StepSyncService {
               currentHardwareSteps: currentHardwareSteps,
               player: player,
             );
-            
+
             // Cross-Document Updates
             if (player.isInTeam && player.teamId != null) {
               final challenge = await challengeController.getTeamRelay(player.teamId!).first;
@@ -171,7 +198,7 @@ class StepSyncService {
             await firebaseService.contributeToGlobalEvent(uid: uid, steps: deltaSteps);
 
             lastSyncTime = DateTime.now();
-            
+
             cachedPlayer = player.copyWith(
               lastHardwareStepCount: currentHardwareSteps,
               totalSteps: player.totalSteps + deltaSteps,
@@ -180,7 +207,7 @@ class StepSyncService {
               dailyCalories: player.dailyCalories + (deltaSteps * GameplayRules.caloriesPerStep).toInt(),
               dailyDistance: player.dailyDistance + (deltaSteps * GameplayRules.distanceKmPerStep),
               xp: player.xp + (deltaSteps ~/ 10 * player.energyBoostXpMultiplier).toInt(),
-              currentStamina: player.currentStamina + (deltaSteps / 1000 * GameplayRules.staminaRefillPerThousandSteps).floor(),
+              currentStamina: (player.currentStamina + GameplayRules.calculateStaminaRefill(deltaSteps, player.effectiveEndurance)).clamp(0, player.maxStamina),
             );
 
             doublePrint("CLOUD SYNC: +$deltaSteps total steps persisted to Firestore.");
@@ -204,7 +231,7 @@ class StepSyncService {
     _locationSubscription?.cancel();
     stepStream = null;
     _locationSubscription = null;
-    _isProcessing = false;
+    reset(); // Fully clear state for next session
   }
 
   void dispose() {
@@ -227,7 +254,7 @@ class StepSyncService {
   }
 
   void _showDriftNotification(int delta, int threshold, int hardware) {
-    // We can't use ScaffoldMessenger here easily without context, 
+    // We can't use ScaffoldMessenger here easily without context,
     // but we can add a stream event for the UI to listen to.
     _driftEventController.add(DriftEvent(
       delta: delta,

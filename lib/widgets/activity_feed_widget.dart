@@ -191,6 +191,10 @@ class ActivityFeedWidget extends StatelessWidget {
         icon = Icons.check_circle_outline_rounded;
         color = Colors.greenAccent;
         break;
+      case ActivityType.worldEventFinished:
+        icon = Icons.public_rounded;
+        color = Colors.deepPurpleAccent;
+        break;
     }
 
     String displayMessage = activity.message;
@@ -243,6 +247,9 @@ class ActivityFeedWidget extends StatelessWidget {
           break;
         case ActivityType.trainingSessionEnded:
           displayMessage = "completed a training session";
+          break;
+        case ActivityType.worldEventFinished:
+          displayMessage = "concluded a global world event";
           break;
       }
     }
@@ -470,7 +477,6 @@ class ActivityFeedWidget extends StatelessWidget {
   }
 
   Widget _buildTimestamp(BuildContext context, DateTime timestamp) {
-    final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [

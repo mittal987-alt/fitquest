@@ -7,6 +7,7 @@ import '../models/player_model.dart';
 import '../models/achievement_model.dart';
 import '../services/firebase_service.dart';
 import '../services/auth_service.dart';
+import '../config/game_theme.dart';
 import 'login_screen.dart';
 import 'goal_adjustment_screen.dart';
 import '../main.dart';
@@ -365,14 +366,15 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildStatRow(BuildContext context, PlayerModel player) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _statItem(context, "${player.dailySteps}", "DAILY", icon: Icons.today_rounded, color: Colors.orangeAccent),
+        _statItem(context, "${player.dailySteps}", "DAILY", icon: Icons.today_rounded, color: colorScheme.xp),
         _statDivider(context),
-        _statItem(context, "${player.totalSteps}", "TOTAL STEPS", icon: Icons.directions_walk_rounded, color: Colors.greenAccent),
+        _statItem(context, "${player.totalSteps}", "TOTAL STEPS", icon: Icons.directions_walk_rounded, color: colorScheme.success),
         _statDivider(context),
-        _statItem(context, "${player.xp}", "XP", icon: Icons.bolt_rounded, color: Colors.amberAccent),
+        _statItem(context, "${player.xp}", "XP", icon: Icons.bolt_rounded, color: colorScheme.gold),
       ],
     );
   }
@@ -449,7 +451,7 @@ class ProfileScreen extends StatelessWidget {
           barRods: [
             BarChartRodData(
               toY: value,
-              color: isGoalMet ? Colors.greenAccent : colorScheme.primary,
+              color: isGoalMet ? colorScheme.success : colorScheme.primary,
               width: 16,
               borderRadius: BorderRadius.circular(4),
               backDrawRodData: BackgroundBarChartRodData(
@@ -589,7 +591,7 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
         if (isUnlocked)
-          const Icon(Icons.verified_outlined, color: Colors.greenAccent, size: 20)
+          Icon(Icons.verified_outlined, color: colorScheme.success, size: 20)
         else
           Icon(Icons.lock_outline_rounded, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.2), size: 20),
       ],
@@ -659,14 +661,14 @@ class ProfileScreen extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     
     final List<Color> colors = [
-      Colors.cyanAccent,
-      Colors.greenAccent,
-      Colors.orangeAccent,
-      Colors.purpleAccent,
-      Colors.redAccent,
-      Colors.blueAccent,
+      colorScheme.info,
+      colorScheme.success,
+      colorScheme.xp,
+      colorScheme.rare,
+      colorScheme.error,
+      colorScheme.primary,
       Colors.pinkAccent,
-      Colors.amberAccent,
+      colorScheme.gold,
     ];
 
     showModalBottomSheet(

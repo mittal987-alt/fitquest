@@ -13,6 +13,42 @@ class GameplayRules {
   /// Average distance in kilometers traversed per step: $\text{km} = \text{steps} \times 0.00075$
   static const double distanceKmPerStep = 0.00075;
 
+  /// Calculates XP gained from steps, applying energy boost multipliers.
+  static int calculateStepXP(int steps, double energyBoostMult) {
+    return (steps / 10 * energyBoostMult).toInt();
+  }
+
+  /// Calculates Raid Damage from steps, considering strength and buffs.
+  static double calculateRaidDamage({
+    required int steps,
+    required int effectiveStrength,
+    double energyBoostMult = 1.0,
+    double gearMult = 1.0,
+    double teamBuffMult = 1.0,
+    double velocityBonus = 1.0,
+  }) {
+    return steps * (effectiveStrength / 10.0) * energyBoostMult * gearMult * teamBuffMult * velocityBonus;
+  }
+
+  /// Calculates anomaly scan progress from steps and agility.
+  static double calculateScanProgress(int steps, int effectiveAgility, {double velocityBonus = 1.0}) {
+    return (steps * (effectiveAgility / 5000.0) * velocityBonus);
+  }
+
+  /// Calculates damage dealt to an enemy territory.
+  static int calculateCaptureDamage(int effectiveStrength, bool isStronghold) {
+    int damage = 20 + (effectiveStrength ~/ 2);
+    if (isStronghold) {
+      damage = (damage / 2).floor();
+    }
+    return damage;
+  }
+
+  /// Calculates repair power for a territory.
+  static int calculateCaptureRepair(int effectiveEndurance) {
+    return 10 + (effectiveEndurance ~/ 2);
+  }
+
   // --- GHOST STRIDER CONFIGURATION ---
   /// Multiplier applied to trust scores when defeating your personal historical ghost
   static const int ghostStriderTrustReward = 50;
@@ -51,18 +87,45 @@ class GameplayRules {
     return 0.15; // Massive Raid Balancing
   }
 
+  // --- WORLD EVENTS ---
+  static const int worldEventContributionCost = 15;
+
   // --- RECOVERY & AP POOLS ---
   /// Maximum stamina Action Points (AP) base limit
   static const int baseMaxStamina = 100;
 
-  /// Stamina recovery multiplier per 1,000 steps completed
-  static const int staminaRefillPerThousandSteps = 10;
-
   /// Stamina recovery per 2 minutes during idle regen
   static const int passiveStaminaRegen = 5;
 
-  /// Cost to participate in a World Event node (Mineral extraction, etc.)
-  static const int worldEventContributionCost = 15;
+  /// Stamina refill rewarded per 1,000 steps taken
+  static const int staminaRefillPerThousandSteps = 10;
+
+  /// Calculates rewards for World Events based on team contribution rank.
+  static Map<String, int> calculateWorldEventRewards({
+    required int rank,
+    required Map<String, int> eventBaseRewards,
+    double participationRatio = 1.0,
+  }) {
+    double rankMult = 1.0;
+    if (rank == 1) rankMult = 1.5;
+    else if (rank == 2) rankMult = 1.2;
+    else if (rank == 3) rankMult = 1.1;
+
+    Map<String, int> finalRewards = {};
+    eventBaseRewards.forEach((key, value) {
+      finalRewards[key] = (value * rankMult * participationRatio).toInt();
+    });
+
+    return finalRewards;
+  }
+
+  /// Calculates stamina refill based on steps and endurance attribute.
+  static int calculateStaminaRefill(int steps, int effectiveEndurance) {
+    // BASE FORMULA: (steps / (200 - effectiveEndurance))
+    // Capped at 150 endurance to avoid division by zero or negative results
+    double adjustedEndurance = effectiveEndurance.toDouble().clamp(0.0, 150.0);
+    return (steps / (200 - adjustedEndurance)).floor();
+  }
 
   // --- ELEMENTAL BOSS SYSTEM ---
   static const List<Map<String, dynamic>> bossPool = [

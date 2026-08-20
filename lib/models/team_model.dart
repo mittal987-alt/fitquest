@@ -24,6 +24,8 @@ class TeamModel {
   final String? raidBossId;
   final Map<String, DateTime> synergyResonance; // Class -> Expiry
   final Map<String, DateTime> activeTeamBuffs; // BuffId -> Expiry
+  final Map<String, dynamic> dailyHistory; // Key: YYYY-MM-DD
+  final Map<String, dynamic> weeklyHistory; // Key: YYYY-WW
 
   TeamModel({
     required this.id,
@@ -48,6 +50,8 @@ class TeamModel {
     this.raidBossId,
     this.synergyResonance = const {},
     this.activeTeamBuffs = const {},
+    this.dailyHistory = const {},
+    this.weeklyHistory = const {},
   });
 
   // =========================
@@ -95,6 +99,8 @@ class TeamModel {
       raidBossId: map["raidBossId"]?.toString(),
       synergyResonance: resonance,
       activeTeamBuffs: buffs,
+      dailyHistory: Map<String, dynamic>.from(map["dailyHistory"] ?? {}),
+      weeklyHistory: Map<String, dynamic>.from(map["weeklyHistory"] ?? {}),
     );
   }
 
@@ -135,6 +141,8 @@ class TeamModel {
       "raidBossId": raidBossId,
       "synergyResonance": resonance,
       "activeTeamBuffs": buffs,
+      "dailyHistory": dailyHistory,
+      "weeklyHistory": weeklyHistory,
     };
   }
 

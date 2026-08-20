@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/gear_model.dart';
 import '../models/player_model.dart';
 import '../services/firebase_service.dart';
+import '../config/game_theme.dart';
 
 class ArmoryScreen extends StatelessWidget {
   const ArmoryScreen({super.key});
@@ -88,7 +89,7 @@ class ArmoryScreen extends StatelessWidget {
                           const SizedBox(height: 8),
                           Text(
                             "${player.xp} XP",
-                            style: TextStyle(color: colorScheme.onSurface, fontSize: 28, fontWeight: FontWeight.w900),
+                            style: TextStyle(color: colorScheme.xp, fontSize: 28, fontWeight: FontWeight.w900),
                           ),
                         ],
                       ),
@@ -303,7 +304,7 @@ class _GearListItem extends StatelessWidget {
                   Text(
                     "${gear.price} XP",
                     style: TextStyle(
-                      color: canAfford ? colorScheme.primary : colorScheme.error,
+                      color: canAfford ? colorScheme.xp : colorScheme.error,
                       fontWeight: FontWeight.w900,
                       fontSize: 14,
                     ),

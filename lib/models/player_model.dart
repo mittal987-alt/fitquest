@@ -72,23 +72,32 @@ class PlayerModel {
   /// Map structure: "HourString" (e.g., "14" or ISO Hour) -> Accumulated steps.
   final Map<String, int> hourlySteps;
 
-  /// Daily logs for historical tracking. Key: "YYYY-MM-DD", Value: Map of stats
   final Map<String, dynamic> dailyHistory;
 
-  int get energyBoostRaidMultiplier {
-    if (activePowerUps.containsKey('energy_boost')) {
-      final expiry = activePowerUps['energy_boost']!;
-      if (expiry.isAfter(DateTime.now())) return 2;
+  double get energyBoostRaidMultiplier {
+    if (!activePowerUps.containsKey('energy_boost')) return 1.0;
+    final expiry = activePowerUps['energy_boost']!;
+    if (expiry.isBefore(DateTime.now())) return 1.0;
+
+    switch (fitnessGoal) {
+      case 'muscle_gain': return 2.2;
+      case 'endurance': return 1.8;
+      case 'weight_loss': return 1.5;
+      default: return 1.5;
     }
-    return 1;
   }
 
-  int get energyBoostXpMultiplier {
-    if (activePowerUps.containsKey('energy_boost')) {
-      final expiry = activePowerUps['energy_boost']!;
-      if (expiry.isAfter(DateTime.now())) return 2;
+  double get energyBoostXpMultiplier {
+    if (!activePowerUps.containsKey('energy_boost')) return 1.0;
+    final expiry = activePowerUps['energy_boost']!;
+    if (expiry.isBefore(DateTime.now())) return 1.0;
+
+    switch (fitnessGoal) {
+      case 'weight_loss': return 2.0;
+      case 'endurance': return 1.8;
+      case 'muscle_gain': return 1.5;
+      default: return 1.5;
     }
-    return 1;
   }
 
   final bool isGhostStriderEnabled;

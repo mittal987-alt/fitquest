@@ -102,7 +102,7 @@ class FirebaseService {
     await firestore.collection("players").doc(uid).update({
       "unlockedAchievements": FieldValue.arrayUnion([achievementId]),
     });
-    
+
     // Log to activity feed
     await firestore.collection("activity_feed").add({
       "userId": uid,
@@ -114,32 +114,13 @@ class FirebaseService {
 
   Future<void> saveWalkSession(WalkSessionModel session) async {
     await firestore.collection("walk_sessions").add(session.toMap());
-    
-    // Update player's total land if session has many steps
-    if (session.steps > 1000) {
-      final playerRef = firestore.collection("players").doc(session.userId);
-      await playerRef.update({
-        "totalLand": FieldValue.increment(1),
-      });
 
-      // Log the capture in the activity feed for the "Today's Area" metric
-      final playerDoc = await playerRef.get();
-      final playerName = playerDoc.data()?['name'] ?? "A Strider";
-      
-      await firestore.collection("activity_feed").add({
-        "userId": session.userId,
-        "playerName": playerName,
-        "type": ActivityType.capture.name,
-        "message": "captured a new territory sector",
-        "timestamp": FieldValue.serverTimestamp(),
-      });
-
-      // Update daily captures in player history
-      final todayKey = DateTime.now().toIso8601String().split('T')[0];
-      await playerRef.update({
-        "dailyHistory.$todayKey.captures": FieldValue.increment(1),
-      });
-    }
+    final playerRef = firestore.collection("players").doc(session.userId);
+    // Update daily history for steps/distance
+    final todayKey = DateTime.now().toIso8601String().split('T')[0];
+    await playerRef.update({
+      "dailyHistory.$todayKey.walks": FieldValue.increment(1),
+    });
   }
 
   Future<void> sendTacticalPing(String teamId, String channel, String message) async {
@@ -160,7 +141,10 @@ class FirebaseService {
     // Limit check: Prevent flooding (e.g., max 100 teams globally or per user)
     // For now, let's just ensure the user isn't already in a team (already handled in UI but good to have here)
     final playerDoc = await firestore.collection("players").doc(leaderId).get();
-    if (playerDoc.exists && (playerDoc.data()?["isInTeam"] ?? false)) {
+    if (!playerDoc.exists) throw Exception("PLAYER_NOT_FOUND");
+    final player = PlayerModel.fromMap(playerDoc.data()!);
+
+    if (player.isInTeam) {
       throw Exception("PLAYER_ALREADY_IN_TEAM");
     }
 
@@ -171,12 +155,15 @@ class FirebaseService {
       color: "purple",
       members: 1,
       maxMembers: 5,
-      totalSteps: 0,
+      totalSteps: player.dailySteps, // Team starts with leader's current effort
+      dailySteps: player.dailySteps,
+      weeklySteps: player.weeklySteps,
       leaderId: leaderId,
       strongholdActive: false,
       logo: "shield",
+      territoryCount: 0,
     );
-    
+
     await firestore.runTransaction((transaction) async {
       transaction.set(teamRef, team.toMap());
       transaction.update(firestore.collection("players").doc(leaderId), {
@@ -278,13 +265,7 @@ class FirebaseService {
       }
 
       // ENERGY BOOST BONUS
-      double energyBoostMult = 1.0;
-      if (player.activePowerUps.containsKey("energy_boost")) {
-        DateTime expiry = player.activePowerUps["energy_boost"]!;
-        if (expiry.isAfter(DateTime.now())) {
-          energyBoostMult = player.energyBoostRaidMultiplier.toDouble();
-        }
-      }
+      double energyBoostMult = player.energyBoostRaidMultiplier;
 
       double totalDmg = (baseDmg * gearMult * strongholdBonus * energyBoostMult * elementalMult).toDouble();
 
@@ -398,16 +379,16 @@ class FirebaseService {
 
     if (result["success"] == true && result["defeated"] == true) {
       await distributeRaidRewards(
-        teamId: teamId,
-        totalDamage: result["totalDamage"] as double,
-        bossName: result["bossName"] as String
+          teamId: teamId,
+          totalDamage: result["totalDamage"] as double,
+          bossName: result["bossName"] as String
       );
     }
 
     return (
-      result["success"] == true, 
-      result["defeated"] == true, 
-      result["primalSpirit"] == true
+    result["success"] == true,
+    result["defeated"] == true,
+    result["primalSpirit"] == true
     );
   }
 
@@ -438,7 +419,7 @@ class FirebaseService {
 
         final teamSize = participantsQuery.docs.length;
         final rewards = GameplayRules.calculateRaidRewards(teamSize, ratio, true);
-        
+
         int xpReward = rewards["xp"]!;
         int currencyReward = rewards["currency"]!;
 
@@ -535,6 +516,68 @@ class FirebaseService {
     });
   }
 
+  Future<void> completeWorldEvent(String eventId) async {
+    final eventRef = firestore.collection("world_events").doc(eventId);
+
+    await firestore.runTransaction((transaction) async {
+      final eventSnap = await transaction.get(eventRef);
+      if (!eventSnap.exists) return;
+
+      final event = WorldEventModel.fromMap(eventSnap.data()!, eventId);
+      if (!event.isActive) return;
+
+      // 1. Determine Winning Team and Ranks
+      final sortedTeams = event.teamContributions.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      if (sortedTeams.isEmpty) {
+        transaction.update(eventRef, {"isActive": false});
+        return;
+      }
+
+      final winningTeamId = sortedTeams.first.key;
+
+      // 2. Distribute Rewards to Participating Teams
+      for (int i = 0; i < sortedTeams.length; i++) {
+        final teamId = sortedTeams[i].key;
+        final rank = i + 1;
+
+        // Calculate rewards using rules
+        final teamRewards = GameplayRules.calculateWorldEventRewards(
+          rank: rank,
+          eventBaseRewards: event.rewards,
+        );
+
+        // Add to Team Currency
+        final teamRef = firestore.collection("teams").doc(teamId);
+        transaction.update(teamRef, {
+          "teamCurrency": FieldValue.increment(teamRewards["currency"] ?? 0),
+        });
+
+        // Log team achievement if they won
+        if (rank == 1) {
+          transaction.update(teamRef, {
+            "unlockedAchievements": FieldValue.arrayUnion(["world_event_winner"]),
+          });
+        }
+
+        // Notify team via activity feed
+        transaction.set(firestore.collection("activity_feed").doc(), {
+          "teamId": teamId,
+          "type": "world_event_finished",
+          "itemId": event.title,
+          "message": "Ranked #$rank in ${event.title}! Rewards distributed.",
+          "timestamp": FieldValue.serverTimestamp(),
+        });
+      }
+
+      transaction.update(eventRef, {
+        "isActive": false,
+        "winningTeamId": winningTeamId,
+      });
+    });
+  }
+
   Future<void> contributeToWorldEvent(String eventId, String teamId, String uid, {int bonus = 0}) async {
     final playerRef = firestore.collection("players").doc(uid);
     final eventRef = firestore.collection("world_events").doc(eventId);
@@ -548,9 +591,12 @@ class FirebaseService {
 
       if (player.currentStamina < cost) return;
 
+      double eventXpMult = player.getModifier('event_xp_mult', allGear);
+      int xpReward = ((25 + (bonus * 10)) * eventXpMult).toInt();
+
       transaction.update(playerRef, {
         "currentStamina": player.currentStamina - cost,
-        "xp": FieldValue.increment(25 + (bonus * 10)),
+        "xp": FieldValue.increment(xpReward),
       });
 
       transaction.update(eventRef, {
@@ -573,7 +619,7 @@ class FirebaseService {
         // Scaling: Base regen + 1 for every 2 points of effective Endurance
         int bonusRegen = (player.effectiveEndurance / 2).floor();
         int totalRegen = GameplayRules.passiveStaminaRegen + bonusRegen;
-        
+
         transaction.update(docRef, {
           "currentStamina": (current + totalRegen).clamp(0, max),
         });
@@ -595,27 +641,63 @@ class FirebaseService {
 
   Future<void> saveHexTile(HexTileModel tile) async {
     final tileRef = firestore.collection("hex_tiles").doc(tile.tileId);
-    
+
     await firestore.runTransaction((transaction) async {
       final tileSnap = await transaction.get(tileRef);
-      
-      // If tile was previously owned by a different team, decrement their count
+
       if (tileSnap.exists) {
         final oldData = tileSnap.data()!;
-        if (oldData["ownerType"] == "team" && oldData["ownerId"] != tile.ownerId) {
-          final oldTeamRef = firestore.collection("teams").doc(oldData["ownerId"]);
-          transaction.update(oldTeamRef, {"territoryCount": FieldValue.increment(-1)});
+        final String oldOwnerId = oldData["ownerId"];
+        final String oldOwnerType = oldData["ownerType"];
+
+        if (oldOwnerId != tile.ownerId) {
+          // Decrement old owner
+          if (oldOwnerType == "team") {
+            final oldTeamRef = firestore.collection("teams").doc(oldOwnerId);
+            transaction.update(oldTeamRef, {"territoryCount": FieldValue.increment(-1)});
+          } else if (oldOwnerType == "solo") {
+            final oldPlayerRef = firestore.collection("players").doc(oldOwnerId);
+            transaction.update(oldPlayerRef, {"totalLand": FieldValue.increment(-1)});
+          }
+
+          // Increment new owner
+          if (tile.ownerType == "team") {
+            final teamRef = firestore.collection("teams").doc(tile.ownerId);
+            transaction.update(teamRef, {"territoryCount": FieldValue.increment(1)});
+          } else if (tile.ownerType == "solo") {
+            final playerRef = firestore.collection("players").doc(tile.ownerId);
+            transaction.update(playerRef, {"totalLand": FieldValue.increment(1)});
+
+            // Log the capture in the activity feed
+            final activityRef = firestore.collection("activity_feed").doc();
+            transaction.set(activityRef, {
+              "userId": tile.ownerId,
+              "playerName": tile.ownerName,
+              "type": "capture",
+              "message": "captured a new territory sector",
+              "timestamp": FieldValue.serverTimestamp(),
+            });
+
+            // Update daily captures in player history
+            final todayKey = DateTime.now().toIso8601String().split('T')[0];
+            transaction.update(playerRef, {
+              "dailyHistory.$todayKey.captures": FieldValue.increment(1),
+            });
+          }
+        }
+      } else {
+        // New tile being captured for the first time
+        if (tile.ownerType == "team") {
+          final teamRef = firestore.collection("teams").doc(tile.ownerId);
+          transaction.update(teamRef, {"territoryCount": FieldValue.increment(1)});
+        } else if (tile.ownerType == "solo") {
+          final playerRef = firestore.collection("players").doc(tile.ownerId);
+          transaction.update(playerRef, {"totalLand": FieldValue.increment(1)});
         }
       }
 
-      // Set the new tile data
+      // Always set the tile data (it might be a repair or power update)
       transaction.set(tileRef, tile.toMap());
-
-      // If new owner is a team, increment their count
-      if (tile.ownerType == "team") {
-        final teamRef = firestore.collection("teams").doc(tile.ownerId);
-        transaction.update(teamRef, {"territoryCount": FieldValue.increment(1)});
-      }
     });
   }
 
@@ -711,98 +793,142 @@ class FirebaseService {
     required int currentHardwareSteps,
     required PlayerModel player,
   }) async {
+    final playerRef = firestore.collection("players").doc(uid);
+    final teamRef = player.teamId != null ? firestore.collection("teams").doc(player.teamId) : null;
+
     final calories = (deltaSteps * GameplayRules.caloriesPerStep).toInt();
     final distance = deltaSteps * GameplayRules.distanceKmPerStep;
-    final xp = (deltaSteps ~/ 10 * player.energyBoostXpMultiplier).toInt();
+
+    double xpMult = player.getModifier('xp_mult', allGear);
+    double stepXpMult = player.getModifier('step_xp_mult', allGear);
+    final xp = ((deltaSteps / 10) * player.energyBoostXpMultiplier * xpMult * stepXpMult).toInt();
     
-    // RPG Logic: Regain Stamina/AP based on steps
-    final apRegained = (deltaSteps / 1000 * GameplayRules.staminaRefillPerThousandSteps).floor();
+    // Correct stamina refill logic based on GameplayRules
+    final apRegained = GameplayRules.calculateStaminaRefill(deltaSteps, player.effectiveEndurance);
 
     final dateKey = DateTime.now().toIso8601String().split('T')[0];
     final hourKey = DateTime.now().hour.toString();
 
-    final updates = {
-      "lastHardwareStepCount": currentHardwareSteps,
-      "totalSteps": FieldValue.increment(deltaSteps),
-      "dailySteps": FieldValue.increment(deltaSteps),
-      "weeklySteps": FieldValue.increment(deltaSteps),
-      "dailyCalories": FieldValue.increment(calories),
-      "dailyDistance": FieldValue.increment(distance),
-      "lastActiveDate": FieldValue.serverTimestamp(),
-      "xp": FieldValue.increment(xp),
-      "currentStamina": FieldValue.increment(apRegained),
-      "lastSyncTime": FieldValue.serverTimestamp(),
-      "dailyHistory.$dateKey.steps": FieldValue.increment(deltaSteps),
-      "hourlySteps.$hourKey": FieldValue.increment(deltaSteps),
-    };
+    Map<String, dynamic> resultUpdates = {};
 
-    await firestore.collection("players").doc(uid).update(updates);
-    
-    // Ensure stamina doesn't exceed max after increment
-    // We do a follow-up check or we could use a transaction if precision is critical,
-    // but for telemetry bursts, a simple clamp on the next read/write is usually sufficient.
+    await firestore.runTransaction((transaction) async {
+      final playerSnap = await transaction.get(playerRef);
+      if (!playerSnap.exists) return;
 
-    // Update team distance challenge progress
-    if (player.isInTeam && player.teamId != null) {
-      final teamRef = firestore.collection("teams").doc(player.teamId);
-      await firestore.runTransaction((transaction) async {
+      final data = playerSnap.data()!;
+
+      // Manually handle nested map entries to ensure they exist before incrementing
+      Map<String, dynamic> dailyHistory = Map<String, dynamic>.from(data["dailyHistory"] ?? {});
+      Map<String, dynamic> dayEntry = Map<String, dynamic>.from(dailyHistory[dateKey] ?? {});
+      dayEntry["steps"] = (dayEntry["steps"] ?? 0) + deltaSteps;
+      dailyHistory[dateKey] = dayEntry;
+
+      Map<String, int> hourlySteps = Map<String, int>.from(data["hourlySteps"] ?? {});
+      hourlySteps[hourKey] = (hourlySteps[hourKey] ?? 0) + deltaSteps;
+
+      final playerUpdates = {
+        "lastHardwareStepCount": currentHardwareSteps,
+        "totalSteps": FieldValue.increment(deltaSteps),
+        "dailySteps": FieldValue.increment(deltaSteps),
+        "weeklySteps": FieldValue.increment(deltaSteps),
+        "dailyCalories": FieldValue.increment(calories),
+        "dailyDistance": FieldValue.increment(distance),
+        "lastActiveDate": FieldValue.serverTimestamp(),
+        "xp": FieldValue.increment(xp),
+        "currentStamina": FieldValue.increment(apRegained),
+        "lastSyncTime": FieldValue.serverTimestamp(),
+        "dailyHistory": dailyHistory,
+        "hourlySteps": hourlySteps,
+      };
+
+      resultUpdates = playerUpdates;
+
+      // 1. Update Player
+      transaction.update(playerRef, playerUpdates);
+
+      // 2. Update Team (if applicable)
+      if (teamRef != null) {
         final teamSnap = await transaction.get(teamRef);
-        if (!teamSnap.exists) return;
+        if (teamSnap.exists) {
+          final teamData = teamSnap.data()!;
 
-        final teamData = teamSnap.data()!;
-        
-        // 1. Update team-wide weekly and total steps
-        transaction.update(teamRef, {
-          "totalSteps": FieldValue.increment(deltaSteps),
-          "dailySteps": FieldValue.increment(deltaSteps),
-          "weeklySteps": FieldValue.increment(deltaSteps),
-        });
+          transaction.update(teamRef, {
+            "totalSteps": FieldValue.increment(deltaSteps),
+            "dailySteps": FieldValue.increment(deltaSteps),
+            "weeklySteps": FieldValue.increment(deltaSteps),
+          });
 
-        // 2. Update team challenge progress
-        final challengeId = teamData["activeDailyChallengeId"];
-        if (challengeId != null) {
-          final challengeRef = teamRef.collection("challenges").doc(challengeId);
-          final challengeSnap = await transaction.get(challengeRef);
-          if (challengeSnap.exists) {
-            final challengeData = challengeSnap.data()!;
-            final type = challengeData["type"];
-            
-            double increment = 0;
-            if (type == "distance") {
-              increment = distance;
-            } else if (type == "steps") {
-              increment = deltaSteps.toDouble();
-            }
+          // 3. Update Team Challenge Progress
+          final challengeId = teamData["activeDailyChallengeId"];
+          if (challengeId != null) {
+            final challengeRef = teamRef.collection("challenges").doc(challengeId);
+            final challengeSnap = await transaction.get(challengeRef);
+            if (challengeSnap.exists) {
+              final challengeData = challengeSnap.data()!;
+              final type = challengeData["type"];
+              double increment = (type == "distance") ? distance : (type == "steps" ? deltaSteps.toDouble() : 0);
 
-            if (increment > 0) {
-              final double oldProgress = (challengeData["progress"] ?? 0.0).toDouble();
-              final double target = (challengeData["target"] ?? 0.0).toDouble();
-              final double newProgress = oldProgress + increment;
+              if (increment > 0) {
+                final double oldProgress = (challengeData["progress"] ?? 0.0).toDouble();
+                final double target = (challengeData["target"] ?? 0.0).toDouble();
+                final double newProgress = oldProgress + increment;
 
-              transaction.update(challengeRef, {
-                "progress": newProgress,
-              });
+                transaction.update(challengeRef, {"progress": newProgress});
 
-              if (oldProgress < target && newProgress >= target) {
-                transaction.set(firestore.collection("activity_feed").doc(), {
-                  "teamId": player.teamId,
-                  "type": "challenge_completed",
-                  "itemId": challengeData["title"],
-                  "timestamp": FieldValue.serverTimestamp(),
-                });
+                if (oldProgress < target && newProgress >= target) {
+                  transaction.set(firestore.collection("activity_feed").doc(), {
+                    "teamId": player.teamId,
+                    "type": "challenge_completed",
+                    "itemId": challengeData["title"],
+                    "timestamp": FieldValue.serverTimestamp(),
+                  });
+                }
               }
             }
           }
         }
+      }
+    });
+
+    _clampPlayerStamina(uid);
+    await contributeToGlobalEvent(uid: uid, steps: deltaSteps);
+
+    return resultUpdates;
+  }
+
+  Future<void> _clampPlayerStamina(String uid) async {
+    final docRef = firestore.collection("players").doc(uid);
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+      final data = snapshot.data()!;
+      int current = (data["currentStamina"] as num?)?.toInt() ?? 0;
+      int max = (data["maxStamina"] as num?)?.toInt() ?? GameplayRules.baseMaxStamina;
+      if (current > max) {
+        transaction.update(docRef, {"currentStamina": max});
+      }
+    });
+  }
+
+  Future<void> claimMineralNode(String uid, String material) async {
+    final playerRef = firestore.collection("players").doc(uid);
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(playerRef);
+      if (!snapshot.exists) return;
+
+      Map<String, int> inventory = Map<String, int>.from(snapshot.data()?["inventory"] ?? {});
+      inventory[material] = (inventory[material] ?? 0) + 1;
+
+      transaction.update(playerRef, {
+        "inventory": inventory,
+        "xp": FieldValue.increment(50),
       });
-    }
-    
-    return updates;
+    });
   }
 
   Future<void> updateTeamSteps({required String teamId, required int stepsToAdd}) async {
     final teamRef = firestore.collection("teams").doc(teamId);
-    
+
     await firestore.runTransaction((transaction) async {
       final teamSnap = await transaction.get(teamRef);
       if (!teamSnap.exists) return;
@@ -810,7 +936,7 @@ class FirebaseService {
       final data = teamSnap.data()!;
       final currentSteps = (data["totalSteps"] ?? 0) as int;
       final newSteps = currentSteps + stepsToAdd;
-      
+
       final currentDailySteps = (data["dailySteps"] ?? 0) as int;
       final newDailySteps = currentDailySteps + stepsToAdd;
 
@@ -841,7 +967,7 @@ class FirebaseService {
           final double oldProgress = (challengeSnap.data()?["progress"] ?? 0.0).toDouble();
           final double target = (challengeSnap.data()?["target"] ?? 0.0).toDouble();
           final double newProgress = oldProgress + stepsToAdd;
-          
+
           transaction.update(challengeRef, {
             "progress": newProgress,
           });
@@ -877,7 +1003,7 @@ class FirebaseService {
 
   Future<void> rotateDailyChallenge(String teamId) async {
     final teamRef = firestore.collection("teams").doc(teamId);
-    
+
     await firestore.runTransaction((transaction) async {
       final teamSnap = await transaction.get(teamRef);
       if (!teamSnap.exists) return;
@@ -887,9 +1013,9 @@ class FirebaseService {
       final now = DateTime.now();
 
       // Check if it's actually a new day
-      if (lastReset != null && 
-          lastReset.year == now.year && 
-          lastReset.month == now.month && 
+      if (lastReset != null &&
+          lastReset.year == now.year &&
+          lastReset.month == now.month &&
           lastReset.day == now.day) {
         return;
       }
@@ -903,7 +1029,7 @@ class FirebaseService {
       // 2. Pick a new challenge from the pool
       final pool = GameplayRules.dailyChallengePool;
       final challengeData = pool[Random().nextInt(pool.length)];
-      
+
       final challengeRef = teamRef.collection("challenges").doc();
       final expiresAt = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
@@ -1001,28 +1127,28 @@ class FirebaseService {
     });
   }
 
-  Future<void> checkAndResetDailyStats(String uid) async {
+  Future<void> checkAndResetDailyStats(String uid, {int? currentHardwareSteps}) async {
     final playerRef = firestore.collection("players").doc(uid);
-    
+
     await firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(playerRef);
       if (!snapshot.exists) return;
 
       final data = snapshot.data()!;
-      final lastActive = data["lastActiveDate"] is Timestamp 
-          ? (data["lastActiveDate"] as Timestamp).toDate() 
+      final lastActive = data["lastActiveDate"] is Timestamp
+          ? (data["lastActiveDate"] as Timestamp).toDate()
           : null;
-      
+
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
 
       if (lastActive == null || lastActive.isBefore(today)) {
-        // It's a new day! 
+        // It's a new day!
         // 1. Archive yesterday's stats
-        final dateKey = lastActive != null 
+        final dateKey = lastActive != null
             ? "${lastActive.year}-${lastActive.month.toString().padLeft(2, '0')}-${lastActive.day.toString().padLeft(2, '0')}"
             : "initial";
-        
+
         Map<String, dynamic> dailyHistory = Map<String, dynamic>.from(data["dailyHistory"] ?? {});
         dailyHistory[dateKey] = {
           "steps": data["dailySteps"] ?? 0,
@@ -1038,7 +1164,7 @@ class FirebaseService {
           final now = DateTime.now();
           final lastMonday = now.subtract(Duration(days: now.weekday - 1));
           final lastMondayMidnight = DateTime(lastMonday.year, lastMonday.month, lastMonday.day);
-          
+
           if (lastActive.isBefore(lastMondayMidnight)) {
             isWeeklyReset = true;
           }
@@ -1053,7 +1179,7 @@ class FirebaseService {
           final yesterday = today.subtract(const Duration(days: 1));
           final yesterdayStr = "${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}";
           final lastActiveDay = DateTime(lastActive.year, lastActive.month, lastActive.day);
-          
+
           if (lastActiveDay == yesterday) {
             // Check if they met their daily target to maintain/increment streak
             final int dailyTarget = data["dailyStepTarget"] ?? 10000;
@@ -1067,7 +1193,7 @@ class FirebaseService {
               streak = 0;
             }
           } else if (lastActiveDay == today) {
-             // Already processed today
+            // Already processed today
           } else if (lastActiveDay.isBefore(yesterday)) {
             streak = 0;
           }
@@ -1087,6 +1213,11 @@ class FirebaseService {
           "hourlySteps": {}, // Reset hourly telemetry for the new day
         };
 
+        // Anchor the new day's hardware baseline if current steps are known
+        if (currentHardwareSteps != null && currentHardwareSteps > 0) {
+          playerUpdates["lastHardwareStepCount"] = currentHardwareSteps;
+        }
+
         if (isWeeklyReset) {
           playerUpdates["weeklySteps"] = 0;
         }
@@ -1094,35 +1225,65 @@ class FirebaseService {
         transaction.update(playerRef, playerUpdates);
 
         // 4. Handle Team Daily Reset if player is in a team
+        // FIX: this call was previously not awaited. _checkAndResetTeamDaily
+        // does its own transaction.get()/transaction.update() calls, and
+        // Firestore transactions require ALL reads to finish before ANY
+        // writes commit. Without awaiting, the outer transaction could
+        // finish (and commit) before the inner get/update pair completed,
+        // which can throw a Firestore transaction error or just silently
+        // skip the team's daily reset.
         if (data["isInTeam"] == true && data["teamId"] != null) {
           final teamId = data["teamId"];
-          _checkAndResetTeamDaily(transaction, teamId, isWeeklyReset);
+          await _checkAndResetTeamDaily(transaction, teamId, isWeeklyReset);
         }
       }
     });
   }
 
-  void _checkAndResetTeamDaily(Transaction transaction, String teamId, bool isWeeklyReset) async {
+  Future<void> _checkAndResetTeamDaily(Transaction transaction, String teamId, bool isWeeklyReset) async {
     final teamRef = firestore.collection("teams").doc(teamId);
     final teamSnap = await transaction.get(teamRef);
     if (!teamSnap.exists) return;
 
     final teamData = teamSnap.data()!;
-    final lastReset = teamData["lastDailyReset"] is Timestamp 
-        ? (teamData["lastDailyReset"] as Timestamp).toDate() 
+    final lastReset = teamData["lastDailyReset"] is Timestamp
+        ? (teamData["lastDailyReset"] as Timestamp).toDate()
         : null;
-    
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
     if (lastReset == null || lastReset.isBefore(today)) {
+      final dateKey = lastReset != null
+          ? "${lastReset.year}-${lastReset.month.toString().padLeft(2, '0')}-${lastReset.day.toString().padLeft(2, '0')}"
+          : "initial";
+
+      Map<String, dynamic> dailyHistory = Map<String, dynamic>.from(teamData["dailyHistory"] ?? {});
+      dailyHistory[dateKey] = {
+        "steps": teamData["dailySteps"] ?? 0,
+        "territory": teamData["territoryCount"] ?? 0,
+        "timestamp": teamData["lastDailyReset"] ?? FieldValue.serverTimestamp(),
+      };
+
       Map<String, dynamic> teamUpdates = {
         "dailySteps": 0,
         "lastDailyReset": Timestamp.fromDate(today),
+        "dailyHistory": dailyHistory,
       };
 
       if (isWeeklyReset) {
+        Map<String, dynamic> weeklyHistory = Map<String, dynamic>.from(teamData["weeklyHistory"] ?? {});
+        final weekKey = "${now.year}-W${(now.day / 7).ceil()}"; // Simple week key
+        weeklyHistory[weekKey] = teamData["weeklySteps"] ?? 0;
+
         teamUpdates["weeklySteps"] = 0;
+        teamUpdates["weeklyHistory"] = weeklyHistory;
+
+        // Also reset individual weekly steps for all team members
+        final membersQuery = await firestore.collection("players").where("teamId", isEqualTo: teamId).get();
+        for (var doc in membersQuery.docs) {
+          transaction.update(doc.reference, {"weeklySteps": 0});
+        }
       }
 
       transaction.update(teamRef, teamUpdates);
@@ -1166,7 +1327,7 @@ class FirebaseService {
         .where("name", isLessThanOrEqualTo: "$query\uf8ff")
         .limit(20)
         .get();
-    
+
     return snapshot.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
   }
 
@@ -1319,7 +1480,7 @@ class FirebaseService {
 
       final teamSnap = await transaction.get(teamRef);
       if (!teamSnap.exists) throw Exception("TEAM_NOT_FOUND");
-      
+
       final teamData = teamSnap.data()!;
       final members = (teamData["members"] ?? 0) as int;
       final maxMembers = (teamData["maxMembers"] ?? 5) as int;
@@ -1343,6 +1504,9 @@ class FirebaseService {
       final newMemberCount = members + 1;
       Map<String, dynamic> teamUpdates = {
         "members": newMemberCount,
+        "totalSteps": FieldValue.increment(playerSnap.data()?["dailySteps"] ?? 0),
+        "dailySteps": FieldValue.increment(playerSnap.data()?["dailySteps"] ?? 0),
+        "weeklySteps": FieldValue.increment(playerSnap.data()?["weeklySteps"] ?? 0),
       };
 
       if (newMemberCount >= maxMembers) {
@@ -1427,7 +1591,7 @@ class FirebaseService {
       }
 
       transaction.update(teamRef, updateData);
-      
+
       return {
         "success": true,
         "defeated": isDefeated,
@@ -1443,13 +1607,13 @@ class FirebaseService {
         bossName: result["bossName"] as String,
       );
     }
-    
+
     return result;
   }
 
   Future<void> contributeRaidDamageFromSteps({required String teamId, required String uid, required int steps}) async {
     final double damage = steps * GameplayRules.damagePerStep;
-    
+
     // Update player's damage first so they are counted in rewards if boss dies
     await firestore.collection("players").doc(uid).update({
       "totalRaidDamage": FieldValue.increment(damage.toInt()),
@@ -1523,6 +1687,18 @@ class FirebaseService {
     });
   }
 
+  Stream<List<PlayerModel>> getTeamWeeklyLeaderboard(String teamId) {
+    return firestore
+        .collection("players")
+        .where("teamId", isEqualTo: teamId)
+        .orderBy("weeklySteps", descending: true)
+        .limit(50)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
+    });
+  }
+
   Stream<List<PlayerModel>> getTeamLeaderboard(String teamName) {
     return firestore
         .collection("players")
@@ -1573,7 +1749,7 @@ class FirebaseService {
 
   Future<void> purchaseTeamBuff(String teamId, Map<String, dynamic> buff) async {
     final teamRef = firestore.collection("teams").doc(teamId);
-    
+
     await firestore.runTransaction((transaction) async {
       final teamSnap = await transaction.get(teamRef);
       if (!teamSnap.exists) return;
@@ -1587,10 +1763,10 @@ class FirebaseService {
       }
 
       Map<String, Timestamp> activeBuffs = Map<String, Timestamp>.from(data["activeTeamBuffs"] ?? {});
-      
+
       DateTime now = DateTime.now();
       DateTime expiry = now.add(buff["duration"] as Duration);
-      
+
       // Extend if already active
       if (activeBuffs.containsKey(buff["id"])) {
         DateTime currentExpiry = activeBuffs[buff["id"]]!.toDate();

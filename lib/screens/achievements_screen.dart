@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/firebase_service.dart';
 import '../models/player_model.dart';
 import '../models/achievement_model.dart';
+import '../config/game_theme.dart';
 
 class AchievementsScreen extends StatelessWidget {
   const AchievementsScreen({super.key});
@@ -91,11 +92,11 @@ class AchievementsScreen extends StatelessWidget {
                         children: [
                           Text(
                             "${achievement.xpReward} XP",
-                            style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 10),
+                            style: TextStyle(color: colorScheme.xp, fontWeight: FontWeight.bold, fontSize: 10),
                           ),
                           Text(
                             "${achievement.coinReward} CREDITS",
-                            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 10),
+                            style: TextStyle(color: colorScheme.gold, fontWeight: FontWeight.bold, fontSize: 10),
                           ),
                         ],
                       ),
