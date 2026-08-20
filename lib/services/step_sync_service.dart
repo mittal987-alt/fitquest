@@ -100,7 +100,7 @@ class StepSyncService {
           final today = DateTime(now.year, now.month, now.day);
           if (player.lastActiveDate == null || player.lastActiveDate!.isBefore(today)) {
             doublePrint("NEW DAY DETECTED: Triggering daily reset sequence.");
-            await firebaseService.checkAndResetDailyStats(uid);
+            await firebaseService.checkAndResetDailyStats(uid, currentHardwareSteps: event.steps);
             player = await firebaseService.getPlayer(uid);
             if (player == null) {
               _isProcessing = false;
