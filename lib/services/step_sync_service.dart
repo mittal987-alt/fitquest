@@ -163,12 +163,12 @@ class StepSyncService {
           }
 
           // 3. CLOUD SYNC THROTTLE (Limit Firestore writes to once every 30 seconds)
-          if (lastSyncTime != null && now.difference(lastSyncTime!).inSeconds < 30) {
-            _isProcessing = false;
-            return;
-          }
-
           if (deltaSteps > 0) {
+            if (lastSyncTime != null && now.difference(lastSyncTime!).inSeconds < 30) {
+              _isProcessing = false;
+              return;
+            }
+
             _syncStatusController.add(true);
 
             // Unified Telemetry Sync (Batching multiple field increments including team steps)
@@ -211,8 +211,6 @@ class StepSyncService {
 
             doublePrint("CLOUD SYNC: +$deltaSteps total steps persisted to Firestore.");
             _syncStatusController.add(false);
-          } else {
-            lastSyncTime = DateTime.now();
           }
         } catch (e) {
           doublePrint("SYNC ERROR: $e");
